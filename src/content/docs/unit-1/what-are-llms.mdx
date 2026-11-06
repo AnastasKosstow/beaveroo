@@ -1,0 +1,207 @@
+---
+title: Какво са LLMs?
+description: Какво представляват Large Language Models — Transformer архитектурата, tokens и special tokens, next token prediction, attention, prompting, обучение и ролята им в AI Agents.
+---
+
+import Embed from '../../../components/Embed.astro';
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-check-1.jpg" alt="План на Unit 1"/>
+
+В предишната секция научихме, че всеки Agent има нужда от **AI модел в основата си** и че LLMs са най-често срещаният тип AI модели за тази цел.
+
+Сега ще научим какво са LLMs и как задвижват Agents.
+
+Тази секция предлага кратко техническо обяснение за използването на LLMs. Ако искаш да навлезеш по-дълбоко, можеш да разгледаш безплатния <a href="https://huggingface.co/learn/nlp-course/chapter1/1" target="_blank">Natural Language Processing Course</a> на Hugging Face.
+
+## Какво е Large Language Model?
+
+LLM е вид AI модел, който е отличен в **разбирането и генерирането на човешки език**. Такива модели се обучават върху огромни количества текстови данни, което им позволява да научат шаблони, структура и дори нюанси в езика. Те обикновено се състоят от много милиони параметри.
+
+Повечето LLMs днес са **изградени върху Transformer архитектурата** — deep learning архитектура, базирана на алгоритъма „Attention“, която привлече значителен интерес след излизането на BERT от Google през 2018 г.
+
+<figure>
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/transformer.jpg" alt="Transformer"/>
+<figcaption>Оригиналната Transformer архитектура изглеждаше така — с encoder отляво и decoder отдясно.</figcaption>
+</figure>
+
+Има 3 типа transformers:
+
+1. **Encoders**\
+   Encoder-базираният Transformer приема текст (или други данни) като вход и извежда плътна репрезентация (embedding) на този текст.
+
+   - **Пример**: BERT от Google
+   - **Приложения**: класификация на текст, семантично търсене, Named Entity Recognition
+   - **Типичен размер**: милиони параметри
+
+2. **Decoders**\
+   Decoder-базираният Transformer се фокусира **върху генерирането на нови tokens, за да допълни последователност — по един token наведнъж**.
+
+   - **Пример**: Llama от Meta
+   - **Приложения**: генериране на текст, chatbots, генериране на код
+   - **Типичен размер**: милиарди (10^9) параметри
+
+3. **Seq2Seq (Encoder–Decoder)**\
+   Sequence-to-sequence Transformer _комбинира_ encoder и decoder. Encoder-ът първо обработва входната последователност в контекстна репрезентация, след което decoder-ът генерира изходна последователност.
+
+   - **Пример**: T5, BART
+   - **Приложения**: превод, обобщаване (summarization), перифразиране
+   - **Типичен размер**: милиони параметри
+
+Макар Large Language Models да се срещат в различни форми, LLMs обикновено са decoder-базирани модели с милиарди параметри. Ето някои от най-известните LLMs:
+
+| **Модел** | **Доставчик** |
+|-----------|---------------|
+| **Deepseek-R1** | DeepSeek |
+| **GPT4** | OpenAI |
+| **Llama 3** | Meta (Facebook AI Research) |
+| **SmolLM2** | Hugging Face |
+| **Gemma** | Google |
+| **Mistral** | Mistral |
+
+Основният принцип на LLM е прост, но изключително ефективен: **целта му е да предскаже следващия token при дадена последователност от предишни tokens**. „Token“ е единицата информация, с която работи LLM. Можеш да мислиш за „token“ като за „дума“, но от съображения за ефективност LLMs не използват цели думи.
+
+Например, докато английският език има приблизително 600 000 думи, един LLM може да има речник от около 32 000 tokens (както е при Llama 2). Tokenization често работи с под-словни (sub-word) единици, които могат да се комбинират.
+
+Например, помисли как tokens „interest“ и „ing“ могат да се комбинират в „interesting“, или как „ed“ може да се добави, за да се получи „interested“.
+
+Можеш да експериментираш с различни tokenizers в интерактивната площадка по-долу:
+
+<Embed src="https://agents-course-the-tokenizer-playground.static.hf.space" title="Tokenizer Playground" />
+
+Всеки LLM има **special tokens**, специфични за модела. LLM използва тези tokens, за да отваря и затваря структурните компоненти на своето генериране. Например, за да обозначи началото или края на последователност, съобщение или отговор. Освен това входните prompts, които подаваме на модела, също са структурирани със special tokens. Най-важният от тях е **End of sequence token** (EOS).
+
+Формите на special tokens са много разнообразни при различните доставчици на модели.
+
+Таблицата по-долу илюстрира разнообразието на special tokens.
+
+<table>
+  <thead>
+    <tr>
+      <th><strong>Модел</strong></th>
+      <th><strong>Доставчик</strong></th>
+      <th><strong>EOS Token</strong></th>
+      <th><strong>Функция</strong></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>GPT4</strong></td>
+      <td>OpenAI</td>
+      <td><code>&lt;|endoftext|&gt;</code></td>
+      <td>Край на текста на съобщението</td>
+    </tr>
+    <tr>
+      <td><strong>Llama 3</strong></td>
+      <td>Meta (Facebook AI Research)</td>
+      <td><code>&lt;|eot_id|&gt;</code></td>
+      <td>Край на последователността</td>
+    </tr>
+    <tr>
+      <td><strong>Deepseek-R1</strong></td>
+      <td>DeepSeek</td>
+      <td><code>&lt;｜end▁of▁sentence｜&gt;</code></td>
+      <td>Край на текста на съобщението</td>
+    </tr>
+    <tr>
+      <td><strong>SmolLM2</strong></td>
+      <td>Hugging Face</td>
+      <td><code>&lt;|im_end|&gt;</code></td>
+      <td>Край на инструкция или съобщение</td>
+    </tr>
+    <tr>
+      <td><strong>Gemma</strong></td>
+      <td>Google</td>
+      <td><code>&lt;end_of_turn&gt;</code></td>
+      <td>Край на хода в разговора</td>
+    </tr>
+  </tbody>
+</table>
+
+:::tip
+Не очакваме да запомниш тези special tokens, но е важно да оцениш разнообразието им и ролята, която играят при генерирането на текст от LLMs. Ако искаш да научиш повече за special tokens, можеш да разгледаш конфигурацията на модела в неговото Hub хранилище. Например можеш да намериш special tokens на модела SmolLM2 в неговия <a href="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/blob/main/tokenizer_config.json">tokenizer_config.json</a>.
+:::
+
+## Разбиране на next token prediction
+
+За LLMs се казва, че са **autoregressive** — това означава, че **изходът от едно преминаване става вход за следващото**. Този цикъл продължава, докато моделът не предскаже, че следващият token е EOS token, при което моделът може да спре.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/AutoregressionSchema.gif" alt="Визуализация на autoregressive decoding" width="60%" />
+
+С други думи, LLM ще декодира текст, докато не достигне EOS. Но какво се случва по време на един цикъл на декодиране?
+
+Макар пълният процес да е доста технически за целите на изучаването на agents, ето кратък преглед:
+
+- След като входният текст е **tokenized**, моделът изчислява репрезентация на последователността, която улавя информация за значението и позицията на всеки token във входната последователност.
+- Тази репрезентация влиза в модела, който извежда оценки (scores), подреждащи вероятността всеки token от речника да е следващият в последователността.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/DecodingFinal.gif" alt="Визуализация на decoding" width="60%" />
+
+Въз основа на тези оценки имаме множество стратегии за избор на tokens, с които да завършим изречението.
+
+- Най-простата decoding стратегия би била винаги да се взема token-ът с най-висока оценка.
+
+Можеш сам да взаимодействаш с процеса на decoding със SmolLM2 в това Space (запомни: то декодира, докато достигне **EOS** token, който за този модел е `<|im_end|>`):
+
+<Embed src="https://agents-course-decoding-visualizer.hf.space" title="Decoding Visualizer" />
+
+- Но има и по-напреднали decoding стратегии. Например *beam search* изследва множество кандидат-последователности, за да намери тази с максимална обща оценка — дори ако някои отделни tokens имат по-ниски оценки.
+
+<Embed src="https://agents-course-beam-search-visualizer.hf.space" title="Beam Search Visualizer" />
+
+Ако искаш да научиш повече за decoding, можеш да разгледаш [NLP course](https://huggingface.co/learn/nlp-course).
+
+## Attention is all you need
+
+Ключов аспект на Transformer архитектурата е **Attention**. При предсказването на следващата дума не всяка дума в изречението е еднакво важна; думи като „France“ и „capital“ в изречението *„The capital of France is ...“* носят най-много смисъл.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/AttentionSceneFinal.gif" alt="Визуализация на Attention" width="60%" />
+
+Този процес на идентифициране на най-релевантните думи за предсказване на следващия token се оказа изключително ефективен.
+
+Макар основният принцип на LLMs — предсказване на следващия token — да е останал непроменен от GPT-2 насам, има значителен напредък в мащабирането на невронните мрежи и в това attention механизмът да работи за все по-дълги последователности.
+
+Ако си работил с LLMs, вероятно ти е познат терминът *context length* — максималният брой tokens, които LLM може да обработи, и максималният _attention span_, който има.
+
+## Prompting на LLM е важно
+
+Като се има предвид, че единствената задача на LLM е да предскаже следващия token, като разглежда всеки входен token и избира кои tokens са „важни“, формулировката на входната последователност е много важна.
+
+Входната последователност, която подаваш на LLM, се нарича _prompt_. Внимателният дизайн на prompt-а улеснява **насочването на генерирането на LLM към желания изход**.
+
+## Как се обучават LLMs?
+
+LLMs се обучават върху големи набори от текстови данни, където се учат да предсказват следващата дума в последователност чрез self-supervised или masked language modeling цел.
+
+От това unsupervised learning моделът научава структурата на езика и **скритите шаблони в текста, което му позволява да обобщава върху невиждани данни**.
+
+След това първоначално _pre-training_, LLMs могат да бъдат fine-tuned със supervised learning цел, за да изпълняват конкретни задачи. Например някои модели са обучени за разговорни структури или използване на tools, докато други се фокусират върху класификация или генериране на код.
+
+## Как мога да използвам LLMs?
+
+Имаш две основни възможности:
+
+1. **Локално изпълнение** (ако имаш достатъчно мощен хардуер) — в .NET света например с [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/) или [Ollama](https://ollama.com/) като локален сървър, към който се свързваш чрез `IChatClient`.
+
+2. **Използване на Cloud/API** (например чрез Hugging Face Inference Providers, които предоставят OpenAI-съвместим API).
+
+В този курс ще използваме моделите основно чрез API в Hugging Face Hub. По-късно ще разгледаме как да изпълняваме тези модели локално на собствения си хардуер.
+
+## Как се използват LLMs в AI Agents?
+
+LLMs са ключов компонент на AI Agents, **осигуряващ основата за разбиране и генериране на човешки език**.
+
+Те могат да интерпретират инструкциите на потребителя, да поддържат контекст в разговорите, да дефинират план и да решат кои tools да използват.
+
+Ще разгледаме тези стъпки по-подробно в този Unit, но засега трябва да разбереш, че LLM е **мозъкът на Agent**.
+
+---
+
+Това беше много информация! Покрихме основите на това какво са LLMs, как функционират и ролята им в задвижването на AI agents.
+
+Ако искаш да се потопиш още по-дълбоко в очарователния свят на езиковите модели и обработката на естествен език, не се колебай да разгледаш безплатния <a href="https://huggingface.co/learn/nlp-course/chapter1/1" target="_blank">NLP course</a>.
+
+Сега, когато разбираме как работят LLMs, е време да видим **как LLMs структурират генерирането си в контекста на разговор**.
+
+За да изпълниш C# примерите от следващите секции, **ти трябва Hugging Face token**, който можеш да получиш от <a href="https://hf.co/settings/tokens" target="_blank">https://hf.co/settings/tokens</a>. Оригиналният курс използва Jupyter notebook; .NET еквивалентът са <a href="https://code.visualstudio.com/docs/languages/polyglot" target="_blank">Polyglot Notebooks</a> във VS Code (C# в notebook формат) или обикновено конзолно приложение, създадено с `dotnet new console`.
+
+Някои модели (например Llama на Meta) са *gated* — за да ги използваш, трябва първо да заявиш достъп на страницата на модела в Hub, например <a href="https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct" target="_blank">Meta Llama 3.2</a>.

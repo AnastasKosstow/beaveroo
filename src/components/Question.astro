@@ -1,0 +1,95 @@
+---
+interface Choice {
+	text: string;
+	explain?: string;
+	correct?: boolean;
+}
+
+interface Props {
+	choices: Choice[];
+}
+
+const { choices } = Astro.props;
+const t = Astro.locals.t;
+---
+
+<div
+	class="hf-question not-content"
+	data-hf-question
+	data-label-correct={t('quiz.correct')}
+	data-label-incorrect={t('quiz.incorrect')}
+	data-label-all-correct={t('quiz.allCorrect')}
+	data-label-some-wrong={t('quiz.someWrong')}
+>
+	<ul class="hf-question__choices">
+		{
+			choices.map((choice, index) => (
+				<li data-correct={choice.correct ? 'true' : 'false'} data-explain={choice.explain ?? ''}>
+					<label class="hf-question__choice">
+						<input type="checkbox" value={index} />
+						<span>{choice.text}</span>
+					</label>
+					<p class="hf-question__feedback" hidden />
+				</li>
+			))
+		}
+	</ul>
+	<div class="hf-question__actions">
+		<button type="button" class="hf-question__submit" disabled>{t('quiz.check')}</button>
+		<span class="hf-question__status" role="status" aria-live="polite"></span>
+	</div>
+</div>
+
+<script>
+	const SELECTOR = '[data-hf-question]';
+
+	document.addEventListener('change', (event) => {
+		const input = event.target;
+		if (!(input instanceof HTMLInputElement)) return;
+		const question = input.closest<HTMLElement>(SELECTOR);
+		if (!question) return;
+		const submit = question.querySelector<HTMLButtonElement>('.hf-question__submit');
+		if (submit) submit.disabled = question.querySelector('input:checked') === null;
+	});
+
+	document.addEventListener('click', (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		const submit = target.closest<HTMLButtonElement>('.hf-question__submit');
+		if (!submit) return;
+		const question = submit.closest<HTMLElement>(SELECTOR);
+		if (!question) return;
+
+		const labels = question.dataset;
+		let allCorrect = true;
+
+		question.querySelectorAll<HTMLLIElement>('li').forEach((item) => {
+			const input = item.querySelector<HTMLInputElement>('input');
+			const feedback = item.querySelector<HTMLElement>('.hf-question__feedback');
+			if (!input || !feedback) return;
+
+			const isCorrect = item.dataset.correct === 'true';
+			const explain = item.dataset.explain ?? '';
+
+			if (input.checked) {
+				feedback.hidden = false;
+				feedback.className = `hf-question__feedback ${isCorrect ? 'is-correct' : 'is-incorrect'}`;
+				feedback.replaceChildren();
+				const label = document.createElement('strong');
+				label.textContent = isCorrect ? (labels.labelCorrect ?? '') : (labels.labelIncorrect ?? '');
+				feedback.append(label);
+				if (explain) feedback.append(` ${explain}`);
+				if (!isCorrect) allCorrect = false;
+			} else {
+				feedback.hidden = true;
+				if (isCorrect) allCorrect = false;
+			}
+		});
+
+		const status = question.querySelector<HTMLElement>('.hf-question__status');
+		if (status) {
+			status.className = `hf-question__status ${allCorrect ? 'is-correct' : 'is-incorrect'}`;
+			status.textContent = allCorrect ? (labels.labelAllCorrect ?? '') : (labels.labelSomeWrong ?? '');
+		}
+	});
+</script>

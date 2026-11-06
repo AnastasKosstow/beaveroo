@@ -1,0 +1,257 @@
+---
+title: Unit 1 Final Quiz
+description: The final quiz for Unit 1 — test your understanding of Agents, LLMs, Messages, Tools and the Thought-Action-Observation cycle and get your certificate.
+---
+
+import Question from '../../../../components/Question.astro';
+import Embed from '../../../../components/Embed.astro';
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-unit1sub4DONE.jpg" alt="Unit 1 planning"/>
+
+Well done on working through the first unit! Let's test your understanding of the key concepts covered so far.
+
+When you pass the quiz, proceed to the next section to claim your certificate.
+
+Good luck!
+
+## Quiz
+
+The quiz below covers the whole of Unit 1. Take it as many times as you like — it is for self-assessment. The official Hugging Face quiz (the one that grants the certificate) is in the next section.
+
+### Q1: What makes a system an "Agent"?
+
+<Question
+  choices={[
+    {
+      text: 'It uses an AI model to reason and plan, and takes actions on its environment through tools to achieve a given goal.',
+      explain: 'That is the definition: a model (Brain) + capabilities and tools (Body) + interaction with the environment.',
+      correct: true,
+    },
+    {
+      text: 'It generates text with very high accuracy without using any external resources.',
+      explain: 'Text generation alone is not agency — the interaction with the environment is missing.',
+    },
+    {
+      text: 'It stores the conversation history in a database.',
+      explain: 'Storing history is useful, but it is not what defines an Agent.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What are the roles of the "Brain" and the "Body" of an Agent?
+
+<Question
+  choices={[
+    {
+      text: 'The Brain is the AI model that thinks and plans; the Body is the tools and capabilities through which the Agent acts.',
+      explain: 'The AI model handles reasoning and planning, and the scope of possible actions depends on the tools the Agent is equipped with.',
+      correct: true,
+    },
+    {
+      text: 'The Brain is the database and the Body is the user interface.',
+      explain: 'No — the Brain is the AI model (usually an LLM) and the Body is the set of capabilities (tools).',
+    },
+    {
+      text: 'The Brain and the Body are two copies of the same LLM.',
+      explain: 'The Body is not a model; it is the set of tools and capabilities.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: What is the core task of an LLM?
+
+<Question
+  choices={[
+    {
+      text: 'To predict the next token given a sequence of previous tokens.',
+      explain: 'LLMs are autoregressive — they generate token by token until they reach an EOS token.',
+      correct: true,
+    },
+    {
+      text: 'To search the internet for answers in real time.',
+      explain: 'On its own an LLM has no internet access — that requires tools.',
+    },
+    {
+      text: 'To execute code it has written itself.',
+      explain: 'An LLM only generates text; executing code is the job of the Agent (the environment).',
+    },
+  ]}
+/>
+
+---
+
+### Q4: Why are special tokens such as EOS important?
+
+<Question
+  choices={[
+    {
+      text: 'They delimit the structure of the prompt and the generated text — for example the end of a sequence or the boundaries between roles (system, user, assistant).',
+      explain: 'Every model has its own special tokens and a chat template that uses them.',
+      correct: true,
+    },
+    {
+      text: 'They enlarge the vocabulary of the model so it writes richer text.',
+      explain: 'Special tokens have a structural, not a stylistic, function.',
+    },
+    {
+      text: 'They are identical across all models, so there is no need to know them.',
+      explain: 'On the contrary — they differ significantly between models (e.g. <|im_end|> vs <|eot_id|>).',
+    },
+  ]}
+/>
+
+---
+
+### Q5: What does a chat template do?
+
+<Question
+  choices={[
+    {
+      text: 'It converts the list of messages (system, user, assistant) into a single text prompt with special tokens that the specific model understands.',
+      explain: 'The model does not "remember" the conversation — it reads the whole concatenated prompt every time.',
+      correct: true,
+    },
+    {
+      text: 'It translates the user messages into English.',
+      explain: 'A chat template does not change the content, it only formats the structure.',
+    },
+    {
+      text: 'It stores the conversation on the server between requests.',
+      explain: 'A chat template is a formatting function, not a storage.',
+    },
+  ]}
+/>
+
+---
+
+### Q6: What should the description of a Tool for an LLM contain?
+
+<Question
+  choices={[
+    {
+      text: 'A name, a textual description of its purpose, the arguments with their types and (optionally) the output type.',
+      explain: 'These are exactly the elements we extract automatically through reflection (in .NET — with [Description] and AIFunctionFactory).',
+      correct: true,
+    },
+    {
+      text: 'Only the function name — the model will figure out the rest.',
+      explain: 'Without a description and argument types the model often calls the tool incorrectly.',
+    },
+    {
+      text: 'The complete source code of the function, including all its dependencies.',
+      explain: 'The implementation does not matter to the LLM — the name, description, inputs and output do.',
+    },
+  ]}
+/>
+
+---
+
+### Q7: In the Thought-Action-Observation cycle, what is an Observation?
+
+<Question
+  choices={[
+    {
+      text: 'The result of the executed action (e.g. an API response or an error), appended to the context of the Agent.',
+      explain: 'The Observation is the feedback from the environment that fuels the next Thought.',
+      correct: true,
+    },
+    {
+      text: "The model's internal monologue before choosing a tool.",
+      explain: 'That is the Thought, not the Observation.',
+    },
+    {
+      text: 'The JSON blob in which the model describes which tool it wants to call.',
+      explain: 'That is the Action, not the Observation.',
+    },
+  ]}
+/>
+
+---
+
+### Q8: Why did we stop the generation before "Observation:" in the Dummy Agent Library?
+
+<Question
+  choices={[
+    {
+      text: 'So that the model does not hallucinate a made-up tool result, and we actually execute the function and insert the real result instead.',
+      explain: 'This is the stop and parse approach — stop, parse the action, execute it and return the real Observation.',
+      correct: true,
+    },
+    {
+      text: 'To save tokens and reduce the cost of the request.',
+      explain: 'Saving tokens is a side effect; the main reason is to prevent hallucinated observations.',
+    },
+    {
+      text: 'Because the API does not allow longer responses.',
+      explain: 'The limit was ours — via the stop parameter — not the API’s.',
+    },
+  ]}
+/>
+
+---
+
+### Q9: What is the difference between a JSON Agent and a Code Agent?
+
+<Question
+  choices={[
+    {
+      text: 'A JSON Agent describes the action as a JSON object that the framework parses; a Code Agent generates an executable code block that the environment runs.',
+      explain: 'Code Agents are more expressive, but executing generated code requires a sandbox and attention to security.',
+      correct: true,
+    },
+    {
+      text: 'A JSON Agent only works with OpenAI models, while a Code Agent only works with open models.',
+      explain: 'The type of Agent does not depend on the model provider.',
+    },
+    {
+      text: 'There is no difference — they are two names for the same thing.',
+      explain: 'The difference is in how actions are represented and executed.',
+    },
+  ]}
+/>
+
+---
+
+### Q10: What does `UseFunctionInvocation()` do in Microsoft.Extensions.AI?
+
+<Question
+  choices={[
+    {
+      text: 'It automates the Thought → Action → Observation loop: when the model requests a tool, the library executes it, appends the result as an Observation and feeds the conversation back to the model.',
+      explain: 'This is exactly the manual logic from the Dummy Agent Library, implemented as reusable middleware.',
+      correct: true,
+    },
+    {
+      text: 'It makes the model write C# code that is then compiled and executed.',
+      explain: 'Function invocation works with structured tool calls, not with generated code.',
+    },
+    {
+      text: 'It replaces the system prompt with an automatically generated one.',
+      explain: 'The system prompt stays ours — the middleware only manages tool invocation.',
+    },
+  ]}
+/>
+
+## The official quiz and the certificate
+
+The original interactive quiz is hosted on the Hugging Face Hub in a Space. It will take you through a set of multiple choice questions to test your understanding of the key concepts covered in this unit. Once you've completed the quiz, you'll be able to see your score and a breakdown of the correct answers.
+
+One important thing: **don't forget to click on Submit after you passed, otherwise your exam score will not be saved!**
+
+<Embed src="https://agents-course-unit-1-quiz.hf.space" title="Unit 1 Quiz (Hugging Face Space)" height="650" />
+
+You can also access the quiz 👉 [here](https://huggingface.co/spaces/agents-course/unit_1_quiz)
+
+## Certificate
+
+Now that you have successfully passed the quiz, **you can get your certificate 🎓**
+
+When you complete the official quiz, it will grant you access to a certificate of completion for this unit. You can download and share this certificate to showcase your progress in the course.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-unit1sub5DONE.jpg" alt="Unit 1 planning"/>
+
+Once you receive your certificate, you can add it to your LinkedIn 🧑‍💼 or share it on X, Bluesky, etc. **The course team would be super proud and would love to congratulate you if you tag @huggingface**! 🤗

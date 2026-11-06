@@ -1,0 +1,148 @@
+---
+title: Разбиране на AI Agents чрез цикъла Thought-Action-Observation
+description: Пълният работен процес на AI Agent — цикълът Thought → Action → Observation, илюстриран с Alfred, weather Agent-ът.
+---
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-check-3.jpg" alt="План на Unit 1"/>
+
+В предишните секции научихме:
+
+- **Как tools се предоставят на agent-а в system prompt-а**.
+- **Как AI agents са системи, които могат да „разсъждават“ (reason), да планират и да взаимодействат със средата си**.
+
+В тази секция **ще разгледаме пълния работен процес на AI Agent** — цикъл, който дефинирахме като Thought-Action-Observation.
+
+След това ще се потопим по-дълбоко във всяка от тези стъпки.
+
+## Основните компоненти
+
+Работата на Agents е непрекъснат цикъл от: **мислене (Thought) → действие (Act) и наблюдение (Observe)**.
+
+Да разгледаме тези действия заедно:
+
+1. **Thought**: LLM частта на Agent-а решава каква трябва да е следващата стъпка.
+2. **Action:** Agent-ът предприема action, като извиква tools със съответните аргументи.
+3. **Observation:** Моделът осмисля отговора от tool-а.
+
+## Цикълът Thought-Action-Observation
+
+Трите компонента работят заедно в непрекъснат цикъл. Ако използваме аналогия от програмирането, agent-ът използва **while цикъл**: цикълът продължава, докато целта на agent-а не бъде постигната.
+
+Визуално изглежда така:
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/AgentCycle.gif" alt="Цикълът Think, Act, Observe"/>
+
+В много Agent frameworks **правилата и насоките са вградени директно в system prompt-а**, което гарантира, че всеки цикъл следва определена логика.
+
+В опростен вариант нашият system prompt може да изглежда така:
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/system_prompt_cycle.png" alt="System prompt с цикъла Think, Act, Observe"/>
+
+Тук виждаме, че в System Message сме дефинирали:
+
+- *Поведението на Agent-а*.
+- *Tools, до които нашият Agent има достъп*, както описахме в предишната секция.
+- *Цикълът Thought-Action-Observation*, който вграждаме в инструкциите към LLM.
+
+Да разгледаме малък пример, за да разберем процеса, преди да навлезем по-дълбоко във всяка стъпка.
+
+## Alfred, weather Agent-ът
+
+Създадохме Alfred, Weather Agent-ът.
+
+Потребител пита Alfred: „Какво е времето в Ню Йорк в момента?“
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent.jpg" alt="Alfred Agent"/>
+
+Задачата на Alfred е да отговори на тази заявка с помощта на weather API tool.
+
+Ето как се развива цикълът:
+
+### Thought
+
+**Вътрешно Reasoning:**
+
+При получаване на заявката вътрешният диалог на Alfred може да бъде:
+
+*„Потребителят има нужда от актуална информация за времето в Ню Йорк. Имам достъп до tool, който извлича данни за времето. Първо трябва да извикам weather API, за да получа актуални данни.“*
+
+Тази стъпка показва как agent-ът разбива проблема на стъпки: първо — събиране на необходимите данни.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-1.jpg" alt="Alfred Agent"/>
+
+### Action
+
+**Използване на Tool:**
+
+Въз основа на своето reasoning и факта, че Alfred знае за tool `get_weather`, Alfred подготвя команда във формат JSON, която извиква weather API tool-а. Например първият му action може да бъде:
+
+Thought: I need to check the current weather for New York.
+
+```json
+{
+  "action": "get_weather",
+  "action_input": {
+    "location": "New York"
+  }
+}
+```
+
+Тук action-ът ясно посочва кой tool да бъде извикан (например `get_weather`) и какъв параметър да бъде подаден (`"location": "New York"`).
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-2.jpg" alt="Alfred Agent"/>
+
+### Observation
+
+**Обратна връзка от средата:**
+
+След извикването на tool-а Alfred получава observation. Това може да са суровите данни за времето от API, например:
+
+*„Current weather in New York: partly cloudy, 15°C, 60% humidity.“*
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-3.jpg" alt="Alfred Agent"/>
+
+Този observation след това се добавя към prompt-а като допълнителен контекст. Той функционира като обратна връзка от реалния свят, потвърждавайки дали action-ът е бил успешен и предоставяйки нужните детайли.
+
+### Обновен Thought
+
+**Рефлексия:**
+
+С observation-а в ръка Alfred обновява вътрешното си reasoning:
+
+*„Сега, когато имам данните за времето в Ню Йорк, мога да съставя отговор за потребителя.“*
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-4.jpg" alt="Alfred Agent"/>
+
+### Финален Action
+
+След това Alfred генерира финален отговор, форматиран така, както сме му указали:
+
+Thought: I have the weather data now. The current weather in New York is partly cloudy with a temperature of 15°C and 60% humidity.
+
+Final answer: The current weather in New York is partly cloudy with a temperature of 15°C and 60% humidity.
+
+Този финален action изпраща отговора обратно на потребителя и затваря цикъла.
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-5.jpg" alt="Alfred Agent"/>
+
+Какво виждаме в този пример:
+
+- **Agents итерират в цикъл, докато целта не бъде постигната:**
+
+**Процесът на Alfred е цикличен**. Той започва с thought, след това действа, като извиква tool, и накрая наблюдава резултата. Ако observation-ът беше показал грешка или непълни данни, Alfred можеше да влезе отново в цикъла, за да коригира подхода си.
+
+- **Интеграция на Tools:**
+
+Възможността да извика tool (като weather API) позволява на Alfred да **надхвърли статичните знания и да извлече данни в реално време** — съществен аспект на много AI Agents.
+
+- **Динамична адаптация:**
+
+Всеки цикъл позволява на agent-а да включи нова информация (observations) в своето reasoning (thought), което гарантира, че финалният отговор е добре обоснован и точен.
+
+Този пример показва основната концепция зад *ReAct цикъла* (концепция, която ще развием в следващата секция): **взаимодействието между Thought, Action и Observation дава възможност на AI agents да решават сложни задачи итеративно**.
+
+Като разбираш и прилагаш тези принципи, можеш да проектираш agents, които не само разсъждават върху задачите си, но и **ефективно използват външни tools, за да ги изпълнят**, като непрекъснато усъвършенстват изхода си въз основа на обратната връзка от средата.
+
+---
+
+Сега да се потопим по-дълбоко в Thought, Action и Observation като отделни стъпки от процеса.

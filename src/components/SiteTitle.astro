@@ -1,0 +1,8 @@
+---
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="hf-brand" translate="no">
+	<span class="hf-brand__logo" aria-hidden="true">🦦</span>
+	<span class="hf-brand__name">{siteTitle}</span>
+</a>

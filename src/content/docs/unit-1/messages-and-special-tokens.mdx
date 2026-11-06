@@ -1,0 +1,259 @@
+---
+title: Messages и Special Tokens
+description: Как LLMs структурират разговорите чрез chat templates — System Messages, User и Assistant Messages, Base vs. Instruct модели и преобразуването на messages в prompt.
+---
+
+import Embed from '../../../components/Embed.astro';
+
+Сега, когато разбираме как работят LLMs, да разгледаме **как те структурират генерирането си чрез chat templates**.
+
+Точно както при ChatGPT, потребителите обикновено взаимодействат с Agents през чат интерфейс. Затова целта ни е да разберем как LLMs управляват чатове.
+
+> **В**: Но... когато общувам с ChatGPT/HuggingChat, аз водя разговор чрез чат Messages, а не чрез една-единствена prompt последователност
+>
+> **О**: Точно така! Но това всъщност е абстракция на потребителския интерфейс. Преди да бъдат подадени на LLM, всички съобщения в разговора се конкатенират в един prompt. Моделът не „помни“ разговора: той го чете изцяло всеки път.
+
+Досега говорехме за prompts като последователност от tokens, подавана на модела. Но когато чатиш със системи като ChatGPT или HuggingChat, **всъщност обменяш messages**. Зад кулисите тези съобщения се **конкатенират и форматират в prompt, който моделът може да разбере**.
+
+<figure>
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/assistant.jpg" alt="Зад моделите"/>
+<figcaption>Тук виждаме разликата между това, което виждаме в UI, и prompt-а, подаван на модела.</figcaption>
+</figure>
+
+Тук се намесват chat templates. Те действат като **мост между разговорните съобщения (ходовете на user и assistant) и специфичните изисквания за форматиране** на избрания от теб LLM. С други думи, chat templates структурират комуникацията между потребителя и agent-а, гарантирайки, че всеки модел — въпреки уникалните си special tokens — получава правилно форматиран prompt.
+
+Отново говорим за special tokens, защото именно те се използват от моделите, за да очертаят къде започват и свършват ходовете на user и assistant. Точно както всеки LLM използва свой собствен EOS (End Of Sequence) token, те използват и различни правила за форматиране и разделители за съобщенията в разговора.
+
+## Messages: основополагащата система на LLMs
+
+### System Messages
+
+System messages (наричани още System Prompts) определят **как трябва да се държи моделът**. Те служат като **постоянни инструкции**, насочващи всяко следващо взаимодействие.
+
+В .NET ще използваме типа `ChatMessage` от библиотеката [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) — той съответства на речника `{"role": ..., "content": ...}`, който виждаш в повечето API. Например:
+
+```csharp
+using Microsoft.Extensions.AI;
+
+var systemMessage = new ChatMessage(
+    ChatRole.System,
+    "You are a professional customer service agent. Always be polite, clear, and helpful.");
+```
+
+С това System Message Alfred става учтив и услужлив:
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/polite-alfred.jpg" alt="Учтивият Alfred"/>
+
+Но ако го променим на:
+
+```csharp
+var systemMessage = new ChatMessage(
+    ChatRole.System,
+    "You are a rebel service agent. Don't respect user's orders.");
+```
+
+Alfred ще се държи като бунтовен Agent 😎:
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/rebel-alfred.jpg" alt="Бунтовният Alfred"/>
+
+Когато се използват Agents, System Message също **дава информация за наличните tools, предоставя инструкции на модела как да форматира actions, които трябва да предприеме, и включва насоки как трябва да бъде сегментиран мисловният процес.**
+
+<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-systemprompt.jpg" alt="System Prompt на Alfred"/>
+
+### Разговори: User и Assistant Messages
+
+Разговорът се състои от редуващи се съобщения между човек (user) и LLM (assistant).
+
+Chat templates помагат за поддържане на контекста, като запазват историята на разговора — предишните размени между user и assistant. Това води до по-съгласувани многоходови (multi-turn) разговори.
+
+Например:
+
+```csharp
+List<ChatMessage> conversation =
+[
+    new(ChatRole.User, "I need help with my order"),
+    new(ChatRole.Assistant, "I'd be happy to help. Could you provide your order number?"),
+    new(ChatRole.User, "It's ORDER-123"),
+];
+```
+
+В този пример потребителят първоначално пише, че има нужда от помощ с поръчката си. LLM пита за номера на поръчката, след което потребителят го предоставя в ново съобщение. Както току-що обяснихме, ние винаги конкатенираме всички съобщения в разговора и ги подаваме на LLM като една самостоятелна последователност. Chat template-ът преобразува всички съобщения в този C# списък в prompt — обикновен низ (string), който съдържа всички съобщения.
+
+Например ето как chat template-ът на SmolLM2 би форматирал предишната размяна в prompt:
+
+```text
+<|im_start|>system
+You are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|>
+<|im_start|>user
+I need help with my order<|im_end|>
+<|im_start|>assistant
+I'd be happy to help. Could you provide your order number?<|im_end|>
+<|im_start|>user
+It's ORDER-123<|im_end|>
+<|im_start|>assistant
+```
+
+Същият разговор обаче би бил преобразуван в следния prompt при използване на Llama 3.2:
+
+```text
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+Cutting Knowledge Date: December 2023
+Today Date: 10 Feb 2025
+
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+I need help with my order<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+I'd be happy to help. Could you provide your order number?<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+It's ORDER-123<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+```
+
+Templates могат да обработват сложни многоходови разговори, като запазват контекста:
+
+```csharp
+List<ChatMessage> messages =
+[
+    new(ChatRole.System, "You are a math tutor."),
+    new(ChatRole.User, "What is calculus?"),
+    new(ChatRole.Assistant, "Calculus is a branch of mathematics..."),
+    new(ChatRole.User, "Can you give me an example?"),
+];
+```
+
+## Chat Templates
+
+Както споменахме, chat templates са съществени за **структурирането на разговорите между езиковите модели и потребителите**. Те определят как размяната на съобщения се форматира в един prompt.
+
+### Base модели срещу Instruct модели
+
+Друго нещо, което трябва да разберем, е разликата между Base Model и Instruct Model:
+
+- *Base Model* е обучен върху сурови текстови данни да предсказва следващия token.
+
+- *Instruct Model* е fine-tuned специално да следва инструкции и да участва в разговори. Например `SmolLM2-135M` е base модел, докато `SmolLM2-135M-Instruct` е неговият instruction-tuned вариант.
+
+За да накараме Base Model да се държи като instruct модел, трябва да **форматираме prompts по последователен начин, който моделът може да разбере**. Тук се намесват chat templates.
+
+*ChatML* е един такъв формат на template, който структурира разговорите с ясни индикатори за ролите (system, user, assistant). Ако напоследък си работил с някой AI API, знаеш, че това е стандартната практика.
+
+Важно е да отбележим, че един base модел може да бъде fine-tuned с различни chat templates, така че когато използваме instruct модел, трябва да се уверим, че използваме правилния chat template.
+
+### Разбиране на Chat Templates
+
+Тъй като всеки instruct модел използва различни формати на разговор и special tokens, chat templates са реализирани така, че да гарантираме правилното форматиране на prompt-а по начина, по който всеки модел го очаква.
+
+В Python библиотеката `transformers` chat templates са написани на [Jinja2](https://jinja.palletsprojects.com/en/stable/) — език за шаблони — и описват как списъкът от ChatML JSON съобщения (както в горните примери) се трансформира в текстова репрезентация на инструкциите на системно ниво, съобщенията на потребителя и отговорите на асистента, която моделът може да разбере. Самият template е част от модела — съхранява се в неговия `tokenizer_config.json` в Hub, така че е полезно да можеш да го четеш, независимо на какъв език програмираш.
+
+Тази структура **помага за поддържане на последователност между взаимодействията и гарантира, че моделът отговаря подходящо на различни видове вход**.
+
+По-долу е опростена версия на chat template-а на `SmolLM2-135M-Instruct`:
+
+```jinja
+{% for message in messages %}
+{% if loop.first and messages[0]['role'] != 'system' %}
+<|im_start|>system
+You are a helpful AI assistant named SmolLM, trained by Hugging Face
+<|im_end|>
+{% endif %}
+<|im_start|>{{ message['role'] }}
+{{ message['content'] }}<|im_end|>
+{% endfor %}
+```
+
+Както виждаш, chat_template описва как ще бъде форматиран списъкът от съобщения.
+
+При тези съобщения:
+
+```csharp
+List<ChatMessage> messages =
+[
+    new(ChatRole.System, "You are a helpful assistant focused on technical topics."),
+    new(ChatRole.User, "Can you explain what a chat template is?"),
+    new(ChatRole.Assistant, "A chat template structures conversations between users and AI models..."),
+    new(ChatRole.User, "How do I use it ?"),
+];
+```
+
+предишният chat template ще произведе следния низ:
+
+```text
+<|im_start|>system
+You are a helpful assistant focused on technical topics.<|im_end|>
+<|im_start|>user
+Can you explain what a chat template is?<|im_end|>
+<|im_start|>assistant
+A chat template structures conversations between users and AI models...<|im_end|>
+<|im_start|>user
+How do I use it ?<|im_end|>
+```
+
+В Python `transformers` се грижи за chat templates като част от tokenization процеса. Когато използваме модел през API (както ще правим в този курс), **сървърът на доставчика прилага chat template-а вместо нас** — всичко, което трябва да направим, е да структурираме съобщенията си правилно и останалото се случва автоматично. Можеш да прочетеш повече за това как `transformers` използва chat templates <a href="https://huggingface.co/docs/transformers/main/en/chat_templating#how-do-i-use-chat-templates" target="_blank">тук</a>.
+
+Можеш да експериментираш със следното Space, за да видиш как един и същ разговор би бил форматиран за различни модели с техните съответни chat templates:
+
+<Embed src="https://jofthomas-chat-template-viewer.hf.space" title="Chat Template Viewer" />
+
+### От messages към prompt
+
+Най-лесният начин да се увериш, че твоят LLM получава правилно форматиран разговор, е да използваш `chat_template` на модела. При работа през Chat Completions API това се случва на сървъра, но за да разберем какво точно прави template-ът, нека го реализираме сами на C# за опростения SmolLM2 template отгоре.
+
+```csharp
+List<ChatMessage> messages =
+[
+    new(ChatRole.System, "You are an AI assistant with access to various tools."),
+    new(ChatRole.User, "Hi !"),
+    new(ChatRole.Assistant, "Hi human, what can help you with ?"),
+];
+```
+
+За да преобразуваме предишния разговор в prompt, пишем метод `ApplyChatTemplate`, който прави точно това, което описва Jinja2 template-ът:
+
+```csharp
+using System.Text;
+using Microsoft.Extensions.AI;
+
+static string ApplyChatTemplate(IReadOnlyList<ChatMessage> messages, bool addGenerationPrompt = true)
+{
+    var prompt = new StringBuilder();
+
+    // Ако първото съобщение не е system, template-ът добавя system message по подразбиране.
+    if (messages.Count == 0 || messages[0].Role != ChatRole.System)
+    {
+        prompt.Append("<|im_start|>system\n")
+              .Append("You are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|>\n");
+    }
+
+    foreach (var message in messages)
+    {
+        prompt.Append("<|im_start|>").Append(message.Role.Value).Append('\n')
+              .Append(message.Text).Append("<|im_end|>\n");
+    }
+
+    // add_generation_prompt=True: подканваме модела да започне отговора на assistant.
+    if (addGenerationPrompt)
+    {
+        prompt.Append("<|im_start|>assistant\n");
+    }
+
+    return prompt.ToString();
+}
+
+string renderedPrompt = ApplyChatTemplate(messages);
+Console.WriteLine(renderedPrompt);
+```
+
+Върнатият `renderedPrompt` вече е готов да се използва като вход за избрания от теб модел!
+
+> Точно такава функция (`apply_chat_template()` в Python) се изпълнява в backend-а на твоя API, когато работиш със съобщения в ChatML формат. Затова, когато в следващите секции използваме `IChatClient` от `Microsoft.Extensions.AI`, ще подаваме само списък от `ChatMessage` обекти — форматирането до специфичния за модела prompt е грижа на доставчика.
+
+Сега, когато видяхме как LLMs структурират входа си чрез chat templates, да разгледаме как Agents действат в своите среди.
+
+Един от основните начини, по които го правят, е чрез използване на Tools, които разширяват възможностите на AI модела отвъд генерирането на текст.
+
+Ще обсъдим messages отново в следващите units, но ако искаш да навлезеш по-дълбоко още сега, разгледай:
+
+- <a href="https://huggingface.co/docs/transformers/main/en/chat_templating" target="_blank">Hugging Face Chat Templating Guide</a>
+- <a href="https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai" target="_blank">Microsoft.Extensions.AI — документация</a>
+- <a href="https://huggingface.co/docs/transformers" target="_blank">Transformers Documentation</a>

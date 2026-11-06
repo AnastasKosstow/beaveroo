@@ -1,0 +1,25 @@
+---
+const { pagination } = Astro.locals.starlightRoute;
+const { prev, next } = pagination;
+---
+
+{
+	(prev || next) && (
+		<nav class="hf-pagination print:hidden" aria-label={Astro.locals.t('pagination.label')}>
+			{prev ? (
+				<a href={prev.href} rel="prev">
+					<span aria-hidden="true">←</span> {prev.label}
+				</a>
+			) : (
+				<span />
+			)}
+			{next ? (
+				<a href={next.href} rel="next">
+					{next.label} <span aria-hidden="true">→</span>
+				</a>
+			) : (
+				<span />
+			)}
+		</nav>
+	)
+}

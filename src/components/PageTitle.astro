@@ -1,0 +1,19 @@
+---
+const { entry } = Astro.locals.starlightRoute;
+const isSplash = entry.data.template === 'splash';
+---
+
+{
+	isSplash ? (
+		<h1 id="_top" class="hf-learn__heading">
+			<span class="hf-learn__icon" aria-hidden="true">
+				🎓
+			</span>
+			<span>{entry.data.title}</span>
+		</h1>
+	) : (
+		<h1 id="_top" class="hf-page-title">
+			{entry.data.title}
+		</h1>
+	)
+}

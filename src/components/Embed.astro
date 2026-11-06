@@ -1,0 +1,24 @@
+---
+interface Props {
+	src: string;
+	title: string;
+	height?: number;
+	video?: boolean;
+}
+
+const { src, title, height = 450, video = false } = Astro.props;
+---
+
+<figure class:list={['hf-embed', 'not-content', { 'hf-embed--video': video }]} style={`--hf-embed-height:${height}px`}>
+	<iframe
+		src={src}
+		title={title}
+		loading="lazy"
+		allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+		referrerpolicy="strict-origin-when-cross-origin"
+		allowfullscreen></iframe>
+	<figcaption class="hf-embed__note">
+		{Astro.locals.t('embed.note')}
+		<a href={src} target="_blank" rel="noopener">{Astro.locals.t('embed.open')}</a>
+	</figcaption>
+</figure>

@@ -1,0 +1,11 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import SiteTitle from './SiteTitle.astro';
+import HeaderLinks from './HeaderLinks.astro';
+---
+
+<div class="hf-header">
+	<div class="hf-header__brand"><SiteTitle /></div>
+	<div class="hf-header__search print:hidden"><Search /></div>
+	<div class="hf-header__links sl-hidden md:sl-flex print:hidden"><HeaderLinks /></div>
+</div>

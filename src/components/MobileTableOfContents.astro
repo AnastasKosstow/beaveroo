@@ -1,0 +1,10 @@
+---
+import Default from '@astrojs/starlight/components/MobileTableOfContents.astro';
+
+const { toc, entry } = Astro.locals.starlightRoute;
+if (toc && toc.items.length > 0) {
+	toc.items[0] = { ...toc.items[0], text: entry.data.title };
+}
+---
+
+<Default><slot /></Default>

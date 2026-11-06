@@ -1,0 +1,20 @@
+---
+const { locale } = Astro.locals.starlightRoute;
+const base = locale ? `/${locale}` : '';
+const t = Astro.locals.t;
+---
+
+<div class="hf-learn__grid not-content">
+	<a class="hf-learn-card" href={`${base}/unit-0/introduction/`}>
+		<img
+			class="hf-learn-card__image"
+			src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/agents-course/thumbnail.png"
+			alt=""
+			loading="eager"
+		/>
+		<div class="hf-learn-card__body">
+			<h2 class="hf-learn-card__title">{t('course.title')}</h2>
+			<p class="hf-learn-card__text">{t('landing.courseDescription')}</p>
+		</div>
+	</a>
+</div>

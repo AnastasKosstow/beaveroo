@@ -1,0 +1,33 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+
+const { locale } = Astro.locals.starlightRoute;
+const path = Astro.url.pathname.endsWith('/') ? Astro.url.pathname : `${Astro.url.pathname}/`;
+const isEnglish = locale === 'en';
+const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${path}`;
+---
+
+<nav class="hf-links" aria-label={Astro.locals.t('header.linksLabel')}>
+	<a
+		class="hf-links__lang"
+		href={switchHref}
+		hreflang={isEnglish ? 'bg' : 'en'}
+		title={Astro.locals.t('header.switchLanguageTitle')}>{Astro.locals.t('header.switchLanguageLabel')}</a
+	>
+	<a
+		class="hf-links__hf"
+		href="https://huggingface.co/"
+		target="_blank"
+		rel="noopener"
+		title={Astro.locals.t('header.huggingFaceTitle')}
+		><span aria-hidden="true">🤗</span> {Astro.locals.t('header.huggingFace')}</a
+	>
+	<a
+		class="hf-links__github"
+		href="https://github.com/AnastasKosstow/curious-otter"
+		target="_blank"
+		rel="noopener"
+		title={Astro.locals.t('header.githubTitle')}
+		aria-label={Astro.locals.t('header.githubTitle')}><Icon name="github" size="1.25rem" /></a
+	>
+</nav>
