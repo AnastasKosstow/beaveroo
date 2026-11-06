@@ -1,0 +1,17 @@
+
+{
+  "search.label": "Търсене",
+  "search.cancelLabel": "Отказ",
+  "themeSelect.dark": "Тъмна",
+  "themeSelect.light": "Светла",
+  "themeSelect.auto": "Автоматична",
+  "themeSelect.accessibleLabel": "Избор на тема",
+  "menuButton.accessibleLabel": "Меню",
+  "sidebarNav.accessibleLabel": "Основна навигация",
+  "tableOfContents.onThisPage": "На тази страница",
+  "tableOfContents.overview": "Преглед",
+  "page.previousLink": "Предишен урок",
+  "page.nextLink": "Следващ урок",
+  "expressiveCode.copyButtonCopied": "Копирано!",
+  "expressiveCode.copyButtonTooltip": "Копирай кода"
+}
