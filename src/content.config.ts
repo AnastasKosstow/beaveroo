@@ -12,7 +12,6 @@ export const collections = {
     schema: i18nSchema({
       extend: z.object({
         'course.title': z.string().optional(),
-        'course.subtitle': z.string().optional(),
         'header.linksLabel': z.string().optional(),
         'header.switchLanguageLabel': z.string().optional(),
         'header.switchLanguageTitle': z.string().optional(),
@@ -21,8 +20,10 @@ export const collections = {
         'header.githubTitle': z.string().optional(),
         'landing.heading': z.string().optional(),
         'landing.courseDescription': z.string().optional(),
-        'footer.source': z.string().optional(),
-        'footer.attribution': z.string().optional(),
+        'footer.huggingFace': z.string().optional(),
+        'footer.huggingFaceTitle': z.string().optional(),
+        'footer.sourceCode': z.string().optional(),
+        'footer.sourceCodeTitle': z.string().optional(),
         'pagination.label': z.string().optional(),
         'quiz.check': z.string().optional(),
         'quiz.correct': z.string().optional(),

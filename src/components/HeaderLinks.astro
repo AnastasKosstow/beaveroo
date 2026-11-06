@@ -1,5 +1,6 @@
 ---
 import { Icon } from '@astrojs/starlight/components';
+import ThemeToggle from './ThemeToggle.astro';
 
 const { locale } = Astro.locals.starlightRoute;
 const path = Astro.url.pathname.endsWith('/') ? Astro.url.pathname : `${Astro.url.pathname}/`;
@@ -8,6 +9,7 @@ const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${pa
 ---
 
 <nav class="hf-links" aria-label={Astro.locals.t('header.linksLabel')}>
+	<ThemeToggle />
 	<a
 		class="hf-links__lang"
 		href={switchHref}
@@ -16,7 +18,7 @@ const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${pa
 	>
 	<a
 		class="hf-links__hf"
-		href="https://huggingface.co/"
+		href="https://huggingface.co/learn/agents-course/en/unit0/introduction"
 		target="_blank"
 		rel="noopener"
 		title={Astro.locals.t('header.huggingFaceTitle')}

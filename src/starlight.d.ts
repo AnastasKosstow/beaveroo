@@ -1,7 +1,6 @@
 declare namespace StarlightApp {
   interface I18n {
     'course.title': string;
-    'course.subtitle': string;
     'header.linksLabel': string;
     'header.switchLanguageLabel': string;
     'header.switchLanguageTitle': string;
@@ -10,8 +9,10 @@ declare namespace StarlightApp {
     'header.githubTitle': string;
     'landing.heading': string;
     'landing.courseDescription': string;
-    'footer.source': string;
-    'footer.attribution': string;
+    'footer.huggingFace': string;
+    'footer.huggingFaceTitle': string;
+    'footer.sourceCode': string;
+    'footer.sourceCodeTitle': string;
     'pagination.label': string;
     'quiz.check': string;
     'quiz.correct': string;

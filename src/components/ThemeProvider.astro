@@ -1,0 +1,12 @@
+---
+---
+
+<script is:inline>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme = typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		document.documentElement.dataset.theme = storedTheme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers() {},
+		};
+	})();
+</script>

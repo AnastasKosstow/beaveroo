@@ -1,6 +1,5 @@
 ---
 import Default from '@astrojs/starlight/components/Sidebar.astro';
-import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
 import HeaderLinks from './HeaderLinks.astro';
 
 const { siteTitleHref } = Astro.locals.starlightRoute;
@@ -11,11 +10,7 @@ const { siteTitleHref } = Astro.locals.starlightRoute;
 		<span class="hf-course__dot" aria-hidden="true"></span>
 		<span>{Astro.locals.t('course.title')}</span>
 	</a>
-	<p class="hf-course__sub">{Astro.locals.t('course.subtitle')}</p>
-	<div class="hf-course__tools">
-		<ThemeSelect />
-		<div class="md:sl-hidden"><HeaderLinks /></div>
-	</div>
+	<div class="hf-course__tools md:sl-hidden"><HeaderLinks /></div>
 </div>
 
 <Default><slot /></Default>

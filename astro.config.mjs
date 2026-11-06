@@ -14,17 +14,34 @@ export default defineConfig({
         en: { label: 'English', lang: 'en' },
       },
 
-      customCss: [
-        '@fontsource/source-sans-3/400.css',
-        '@fontsource/source-sans-3/600.css',
-        '@fontsource/source-sans-3/700.css',
-        '@fontsource/ibm-plex-mono/400.css',
-        '@fontsource/ibm-plex-mono/500.css',
-        './src/styles/hf.css',
+      customCss: ['./src/styles/fonts.css', './src/styles/theme.css'],
+
+      head: [
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preload',
+            href: '/fonts/manrope-latin-wght-normal.woff2',
+            as: 'font',
+            type: 'font/woff2',
+            crossorigin: 'anonymous',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preload',
+            href: '/fonts/manrope-cyrillic-wght-normal.woff2',
+            as: 'font',
+            type: 'font/woff2',
+            crossorigin: 'anonymous',
+          },
+        },
       ],
 
       components: {
         Header: './src/components/Header.astro',
+        ThemeProvider: './src/components/ThemeProvider.astro',
         SiteTitle: './src/components/SiteTitle.astro',
         Sidebar: './src/components/Sidebar.astro',
         MobileMenuFooter: './src/components/MobileMenuFooter.astro',
@@ -40,23 +57,26 @@ export default defineConfig({
       credits: false,
 
       expressiveCode: {
-        themes: ['github-dark', 'github-light'],
+        themes: ['night-owl', 'one-light'],
         styleOverrides: {
-          borderRadius: '0.75rem',
+          borderRadius: '1rem',
           borderWidth: '1px',
-          borderColor: ({ theme }) => (theme.type === 'dark' ? '#1f2937' : '#e5e7eb'),
-          codeBackground: ({ theme }) => (theme.type === 'dark' ? '#111827' : '#f9fafb'),
-          codeFontFamily: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+          borderColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
+          codeBackground: ({ theme }) => (theme.type === 'dark' ? '#0e1729' : '#f6f8fb'),
+          codeFontFamily: "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
           codeFontSize: '0.875rem',
           codeLineHeight: '1.7',
-          codePaddingBlock: '1rem',
+          codePaddingBlock: '1.1rem',
           codePaddingInline: '1.25rem',
           frames: {
             shadowColor: 'transparent',
-            editorActiveTabIndicatorTopColor: '#ffd21e',
-            editorTabBarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b0f19' : '#f3f4f6'),
-            terminalTitlebarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b0f19' : '#f3f4f6'),
-            terminalBackground: ({ theme }) => (theme.type === 'dark' ? '#111827' : '#f9fafb'),
+            editorActiveTabIndicatorTopColor: '#2dd4bf',
+            editorActiveTabIndicatorBottomColor: 'transparent',
+            editorTabBarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b1220' : '#eef2f7'),
+            editorTabBarBorderBottomColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
+            terminalTitlebarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b1220' : '#eef2f7'),
+            terminalTitlebarBorderBottomColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
+            terminalBackground: ({ theme }) => (theme.type === 'dark' ? '#0e1729' : '#f6f8fb'),
           },
         },
       },

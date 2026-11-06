@@ -1,0 +1,26 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+
+const t = Astro.locals.t;
+---
+
+<button
+	type="button"
+	class="hf-theme-toggle"
+	data-theme-toggle
+	aria-label={t('themeSelect.accessibleLabel')}
+	title={t('themeSelect.accessibleLabel')}
+>
+	<span class="hf-theme-toggle__icon hf-theme-toggle__icon--sun"><Icon name="sun" size="1.1rem" /></span>
+	<span class="hf-theme-toggle__icon hf-theme-toggle__icon--moon"><Icon name="moon" size="1.1rem" /></span>
+</button>
+
+<script>
+	document.addEventListener('click', (event) => {
+		const target = event.target;
+		if (!(target instanceof Element) || !target.closest('[data-theme-toggle]')) return;
+		const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+		document.documentElement.dataset.theme = next;
+		localStorage.setItem('starlight-theme', next);
+	});
+</script>

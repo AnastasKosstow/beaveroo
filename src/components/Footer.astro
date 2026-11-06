@@ -1,11 +1,24 @@
 ---
 import Default from '@astrojs/starlight/components/Footer.astro';
+
+const t = Astro.locals.t;
 ---
 
 <Default><slot /></Default>
 
-<p class="hf-attribution">
-	{Astro.locals.t('footer.source')}
-	<a href="https://github.com/huggingface/agents-course" target="_blank" rel="noopener">Hugging Face Agents Course</a>
-	{Astro.locals.t('footer.attribution')}
-</p>
+<div class="hf-footer">
+	<a class="hf-footer__link" href="https://huggingface.co" target="_blank" rel="noopener" title={t('footer.huggingFaceTitle')}>
+		<img class="hf-footer__icon" src="/images/huggingface.svg" alt="" width="20" height="20" loading="lazy" />
+		<span>{t('footer.huggingFace')}</span>
+	</a>
+	<a
+		class="hf-footer__link"
+		href="https://github.com/AnastasKosstow/curious-otter"
+		target="_blank"
+		rel="noopener"
+		title={t('footer.sourceCodeTitle')}
+	>
+		<span class="hf-footer__icon hf-footer__icon--emoji" aria-hidden="true">🦦</span>
+		<span>{t('footer.sourceCode')}</span>
+	</a>
+</div>
