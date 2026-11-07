@@ -18,10 +18,9 @@ const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${pa
 	>
 	<a
 		class="hf-links__hf"
-		href="https://huggingface.co/learn/agents-course/en/unit0/introduction"
+		href="https://huggingface.co/"
 		target="_blank"
 		rel="noopener"
-		title={Astro.locals.t('header.huggingFaceTitle')}
 		><span aria-hidden="true">🤗</span> {Astro.locals.t('header.huggingFace')}</a
 	>
 	<a
@@ -29,7 +28,6 @@ const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${pa
 		href="https://github.com/AnastasKosstow/curious-otter"
 		target="_blank"
 		rel="noopener"
-		title={Astro.locals.t('header.githubTitle')}
 		aria-label={Astro.locals.t('header.githubTitle')}><Icon name="github" size="1.25rem" /></a
 	>
 </nav>

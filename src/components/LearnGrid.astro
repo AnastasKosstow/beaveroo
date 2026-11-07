@@ -1,4 +1,7 @@
 ---
+import { Image } from 'astro:assets';
+import thumbnail from '../assets/agents-course-thumbnail.png';
+
 const { locale } = Astro.locals.starlightRoute;
 const base = locale ? `/${locale}` : '';
 const t = Astro.locals.t;
@@ -6,10 +9,14 @@ const t = Astro.locals.t;
 
 <div class="hf-learn__grid not-content">
 	<a class="hf-learn-card" href={`${base}/unit-0/introduction/`}>
-		<img
+		<Image
 			class="hf-learn-card__image"
-			src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/agents-course/thumbnail.png"
+			src={thumbnail}
 			alt=""
+			widths={[640, 1024, 1400]}
+			sizes="(min-width: 50rem) 34rem, 100vw"
+			format="webp"
+			quality={82}
 			loading="eager"
 		/>
 		<div class="hf-learn-card__body">
