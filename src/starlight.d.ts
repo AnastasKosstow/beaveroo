@@ -1,12 +1,11 @@
 declare namespace StarlightApp {
   interface I18n {
-    'course.title': string;
     'header.linksLabel': string;
     'header.switchLanguageLabel': string;
     'header.switchLanguageTitle': string;
     'header.huggingFace': string;
+    'header.githubTitle': string;
     'landing.heading': string;
-    'landing.courseDescription': string;
     'footer.huggingFace': string;
     'footer.sourceCode': string;
     'pagination.label': string;
@@ -17,5 +16,74 @@ declare namespace StarlightApp {
     'quiz.someWrong': string;
     'embed.note': string;
     'embed.open': string;
+
+    'course.overview': string;
+    'course.fastTrack': string;
+    'course.deepDive': string;
+    'course.upcoming': string;
+    'course.open': string;
+    'course.start': string;
+    'course.modules': string;
+    'course.path': string;
+    'course.pathIntro': string;
+    'course.yourProgress': string;
+    'course.progressOf': string;
+    'course.progressNote': string;
+    'course.statModules': string;
+    'course.statTime': string;
+    'course.statAccounts': string;
+    'course.minutes': string;
+    'course.navLabel': string;
+
+    'lesson.unit': string;
+    'lesson.checkpoint': string;
+    'lesson.checkpointTitle': string;
+    'lesson.checkpointNote': string;
+    'lesson.complete': string;
+    'lesson.completed': string;
+    'lesson.next': string;
+    'lesson.nextUpcoming': string;
+    'lesson.backToCourse': string;
+
+    'compare.csharp': string;
+    'compare.python': string;
+    'shift.title': string;
+    'pitfall.title': string;
+    'pitfall.dont': string;
+    'pitfall.priority': string;
+    'pitfall.example': string;
+    'local.title': string;
+    'goals.title': string;
+    'ready.title': string;
+    'ready.note': string;
+    'knowledge.correct': string;
+    'knowledge.incorrect': string;
+    'knowledge.pick': string;
+
+    'playground.tryIt': string;
+    'playground.task': string;
+    'playground.editable': string;
+    'playground.editorLabel': string;
+    'playground.run': string;
+    'playground.loading': string;
+    'playground.running': string;
+    'playground.reset': string;
+    'playground.copy': string;
+    'playground.copied': string;
+    'playground.hint': string;
+    'playground.output': string;
+    'playground.outputEmpty': string;
+    'playground.statusIdle': string;
+    'playground.statusOk': string;
+    'playground.statusPassed': string;
+    'playground.statusKeepGoing': string;
+    'playground.statusError': string;
+    'playground.passed': string;
+    'playground.keepGoing': string;
+    'playground.errorIntro': string;
+    'playground.timeout': string;
+    'playground.loadError': string;
+    'playground.note': string;
+    'playground.shortcut': string;
   }
 }

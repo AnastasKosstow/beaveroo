@@ -1,0 +1,97 @@
+---
+import {
+	formatDuration,
+	langOf,
+	localeBase,
+	moduleHref,
+	stripLocale,
+	trackMinutes,
+	type Course,
+	type ModuleTrack,
+} from '../../courses';
+
+interface Props {
+	course: Course;
+}
+
+const { course } = Astro.props;
+const { locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const lang = langOf(locale);
+const base = localeBase(locale);
+const currentPath = stripLocale(Astro.url.pathname).replace(/\/?$/, '/');
+
+const overviewHref = `${base}${course.slug}/`;
+const isOverview = currentPath === `/${course.slug}/`;
+
+const tracks: { id: ModuleTrack; label: string }[] = [
+	{ id: 'fast', label: t('course.fastTrack') },
+	{ id: 'deep', label: t('course.deepDive') },
+];
+
+function isCurrentModule(slug: string | undefined): boolean {
+	return !!slug && currentPath === `/${course.slug}/${slug}/`;
+}
+---
+
+<nav class="co-nav" aria-label={t('course.navLabel')} data-course-nav={course.id}>
+	<a class="co-nav__overview" href={overviewHref} aria-current={isOverview ? 'page' : undefined}>
+		{t('course.overview')}
+	</a>
+
+	{
+		tracks.map((track) => {
+			const modules = (course.modules ?? []).filter((module) => module.track === track.id);
+			if (modules.length === 0) return null;
+			return (
+				<section class="co-nav__track">
+					<h2 class="co-nav__track-title">
+						<span>{track.label}</span>
+						<span class="co-nav__track-meta">{formatDuration(trackMinutes(course, track.id), lang)}</span>
+					</h2>
+					<ol class="co-nav__list">
+						{modules.map((module) => {
+							const href = moduleHref(course, module, locale);
+							return href ? (
+								<li>
+									<a
+										class="co-nav__link"
+										href={href}
+										aria-current={isCurrentModule(module.slug) ? 'page' : undefined}
+										data-module={module.id}
+									>
+										<span class="co-nav__num">{module.number}</span>
+										<span class="co-nav__label">{module.title[lang]}</span>
+										<span class="co-nav__check" aria-hidden="true">
+											✓
+										</span>
+									</a>
+								</li>
+							) : (
+								<li class="co-nav__upcoming" aria-disabled="true">
+									<span class="co-nav__num">{module.number}</span>
+									<span class="co-nav__label">{module.title[lang]}</span>
+									<span class="co-nav__badge">{t('course.upcoming')}</span>
+								</li>
+							);
+						})}
+					</ol>
+				</section>
+			);
+		})
+	}
+</nav>
+
+<script>
+	import { onProgress } from '../../scripts/progress';
+
+	document.querySelectorAll<HTMLElement>('[data-course-nav]').forEach((nav) => {
+		const courseId = nav.dataset.courseNav;
+		if (!courseId) return;
+		onProgress(courseId, (completed) => {
+			nav.querySelectorAll<HTMLElement>('[data-module]').forEach((link) => {
+				link.classList.toggle('is-complete', completed.has(link.dataset.module ?? ''));
+			});
+		});
+	});
+</script>

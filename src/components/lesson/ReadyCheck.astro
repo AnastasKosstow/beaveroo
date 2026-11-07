@@ -1,0 +1,66 @@
+---
+interface Props {
+	items: string[];
+	title?: string;
+}
+
+const { entry } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const { items, title = t('ready.title') } = Astro.props;
+const storageKey = `co:ready:${entry.data.course ?? 'course'}/${entry.data.unit ?? entry.id}`;
+---
+
+<co-ready-check class="co-ready not-content" data-key={storageKey}>
+	<div class="co-ready__head">
+		<p class="co-ready__title">
+			<span class="co-ready__icon" aria-hidden="true">✅</span>
+			<span>{title}</span>
+		</p>
+		<p class="co-ready__count"><span data-ready-done>0</span> / {items.length}</p>
+	</div>
+	<ul class="co-ready__list">
+		{
+			items.map((item, index) => (
+				<li>
+					<label class="co-ready__item">
+						<input type="checkbox" data-ready-item={index} />
+						<span>{item}</span>
+					</label>
+				</li>
+			))
+		}
+	</ul>
+	<p class="co-ready__note">{t('ready.note')}</p>
+</co-ready-check>
+
+<script>
+	import { readJson, writeJson } from '../../scripts/progress';
+
+	class ReadyCheck extends HTMLElement {
+		connectedCallback() {
+			const key = this.dataset.key;
+			if (!key) return;
+			const boxes = [...this.querySelectorAll<HTMLInputElement>('[data-ready-item]')];
+			const counter = this.querySelector<HTMLElement>('[data-ready-done]');
+			const saved = new Set(readJson<number[]>(key, []));
+
+			const refresh = () => {
+				const done = boxes.filter((box) => box.checked).length;
+				if (counter) counter.textContent = String(done);
+				this.classList.toggle('is-complete', done === boxes.length && boxes.length > 0);
+			};
+
+			boxes.forEach((box, index) => {
+				box.checked = saved.has(index);
+				box.addEventListener('change', () => {
+					const checked = boxes.flatMap((item, i) => (item.checked ? [i] : []));
+					writeJson(key, checked);
+					refresh();
+				});
+			});
+			refresh();
+		}
+	}
+
+	if (!customElements.get('co-ready-check')) customElements.define('co-ready-check', ReadyCheck);
+</script>

@@ -14,7 +14,7 @@ export default defineConfig({
         en: { label: 'English', lang: 'en' },
       },
 
-      customCss: ['./src/styles/fonts.css', './src/styles/theme.css'],
+      customCss: ['./src/styles/fonts.css', './src/styles/theme.css', './src/styles/course.css'],
 
       head: [
         {
@@ -46,6 +46,7 @@ export default defineConfig({
         Sidebar: './src/components/Sidebar.astro',
         MobileMenuFooter: './src/components/MobileMenuFooter.astro',
         PageTitle: './src/components/PageTitle.astro',
+        MarkdownContent: './src/components/MarkdownContent.astro',
         TableOfContents: './src/components/TableOfContents.astro',
         MobileTableOfContents: './src/components/MobileTableOfContents.astro',
         Pagination: './src/components/Pagination.astro',
@@ -55,31 +56,6 @@ export default defineConfig({
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
       lastUpdated: false,
       credits: false,
-
-      expressiveCode: {
-        themes: ['night-owl', 'one-light'],
-        styleOverrides: {
-          borderRadius: '1rem',
-          borderWidth: '1px',
-          borderColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
-          codeBackground: ({ theme }) => (theme.type === 'dark' ? '#0e1729' : '#f6f8fb'),
-          codeFontFamily: "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-          codeFontSize: '0.875rem',
-          codeLineHeight: '1.7',
-          codePaddingBlock: '1.1rem',
-          codePaddingInline: '1.25rem',
-          frames: {
-            shadowColor: 'transparent',
-            editorActiveTabIndicatorTopColor: '#2dd4bf',
-            editorActiveTabIndicatorBottomColor: 'transparent',
-            editorTabBarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b1220' : '#eef2f7'),
-            editorTabBarBorderBottomColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
-            terminalTitlebarBackground: ({ theme }) => (theme.type === 'dark' ? '#0b1220' : '#eef2f7'),
-            terminalTitlebarBorderBottomColor: ({ theme }) => (theme.type === 'dark' ? '#1e293b' : '#e2e8f0'),
-            terminalBackground: ({ theme }) => (theme.type === 'dark' ? '#0e1729' : '#f6f8fb'),
-          },
-        },
-      },
 
       sidebar: [
         {

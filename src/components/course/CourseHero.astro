@@ -1,0 +1,79 @@
+---
+import { Code } from '@astrojs/starlight/components';
+import { formatDuration, langOf, localeBase, trackMinutes, type Course } from '../../courses';
+
+interface Props {
+	course: Course;
+}
+
+const { course } = Astro.props;
+const { locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const lang = langOf(locale);
+const base = localeBase(locale);
+
+const fastModules = (course.modules ?? []).filter((module) => module.track === 'fast');
+const fastDuration = formatDuration(trackMinutes(course, 'fast'), lang);
+
+const csharpSnippet = `var greeting = $"Hello, {name}!";
+Console.WriteLine(greeting);`;
+const pythonSnippet = `greeting = f"Hello, {name}!"
+print(greeting)`;
+---
+
+<header class="co-hero not-content">
+	<div class="co-hero__copy">
+		{
+			course.audience && (
+				<p class="co-eyebrow">
+					<span class="co-eyebrow__dot" aria-hidden="true" />
+					<span>{course.audience[lang]}</span>
+				</p>
+			)
+		}
+		<h1 id="_top" class="co-hero__title">{course.title[lang]}</h1>
+		<p class="co-hero__subtitle">{course.subtitle[lang]}</p>
+		{course.lead && <p class="co-hero__lead">{course.lead[lang]}</p>}
+		<div class="co-hero__actions">
+			<a class="co-btn co-btn--primary" href={`${base}${course.startHref}`}>
+				{t('course.start')} <span aria-hidden="true">→</span>
+			</a>
+			<a class="co-btn co-btn--ghost" href="#path">{t('course.modules')}</a>
+		</div>
+		{
+			course.modules && (
+				<dl class="co-stats">
+					<div class="co-stats__item">
+						<dt>{fastModules.length}</dt>
+						<dd>{t('course.statModules')}</dd>
+					</div>
+					<div class="co-stats__item">
+						<dt>~{fastDuration}</dt>
+						<dd>{t('course.statTime')}</dd>
+					</div>
+					<div class="co-stats__item">
+						<dt>0</dt>
+						<dd>{t('course.statAccounts')}</dd>
+					</div>
+				</dl>
+			)
+		}
+	</div>
+
+	<aside class="co-hero__code" aria-hidden="true">
+		<div class="co-hero__pane">
+			<div class="co-compare__bar">
+				<span class="co-lang co-lang--cs">C#</span>
+				<span>Program.cs</span>
+			</div>
+			<Code code={csharpSnippet} lang="csharp" frame="none" />
+		</div>
+		<div class="co-hero__pane">
+			<div class="co-compare__bar">
+				<span class="co-lang co-lang--py">Py</span>
+				<span>main.py</span>
+			</div>
+			<Code code={pythonSnippet} lang="python" frame="none" />
+		</div>
+	</aside>
+</header>

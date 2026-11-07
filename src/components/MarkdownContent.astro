@@ -1,0 +1,7 @@
+---
+const { entry } = Astro.locals.starlightRoute;
+const isLesson = !!entry.data.unit;
+const isLanding = !!entry.data.course && entry.data.template === 'splash';
+---
+
+<div class:list={['sl-markdown-content', { 'co-lesson': isLesson, 'co-landing': isLanding }]}><slot /></div>

@@ -1,0 +1,573 @@
+---
+title: Python Setup & First Script
+description: Инсталирай Python, избери правилния interpreter във VS Code, стартирай и дебъгни първия си скрипт и създай изолирана .venv среда — за около 20 минути, с паралели към dotnet CLI, NuGet и Visual Studio.
+course: python-for-dotnet
+unit: '00'
+minutes: 20
+track: fast
+pagination: false
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LessonGoals from '../../../components/lesson/LessonGoals.astro';
+import CodeComparison from '../../../components/lesson/CodeComparison.astro';
+import MentalModelShift from '../../../components/lesson/MentalModelShift.astro';
+import PitfallCallout from '../../../components/lesson/PitfallCallout.astro';
+import LocalExercise from '../../../components/lesson/LocalExercise.astro';
+import PythonPlayground from '../../../components/lesson/PythonPlayground.astro';
+import Pitfalls from '../../../components/lesson/Pitfalls.astro';
+import Pitfall from '../../../components/lesson/Pitfall.astro';
+import ReadyCheck from '../../../components/lesson/ReadyCheck.astro';
+import KnowledgeCheck from '../../../components/lesson/KnowledgeCheck.astro';
+import LessonCheckpoint from '../../../components/lesson/LessonCheckpoint.astro';
+import greetStart from '../../../examples/python-for-dotnet/unit-00/greet_start.py?raw';
+import tracebackStart from '../../../examples/python-for-dotnet/unit-00/traceback_start.py?raw';
+
+Знаеш как изглежда `dotnet new console` → `dotnet run` → <kbd>F5</kbd>. Този модул прави същото за Python: инсталация, правилният interpreter във VS Code, първият скрипт, debugger и изолирана среда. Без обяснения какво е функция — само това, което е различно от .NET.
+
+<LessonGoals>
+- инсталираш Python и провериш от терминала коя версия и кой interpreter всъщност се извикват;
+- създадеш `main.py`, стартираш го от терминала и от VS Code и прочетеш Python traceback;
+- поставиш breakpoint и стъпиш през кода с debugger-а;
+- създадеш `.venv`, активираш го и го избереш като interpreter на проекта.
+</LessonGoals>
+
+## Инсталация на Python
+
+**Python е interpreter: няма отделни SDK и runtime и няма build стъпка.**
+
+В .NET инсталираш SDK (CLI + компилатор + runtime). В Python инсталираш interpreter — една програма (`python.exe` / `python3`), която компилира кода до bytecode в момента на изпълнение и веднага го изпълнява. Няколко версии могат да съществуват една до друга (както няколко SDK-та), а коя се стартира зависи от `PATH` и — на Windows — от launcher-а `py`.
+
+<CodeComparison csharpTitle="Познатото в .NET" pythonTitle="Същото в Python">
+<Fragment slot="csharp">
+
+```powershell frame="none"
+dotnet --version     # SDK по подразбиране
+dotnet --list-sdks   # всички SDK-та
+dotnet --info
+```
+
+</Fragment>
+<Fragment slot="python">
+
+```powershell frame="none"
+python --version     # първият в PATH
+py -0p               # (Windows) всички + пътища
+python -c "import sys; print(sys.executable)"
+```
+
+</Fragment>
+</CodeComparison>
+
+Официалният източник е [python.org/downloads](https://www.python.org/downloads/) — бутонът винаги сочи към текущата stable версия за твоята операционна система. Не е нужно да помниш номер на версия; всяка поддържана 3.x е достатъчна за този курс.
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+1. Изтегли installer-а от python.org и го стартирай.
+2. На първия екран **отметни „Add python.exe to PATH“** и остави **„py launcher“** включен. После *Install Now*.
+3. Отвори **нов** терминал (PATH се чете при стартиране на процеса) и провери:
+
+```powershell
+py --version
+python --version
+py -0p
+```
+
+Алтернатива с winget — пакетите са по minor версия, затова първо виж кои са налични:
+
+```powershell
+winget search Python.Python
+winget install --id Python.Python.3.14   # замени с най-новата stable от списъка
+```
+
+</TabItem>
+<TabItem label="macOS">
+
+macOS отдавна не включва Python. Два добри варианта:
+
+- **Официален installer** от python.org (universal2 `.pkg`). След инсталация стартирай *Install Certificates.command* от папката `Applications/Python 3.x` — без него HTTPS заявките от Python ще се провалят с грешка за сертификати.
+- **Homebrew**: `brew install python` поставя `python3` в `/opt/homebrew/bin`.
+
+```bash
+python3 --version
+which -a python3
+```
+
+На macOS и Linux командата е `python3` — голото `python` може да липсва или да сочи към нещо друго.
+
+</TabItem>
+<TabItem label="Linux">
+
+Debian/Ubuntu разделят venv модула в отделен пакет — инсталирай го веднага, иначе `python3 -m venv` ще се провали с „ensurepip is not available“:
+
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip
+python3 --version
+```
+
+Fedora: `sudo dnf install python3 python3-pip` (venv е включен). Не подменяй системния Python и не инсталирай пакети глобално с `pip` — системата ще откаже с `externally-managed-environment` (PEP 668). Точно за това е `.venv` от секция 07.
+
+</TabItem>
+</Tabs>
+
+<MentalModelShift>
+- **Няма build артефакт.** .NET компилира до IL веднъж, runtime-ът JIT-ва. Python компилира всеки модул до bytecode при първото зареждане (кешира го в `__pycache__/*.pyc`) и го изпълнява веднага. Няма `bin/Release`, което да deploy-ваш — deploy-ваш изходния код.
+- **Няколко версии са нормални.** `global.json` фиксира SDK за repo-то; в Python активният interpreter е този, към който `python` резолва в момента. По-късно `.venv` фиксира interpreter-а *за проекта*.
+- **Windows има muxer, останалите — не.** `py -3.14 main.py` избира конкретна версия, подобно на `dotnet` + `global.json`. На macOS/Linux решава редът в `PATH`.
+</MentalModelShift>
+
+<PitfallCallout>
+На Windows без инсталиран Python командата `python` **отваря Microsoft Store** вместо да върне „command not found“. Това е *App execution alias* на Windows — изключва се от *Settings → Apps → Advanced app settings → App execution aliases*. След инсталацията от python.org с отметнат PATH проблемът изчезва.
+</PitfallCallout>
+
+## Проверка: interpreter и PATH
+
+**Първият въпрос при всеки Python проблем е: „кой interpreter всъщност се изпълни?“**
+
+`dotnet` е един muxer, който сам намира правилното SDK. В Python няма такъв слой (освен `py` на Windows) — стартира се първият `python` по `PATH`. Истината винаги казва `sys.executable`:
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+```powershell
+py --version
+py -0p                        # всички инсталации и пътищата им
+python --version
+where.exe python              # кой python е първи в PATH (може да са няколко)
+python -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+<TabItem label="macOS">
+
+```bash
+python3 --version
+which -a python3              # всички python3 в PATH, по ред
+python3 -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+python3 --version
+which -a python3
+python3 -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+</Tabs>
+
+В този модул пишем `python` в командите; замени с `py` или `python3` според системата си. След секция 07 ще работиш винаги в `.venv`, където `python` е еднозначно — на всяка ОС.
+
+<PitfallCallout title="Предвиди резултата">
+На Windows `python --version` печата 3.12, а `py --version` — 3.14. Натискаш *Run* във VS Code. Коя версия изпълнява `main.py`?
+
+**Нито една от двете команди не решава.** VS Code използва **избрания в status bar interpreter** (секция 03), а не терминалния `PATH`. Три различни отговора на един и същ въпрос — затова `sys.executable` е първото нещо, което печаташ при съмнение.
+</PitfallCallout>
+
+## VS Code и Python extension
+
+**Същият редактор, друго разширение: `ms-python.python` носи IntelliSense (Pylance), debugger (debugpy) и избора на interpreter.**
+
+1. Инсталирай [VS Code](https://code.visualstudio.com/) (ако липсва) и extension-а **Python** от Microsoft (`ms-python.python`). То автоматично добавя **Pylance** и **Python Debugger**.
+2. Създай празна папка `hello-python` и я отвори: `code hello-python`.
+3. **Избери interpreter**: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → *Python: Select Interpreter* → избери инсталацията от предишната секция (по-късно тук ще избираш `.venv`). Избраният interpreter се вижда **долу вдясно в status bar** — това е еквивалентът на „target framework + SDK“ в едно.
+4. По избор: `"editor.formatOnSave": true` и extension-ът **Ruff** (linter + formatter). Ще ги систематизираме в Unit 08.
+
+<MentalModelShift>
+- **Няма project файл.** C# Dev Kit работи около `.sln`/`.csproj`. Python extension-ът работи около **папка + избран interpreter**. „Проектът“ е директорията.
+- Изборът на interpreter се пази в workspace настройките на VS Code (`.vscode/settings.json`, `python.defaultInterpreterPath`) — незадължително, но полезно в екип.
+- **Pylance ≈ Roslyn в редактора**, но само в редактора. Той подчертава грешки статично; нищо не те спира да стартираш кода въпреки тях.
+</MentalModelShift>
+
+## Първият скрипт: main.py
+
+**Един файл, без проект, без `Main` — модулът се изпълнява отгоре надолу.**
+
+<CodeComparison csharpFile="Program.cs" pythonFile="main.py">
+<Fragment slot="csharp">
+
+```csharp frame="none"
+// dotnet new console (top-level statements)
+string Greet(string name) => $"Hello, {name}!";
+
+Console.WriteLine(Greet("Curious Otter"));
+```
+
+</Fragment>
+<Fragment slot="python">
+
+```python frame="none"
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+
+if __name__ == "__main__":
+    print(greet("Curious Otter"))
+```
+
+</Fragment>
+</CodeComparison>
+
+<MentalModelShift>
+- **`if __name__ == "__main__":` е конвенцията за entry point**, не изискване на езика. Блокът под него се изпълнява само когато файлът е стартиран директно; когато друг модул го `import`-не, `__name__` е името на модула и блокът се пропуска (Unit 02). Без guard-а скриптът също работи — но всеки `import` би отпечатал поздрава.
+- **Блоковете са с отстъп, не със скоби.** `:` отваря блок; стандартът (PEP 8) е 4 интервала. Два празни реда между top-level дефиниции — formatter-ите го правят вместо теб.
+- **Type hints не се проверяват при изпълнение.** `name: str` и `-> str` са метаданни за редактора и за Pyright (Unit 08). `greet(42)` се изпълнява и връща `"Hello, 42!"`.
+- `f"Hello, {name}!"` ≈ `$"Hello, {name}!"`. `print` добавя нов ред, като `Console.WriteLine`.
+- Конвенции: `snake_case` за функции и променливи, `PascalCase` само за класове.
+</MentalModelShift>
+
+<LocalExercise file="main.py">
+1. В папката `hello-python` създай `main.py` с Python кода отгоре (или [изтегли готовия файл](/downloads/python-for-dotnet/unit-00/main.py)).
+2. От терминала, в същата папка:
+
+```powershell
+python main.py        # Windows: също py main.py · macOS/Linux: python3 main.py
+```
+
+3. Във VS Code: бутонът ▷ *Run Python File* горе вдясно или <kbd>Ctrl</kbd>+<kbd>F5</kbd>. Изпълнява се във вградения терминал с **избрания interpreter**.
+
+Очакван изход:
+
+```text
+Hello, Curious Otter!
+```
+</LocalExercise>
+
+<PythonPlayground
+  id="greet"
+  title="Извикай функцията с два различни входа"
+  task="Извикай greet втори път — с името Ada. После пробвай greet(42): изпълнява ли се въпреки анотацията name: str?"
+  code={greetStart}
+  expect={['Hello, Curious Otter!', 'Hello, Ada!']}
+  hint='Под съществуващия print добави нов ред със същия отстъп: print(greet("Ada")). Анотациите не спират greet(42) — ще получиш "Hello, 42!".'
+/>
+
+## Изпълнение и четене на грешки
+
+**Грешките идват при изпълнение, не при компилация — и traceback-ът се чете отдолу нагоре.**
+
+Между теб и стартирания код няма компилатор. Typo в име е `NameError` в момента, в който редът се изпълни — а ако редът е в клон, който не се изпълнява, грешката изобщо не се появява. Pylance хваща много от тези случаи в редактора, но не е гаранция като C# компилатора. Когато нещо гръмне, Python печата traceback:
+
+```text
+Traceback (most recent call last):
+  File "main.py", line 6, in <module>
+    print(great("Curious Otter"))
+          ^^^^^
+NameError: name 'great' is not defined. Did you mean: 'greet'?
+```
+
+<MentalModelShift>
+- **Обратен ред спрямо .NET.** C# stack trace започва с най-скорошното повикване. Python казва „most recent call last“: **последният ред е какво се е случило, редът над него — къде**. Чети отдолу нагоре.
+- **Exit code 1** при неуловено изключение — същото като unhandled exception в конзолно .NET приложение, удобно за скриптове и CI.
+- Грешки от първия ден: `NameError` (typo или недефинирано име), `IndentationError` / `TabError` (грешен или смесен отстъп), `SyntaxError: expected ':'`, `ModuleNotFoundError` (пакетът не е инсталиран в *този* interpreter — секция 07) и `TypeError: can only concatenate str (not "int") to str` — Python не вика `ToString()` вместо теб.
+</MentalModelShift>
+
+<PythonPlayground
+  id="traceback"
+  title="Прочети traceback-а, после поправи реда"
+  task="Изпълни кода както е и прочети грешката отдолу нагоре. После поправи describe така, че да отпечата Python 3 for Curious Otter."
+  code={tracebackStart}
+  expect={['Python 3 for Curious Otter']}
+  hint='Операторът + за низове не конвертира числа. Използвай f-string: f"Python {version} for {name}" — или str(version).'
+/>
+
+## Debugging във VS Code
+
+**Същите клавиши, друг debugger (debugpy) — плюс вграден `breakpoint()`.**
+
+1. Кликни вляво от номера на реда `return f"Hello, {name}!"` (или <kbd>F9</kbd>) — червена точка.
+2. <kbd>F5</kbd> → при първо стартиране избери **Python Debugger: Python File**. Изпълнението спира на breakpoint-а.
+3. Панелите са познатите: **Variables** (локалната `name`), **Watch**, **Call Stack** и **Debug Console** — в него изпълняваш Python изрази в паузирания контекст, като Immediate Window.
+4. <kbd>F10</kbd> Step Over, <kbd>F11</kbd> Step Into, <kbd>Shift</kbd>+<kbd>F11</kbd> Step Out, <kbd>F5</kbd> Continue — както във Visual Studio.
+5. `breakpoint()` в кода е програмен breakpoint — аналог на `Debugger.Break()`. Под debugger спира там; без debugger отваря вградения `pdb` в терминала (`c` продължава, `q` излиза).
+6. `launch.json` не е задължителен — конфигурацията *Python File* е вградена. Нужен е само когато подаваш аргументи или environment variables (*Run and Debug → create a launch.json file*).
+
+| Visual Studio / C# | VS Code / Python | Бележка |
+| --- | --- | --- |
+| <kbd>F5</kbd>, <kbd>F9</kbd>, <kbd>F10</kbd>, <kbd>F11</kbd> | същите | VS Code keymap по подразбиране |
+| Immediate Window | Debug Console | изпълнява реален Python в текущия frame |
+| `Debugger.Break()` | `breakpoint()` | вграден в езика от Python 3.7 |
+| Edit & Continue / Hot Reload | — | рестартираш; скриптовете стартират за милисекунди |
+
+<MentalModelShift>
+Debug Console изпълнява истински Python в паузирания frame: можеш да извикаш `greet("x")`, да видиш `type(name)` или `dir(name)`. В динамичен език това е първокласен начин да изследваш API — не само да ловиш bug-ове.
+</MentalModelShift>
+
+## Virtual environment (.venv)
+
+**`pip install` инсталира в активния interpreter. Без `.venv` „активният interpreter“ е цялата машина.**
+
+NuGet възстановява пакетите в глобален кеш (`~/.nuget/packages`), но всеки проект ги *референцира* през `.csproj` — два проекта могат да ползват различни версии без конфликт. `pip` инсталира в `site-packages` на interpreter-а, който го е извикал: един общ пул за всички проекти на тази версия. `.venv` е изолирано копие (или link) на interpreter-а със собствен `site-packages` — по една среда на проект.
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+```powershell
+cd hello-python
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -c "import sys; print(sys.executable)"   # ...\hello-python\.venv\Scripts\python.exe
+python -m pip --version                          # pip ... from ...\.venv\...
+```
+
+Ако PowerShell откаже да изпълни `Activate.ps1` (execution policy), разреши еднократно подписаните локални скриптове за своя потребител: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. В `cmd` активирането е `.venv\Scripts\activate.bat`.
+
+</TabItem>
+<TabItem label="macOS">
+
+```bash
+cd hello-python
+python3 -m venv .venv
+source .venv/bin/activate
+python -c "import sys; print(sys.executable)"   # .../hello-python/.venv/bin/python
+python -m pip --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd hello-python
+python3 -m venv .venv
+source .venv/bin/activate
+python -c "import sys; print(sys.executable)"   # .../hello-python/.venv/bin/python
+python -m pip --version
+```
+
+</TabItem>
+</Tabs>
+
+След активиране prompt-ът започва с `(.venv)` и вътре `python` е еднозначно — край на танца `py` / `python3`. `deactivate` излиза от средата.
+
+**VS Code** разпознава новата `.venv` и предлага да я избере; ако не — *Python: Select Interpreter* → `./.venv/...`. Новите вградени терминали се отварят с активирана среда. Алтернатива: *Python: Create Environment* → *Venv* създава и избира средата с една команда.
+
+Първата зависимост и проверката, че е отишла на правилното място:
+
+```powershell
+python -m pip install requests
+python -m pip list
+```
+
+<MentalModelShift>
+- **NuGet: глобален кеш + per-project граф. pip: per-environment инсталация.** `.venv` е това, което прави „per-project“ вярно и за Python.
+- **Средата е за еднократна употреба.** `dotnet restore` пресъздава `obj/` от `.csproj`; `python -m venv .venv` + `pip install -r requirements.txt` пресъздава средата от списъка. Затова `.venv/` отива в `.gitignore`, както `bin/` и `obj/`. Съвременният еквивалент на `.csproj` е `pyproject.toml` — Unit 08.
+- **`python -m pip`, не `pip`.** Така pip-ът е гарантирано на *този* interpreter; голото `pip` в `PATH` може да е на друга инсталация.
+- **Linux и PEP 668.** Системният Python отказва `pip install` именно за да не счупиш ОС-а — `.venv` е отговорът, не `--break-system-packages`.
+</MentalModelShift>
+
+<PitfallCallout>
+Терминал, отворен **преди** да избереш `.venv`, не е активиран — `pip install` в него отива в глобалния interpreter, а после `import` във VS Code дава `ModuleNotFoundError`. Затвори го и отвори нов, или активирай ръчно. Проверка: `python -m pip --version` трябва да покаже път вътре в `.venv`.
+</PitfallCallout>
+
+## .NET ↔ Python: карта на инструментите
+
+**Аналогии за ориентация — не еквиваленти.**
+
+| .NET | Python | Бележка |
+| --- | --- | --- |
+| `dotnet --version` | `python --version`, `py -0p` | в .NET версията е на SDK, в Python — на interpreter-а |
+| SDK + runtime | interpreter | един компонент: компилира до bytecode и изпълнява |
+| `dotnet new console` | `mkdir` + `main.py` | няма шаблон, няма project файл |
+| `Program.cs` / `Main` | `main.py` / `if __name__ == "__main__":` | конвенция, не изискване |
+| `dotnet run` | `python main.py` | няма build стъпка; bytecode кеш в `__pycache__` |
+| `dotnet build` | — | няма отделен артефакт за deploy |
+| `.csproj` + NuGet | `pyproject.toml` + PyPI (`pip` / `uv`) | концептуален аналог, различен модел на инсталиране |
+| `global.json` | избран interpreter / `.venv` | фиксира версията за проекта |
+| `bin/`, `obj/` | `.venv/`, `__pycache__/` | не се commit-ват |
+| `Debugger.Break()` | `breakpoint()` | вграден в езика |
+| Immediate Window | Debug Console, REPL (`python`) | REPL-ът е ежедневен инструмент в Python |
+
+## C# инстинкти, които да забравиш
+
+**Шест навика от .NET, които в Python водят до объркване още през първия ден.**
+
+<Pitfalls>
+  <Pitfall
+    title="Компилаторът няма да те спаси"
+    code={'prnt("ready")   # NameError — чак при изпълнение'}
+    why="В C# това е CS0103 преди старта. В Python редът гърми при изпълнение — ако е в рядък клон, bug-ът стига до production. Pylance, Ruff и тестовете поемат ролята на компилатора."
+    priority
+  >
+    Pylance подчертава недефинираното име в редактора, но <kbd>F5</kbd> пак ще стартира кода. Направи си навик: червена вълничка = не стартирай, преди да я разбереш.
+  </Pitfall>
+  <Pitfall
+    title="„python“ не е непременно този Python"
+    code={'python --version   # 3.12\npy --version       # 3.14 — кой стартира?'}
+    why="PATH решава кой interpreter стартира; VS Code има отделен избор. sys.executable казва истината. В .venv проблемът изчезва."
+    priority
+  />
+  <Pitfall
+    title="Отстъпът е синтаксис, не стил"
+    code={'if ready:\nprint("go")   # IndentationError'}
+    why="В C# скобите определят блока, а отстъпът е козметика. В Python отстъпът е блокът. Смесени табове и интервали дават TabError — провери „Spaces: 4“ в status bar на VS Code."
+    priority
+  />
+  <Pitfall
+    title="Traceback-ът се чете отдолу нагоре"
+    code={'NameError: name \'great\' is not defined'}
+    why="C# stack trace започва с най-скорошното повикване. Python завършва с него („most recent call last“): последният ред е грешката, редът над него — мястото."
+  />
+  <Pitfall
+    title="pip install без .venv е инсталация за цялата машина"
+    code={'pip install requests   # в кой interpreter?'}
+    why="Няма per-project restore като при NuGet — пакетът отива в site-packages на interpreter-а, който го е извикал. Винаги .venv, винаги python -m pip."
+    priority
+  />
+  <Pitfall
+    title="Type hints не са типове"
+    code={'greet(42)   # работи и връща "Hello, 42!"'}
+    why="name: str не се проверява при изпълнение. Pyright/mypy ги проверяват статично (Unit 08); входа от външния свят валидираш сам."
+  />
+</Pitfalls>
+
+## Environment Ready Check
+
+**Преди да продължиш към Unit 01, всяка точка трябва да е вярна на твоята машина.**
+
+<ReadyCheck
+  items={[
+    'В нов терминал python --version (или py / python3) печата версия 3.x.',
+    'VS Code има инсталиран extension-а Python (ms-python.python) и в status bar се вижда избран interpreter.',
+    'python main.py печата Hello, Curious Otter! — и от терминала, и с Run Python File.',
+    'Спирал съм на breakpoint и съм видял стойността на name в панела Variables.',
+    '.venv е създадена и активирана; python -c "import sys; print(sys.executable)" сочи път вътре в .venv.',
+    'python -m pip --version показва pip от .venv.',
+    '.venv/ е добавена в .gitignore.',
+  ]}
+/>
+
+## Самостоятелна задача
+
+**Промени функцията, стартирай я с два различни входа и я дебъгни.**
+
+<LocalExercise file="main.py">
+1. Добави втори параметър със стойност по подразбиране: `def greet(name: str, greeting: str = "Hello") -> str` и върни `f"{greeting}, {name}!"`.
+2. Извикай я два пъти с различни входове под guard-а: `greet("Ada")` и `greet("Linus", greeting="Hi")` — вторият е *keyword argument*, като named argument в C# (повече в Unit 02).
+3. Сложи breakpoint на реда с `return`, стартирай с <kbd>F5</kbd> и при второто спиране провери `greeting` и `name` в **Variables**.
+4. В **Debug Console** напиши `greeting.upper()` — методите на низовете се викат както в C#.
+5. Бонус: добави `print(greet(42))`, виж какво казва Pylance в редактора *преди* да стартираш — и какво прави Python след това.
+
+Очакван изход:
+
+```text
+Hello, Ada!
+Hi, Linus!
+```
+</LocalExercise>
+
+## Провери модела
+
+**Четири въпроса. Избери отговор — обяснението идва веднага.**
+
+<KnowledgeCheck
+  question={'Какво прави if __name__ == "__main__": ?'}
+  choices={[
+    {
+      text: 'Обявява entry point, който Python изисква за всяко приложение.',
+      explain: 'Python не изисква entry point — всеки файл се изпълнява отгоре надолу. Guard-ът е конвенция.',
+    },
+    {
+      text: 'Изпълнява блока само когато файлът е стартиран директно, а не когато е import-нат като модул.',
+      explain: 'При директно стартиране __name__ е "__main__"; при import — името на модула. Така един файл е едновременно скрипт и библиотека.',
+      correct: true,
+    },
+    {
+      text: 'Компилира модула до bytecode преди изпълнение.',
+      explain: 'Компилацията до bytecode става автоматично при зареждане на всеки модул, независимо от guard-а.',
+    },
+    {
+      text: 'Същото като static void Main — без него скриптът не стартира.',
+      explain: 'Без guard-а скриптът стартира нормално; разликата се вижда само когато файлът бъде import-нат.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="Изпълнил си pip install requests в терминала, но import requests във VS Code дава ModuleNotFoundError. Най-вероятната причина?"
+  choices={[
+    {
+      text: 'requests не поддържа тази версия на Python.',
+      explain: 'Тогава pip щеше да откаже инсталацията с грешка, а не да я завърши успешно.',
+    },
+    {
+      text: 'Пакетът е инсталиран в друг interpreter от този, който VS Code използва.',
+      explain: 'Класическият случай: терминалът е сочил към глобалния Python, а VS Code — към .venv (или обратно). Провери с python -m pip --version и sys.executable.',
+      correct: true,
+    },
+    {
+      text: 'Windows изисква рестарт след инсталация на пакет.',
+      explain: 'Пакетите са просто файлове в site-packages — няма регистрация в системата.',
+    },
+    {
+      text: 'import изисква пълния път до пакета.',
+      explain: 'import търси по sys.path на активния interpreter; пътища не се подават.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="Къде в Python traceback е редът, който описва самата грешка?"
+  choices={[
+    {
+      text: 'Най-отгоре, както в C# stack trace.',
+      explain: 'Обратно на .NET: Python печата повикванията в хронологичен ред и завършва с грешката.',
+    },
+    {
+      text: 'Най-отдолу — „most recent call last“.',
+      explain: 'Последният ред е типът и съобщението на изключението; редът над него е файлът и номерът на реда, където е възникнало.',
+      correct: true,
+    },
+    {
+      text: 'В средата, маркиран с ^.',
+      explain: 'Каретите (^) само подчертават израза в реда с грешката; самото описание е на последния ред.',
+    },
+    {
+      text: 'Няма такъв ред — трябва debugger.',
+      explain: 'Traceback-ът съдържа всичко необходимо за повечето грешки; debugger-ът е за по-сложните случаи.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="Функцията е def greet(name: str) -> str. Какво става при greet(42)?"
+  code={'def greet(name: str) -> str:\n    return f"Hello, {name}!"\n\nprint(greet(42))'}
+  choices={[
+    {
+      text: 'TypeError заради анотацията name: str.',
+      explain: 'Анотациите са метаданни — interpreter-ът не ги проверява при извикване.',
+    },
+    {
+      text: 'Изпълнява се и отпечатва Hello, 42! — hints не се проверяват при runtime.',
+      explain: 'f-string-ът форматира 42 като текст. Статичната проверка е работа на Pyright/mypy (Unit 08), не на interpreter-а.',
+      correct: true,
+    },
+    {
+      text: 'Pylance спира изпълнението.',
+      explain: 'Pylance само подчертава в редактора; никога не пречи на стартирането.',
+    },
+    {
+      text: 'Python конвертира 42 към "42" преди извикването и предупреждава.',
+      explain: 'Няма имплицитна конверсия при извикване и няма предупреждение — стойността влиза като int и f-string-ът я форматира.',
+    },
+  ]}
+/>
+
+## TL;DR
+
+**Шест съответствия, които да запомниш от този модул.**
+
+- **Interpreter вместо SDK + runtime.** `python --version` и `sys.executable` са първите команди при съмнение.
+- **Папка + `main.py` вместо проект.** `if __name__ == "__main__":` играе ролята на `Main`, но е конвенция.
+- **`python main.py` вместо `dotnet run`.** Няма build стъпка; bytecode кешът е в `__pycache__`.
+- **Traceback се чете отдолу нагоре.** Последният ред — какво; редът над него — къде.
+- **Винаги `.venv`, винаги `python -m pip`.** `.venv/` в `.gitignore`, както `bin/` и `obj/`.
+- **Същите debug клавиши.** `breakpoint()` ≈ `Debugger.Break()`, Debug Console ≈ Immediate Window.
+
+<LessonCheckpoint />

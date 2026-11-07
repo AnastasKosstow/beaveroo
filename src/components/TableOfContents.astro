@@ -5,6 +5,7 @@ const { toc, entry } = Astro.locals.starlightRoute;
 if (toc && toc.items.length > 0) {
 	toc.items[0] = { ...toc.items[0], text: entry.data.title };
 }
+const isLesson = !!entry.data.unit;
 ---
 
-<Default><slot /></Default>
+<div class:list={{ 'co-toc': isLesson }}><Default><slot /></Default></div>

@@ -1,0 +1,129 @@
+---
+import {
+	formatDuration,
+	getCourseById,
+	langOf,
+	localeBase,
+	moduleHref,
+	trackMinutes,
+	type ModuleTrack,
+} from '../../courses';
+
+interface Props {
+	course?: string;
+}
+
+const { entry, locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const lang = langOf(locale);
+const base = localeBase(locale);
+
+const course = getCourseById(Astro.props.course ?? entry.data.course);
+if (!course || !course.modules) {
+	throw new Error('CoursePath: the page must belong to a course with modules (see src/courses.ts).');
+}
+
+const modules = course.modules;
+const total = modules.length;
+const tracks: { id: ModuleTrack; label: string }[] = [
+	{ id: 'fast', label: t('course.fastTrack') },
+	{ id: 'deep', label: t('course.deepDive') },
+];
+---
+
+<section id="path" class="co-path not-content" data-course-path={course.id} data-total={total}>
+	<aside class="co-path__progress">
+		<p class="co-eyebrow co-eyebrow--muted">{t('course.yourProgress')}</p>
+		<p class="co-path__percent"><span data-progress-percent>0</span><span class="co-path__percent-sign">%</span></p>
+		<div class="co-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-bar>
+			<div class="co-progress__fill" style="width: 0%"></div>
+		</div>
+		<p class="co-path__count" data-progress-count data-template={t('course.progressOf', { done: '{{done}}', total: '{{total}}' })}>
+			{t('course.progressOf', { done: 0, total })}
+		</p>
+		<a class="co-btn co-btn--primary" href={`${base}${course.startHref}`}>
+			{t('course.start')} <span aria-hidden="true">→</span>
+		</a>
+		<p class="co-path__note">{t('course.progressNote')}</p>
+	</aside>
+
+	<div class="co-path__tracks">
+		{
+			tracks.map((track) => {
+				const items = modules.filter((module) => module.track === track.id);
+				if (items.length === 0) return null;
+				return (
+					<section class="co-path__track">
+						<h3 class="co-path__track-title">
+							<span>{track.label}</span>
+							<span class="co-path__track-meta">
+								{items.length} · ~{formatDuration(trackMinutes(course, track.id), lang)}
+							</span>
+						</h3>
+						<ol class="co-path__list">
+							{items.map((module) => {
+								const href = moduleHref(course, module, locale);
+								return (
+									<li class:list={['co-path__item', { 'is-upcoming': !href }]} data-module={module.id}>
+										<span class="co-path__num">{module.number}</span>
+										<div class="co-path__text">
+											<p class="co-path__tagline">{module.tagline[lang]}</p>
+											<p class="co-path__title">
+												{href ? <a href={href}>{module.title[lang]}</a> : module.title[lang]}
+											</p>
+										</div>
+										<div class="co-path__side">
+											<span class="co-path__minutes">{t('course.minutes', { n: module.minutes })}</span>
+											{href ? (
+												<a class="co-path__open" href={href}>
+													{t('course.open')} <span aria-hidden="true">→</span>
+												</a>
+											) : (
+												<span class="co-path__badge">{t('course.upcoming')}</span>
+											)}
+											<span class="co-path__check" aria-hidden="true">
+												✓
+											</span>
+										</div>
+									</li>
+								);
+							})}
+						</ol>
+					</section>
+				);
+			})
+		}
+	</div>
+</section>
+
+<script>
+	import { onProgress } from '../../scripts/progress';
+
+	document.querySelectorAll<HTMLElement>('[data-course-path]').forEach((path) => {
+		const courseId = path.dataset.coursePath;
+		const total = Number(path.dataset.total ?? 0);
+		if (!courseId || !total) return;
+
+		const percentEl = path.querySelector<HTMLElement>('[data-progress-percent]');
+		const barEl = path.querySelector<HTMLElement>('[data-progress-bar]');
+		const fillEl = barEl?.querySelector<HTMLElement>('.co-progress__fill');
+		const countEl = path.querySelector<HTMLElement>('[data-progress-count]');
+		const template = countEl?.dataset.template ?? '';
+
+		onProgress(courseId, (completed) => {
+			let done = 0;
+			path.querySelectorAll<HTMLElement>('[data-module]').forEach((item) => {
+				const isDone = completed.has(item.dataset.module ?? '');
+				item.classList.toggle('is-complete', isDone);
+				if (isDone) done += 1;
+			});
+			const percent = Math.round((done / total) * 100);
+			if (percentEl) percentEl.textContent = String(percent);
+			if (fillEl) fillEl.style.width = `${percent}%`;
+			if (barEl) barEl.setAttribute('aria-valuenow', String(percent));
+			if (countEl && template) {
+				countEl.textContent = template.replace('{{done}}', String(done)).replace('{{total}}', String(total));
+			}
+		});
+	});
+</script>

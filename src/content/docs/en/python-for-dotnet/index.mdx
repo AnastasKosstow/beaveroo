@@ -1,0 +1,58 @@
+---
+title: Python for .NET Developers
+description: A short Python course for experienced C#/.NET developers — side-by-side comparisons, semantic differences, exercises in the browser and locally in VS Code. No explanations of what a variable is.
+template: splash
+course: python-for-dotnet
+---
+
+import Eyebrow from '../../../../components/course/Eyebrow.astro';
+import Features from '../../../../components/course/Features.astro';
+import Feature from '../../../../components/course/Feature.astro';
+import CoursePath from '../../../../components/course/CoursePath.astro';
+
+<Eyebrow>01 / How the course works</Eyebrow>
+
+## Four parts, one habit.
+
+The course is built from a small set of pieces that repeat in every module and reinforce each other — instead of one long, undifferentiated textbook.
+
+<Features>
+  <Feature title="C# ↔ Python side by side">
+    Every concept starts from code you already write in C# and shows the comparable Python next to it. You don't learn syntax in a vacuum — you translate.
+  </Feature>
+  <Feature title="What actually changes">
+    Different syntax is the easy part. We explain the semantics separately: references, lazy vs eager, hints without runtime checks, `is` vs `==`.
+  </Feature>
+  <Feature title="Try in the browser + run locally">
+    Short Python exercises right on the page (Pyodide, no backend) and tasks for your own terminal and VS Code — with `.venv`, the debugger and real files.
+  </Feature>
+  <Feature title="Pitfalls for C# developers">
+    In every module: the .NET instincts that quietly become bugs in Python — mutable defaults, shared references, truthiness, `python` ≠ `python3`.
+  </Feature>
+</Features>
+
+<Eyebrow>02 / Who it's for</Eyebrow>
+
+## If you already ship software, this is for you.
+
+We assume engineering judgment: OOP, collections, LINQ, async/await, exceptions, NuGet, tests, HTTP. We don't explain what a variable or a loop is — we explain which Python idioms replace the C# patterns you reach for by habit.
+
+**The promise:** after one focused afternoon with the material and the exercises you can read typical Python code, run and debug a project locally, write small scripts and run tests.
+
+**It is not:** a beginner programming course; full coverage of Python or CPython internals; a course on Django, FastAPI, pandas or machine learning. Those are next steps — here we build the language foundation they skip.
+
+<Eyebrow>03 / Learning path</Eyebrow>
+
+## Build on what you know.
+
+Fast Track is the core and is meant to be followed in order. Deep Dive modules are optional and come after it. Completed modules are marked locally in your browser — no sign-up.
+
+<CoursePath />
+
+<Eyebrow>04 / How to study</Eyebrow>
+
+## Three rules for maximum effect.
+
+1. **Install Python locally in Unit 00.** The in-browser exercises are a convenience for quick checks — they don't replace a real interpreter, debugger and `.venv`.
+2. **Do the "Try it in the browser" and "Run locally" parts, don't just read.** The most useful differences (references, truthiness, lazy evaluation) only sink in when the output surprises you.
+3. **Come back to the pitfalls.** Every module ends with a short list of C# instincts to unlearn. It is worth more than the explanation itself — especially after a week of real Python work.

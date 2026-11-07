@@ -1,0 +1,15 @@
+---
+interface Props {
+	title?: string;
+}
+
+const { title = Astro.locals.t('goals.title') } = Astro.props;
+---
+
+<section class="co-goals" aria-label={title}>
+	<p class="co-goals__title">
+		<span class="co-goals__icon" aria-hidden="true">🎯</span>
+		<span>{title}</span>
+	</p>
+	<div class="co-goals__body"><slot /></div>
+</section>

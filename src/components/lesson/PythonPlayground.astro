@@ -1,0 +1,328 @@
+---
+interface Props {
+	id: string;
+	title: string;
+	task?: string;
+	code: string;
+	expect?: string[];
+	hint?: string;
+	rows?: number;
+}
+
+const { entry } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const { id, title, task, code, expect = [], hint, rows = 12 } = Astro.props;
+
+const draftKey = `co:draft:${entry.data.course ?? 'course'}/${entry.data.unit ?? entry.id}/${id}`;
+const timeoutSeconds = 20;
+
+const labels = {
+	run: t('playground.run'),
+	loading: t('playground.loading'),
+	running: t('playground.running'),
+	copy: t('playground.copy'),
+	copied: t('playground.copied'),
+	outputEmpty: t('playground.outputEmpty'),
+	statusIdle: t('playground.statusIdle'),
+	statusOk: t('playground.statusOk'),
+	statusPassed: t('playground.statusPassed'),
+	statusKeepGoing: t('playground.statusKeepGoing'),
+	statusError: t('playground.statusError'),
+	passed: t('playground.passed'),
+	keepGoing: t('playground.keepGoing'),
+	errorIntro: t('playground.errorIntro'),
+	timeout: t('playground.timeout', { seconds: timeoutSeconds }),
+	loadError: t('playground.loadError'),
+};
+---
+
+<co-playground
+	class="co-play not-content"
+	data-draft-key={draftKey}
+	data-expect={JSON.stringify(expect)}
+	data-i18n={JSON.stringify(labels)}
+	data-timeout={timeoutSeconds * 1000}
+>
+	<header class="co-play__head">
+		<p class="co-eyebrow">
+			<span class="co-eyebrow__dot" aria-hidden="true"></span>
+			<span>{t('playground.tryIt')}</span>
+		</p>
+		<p class="co-play__title">{title}</p>
+		{
+			task && (
+				<p class="co-play__task">
+					<strong>{t('playground.task')}</strong> {task}
+				</p>
+			)
+		}
+	</header>
+
+	<div class="co-play__workspace">
+		<div class="co-play__editor">
+			<div class="co-play__bar">
+				<span class="co-play__file">main.py</span>
+				<small>{t('playground.editable')}</small>
+			</div>
+			<textarea
+				class="co-play__code"
+				spellcheck="false"
+				autocapitalize="off"
+				autocomplete="off"
+				autocorrect="off"
+				wrap="off"
+				rows={rows}
+				aria-label={`${t('playground.editorLabel')}: ${title}`}
+				set:text={code}></textarea>
+			<div class="co-play__controls">
+				<button type="button" class="co-btn co-btn--primary co-play__run" data-run title={t('playground.shortcut')}>
+					<span aria-hidden="true">▶</span>
+					<span data-run-label>{t('playground.run')}</span>
+				</button>
+				{
+					hint && (
+						<button type="button" class="co-btn co-btn--ghost" data-hint aria-expanded="false">
+							{t('playground.hint')}
+						</button>
+					)
+				}
+				<button type="button" class="co-btn co-btn--ghost" data-reset>{t('playground.reset')}</button>
+				<button type="button" class="co-btn co-btn--ghost" data-copy>{t('playground.copy')}</button>
+			</div>
+			{hint && <p class="co-play__hint" data-hint-text hidden>{hint}</p>}
+		</div>
+
+		<div class="co-play__console">
+			<div class="co-play__bar">
+				<span>{t('playground.output')}</span>
+				<small class="co-play__status" data-status>{t('playground.statusIdle')}</small>
+			</div>
+			<pre class="co-play__out" aria-live="polite" aria-atomic="true"><code data-output class="is-empty">{t('playground.outputEmpty')}</code></pre>
+			<p class="co-play__feedback" data-feedback hidden></p>
+		</div>
+	</div>
+
+	<p class="co-play__note">{t('playground.note')}</p>
+</co-playground>
+
+<script>
+	import { ensureRuntime, runPython, PythonTimeoutError, type RunResult } from '../../scripts/pyodide-runner';
+
+	type Labels = Record<
+		| 'run'
+		| 'loading'
+		| 'running'
+		| 'copy'
+		| 'copied'
+		| 'outputEmpty'
+		| 'statusIdle'
+		| 'statusOk'
+		| 'statusPassed'
+		| 'statusKeepGoing'
+		| 'statusError'
+		| 'passed'
+		| 'keepGoing'
+		| 'errorIntro'
+		| 'timeout'
+		| 'loadError',
+		string
+	>;
+
+	class Playground extends HTMLElement {
+		connectedCallback() {
+			const labels = JSON.parse(this.dataset.i18n ?? '{}') as Labels;
+			const expect = JSON.parse(this.dataset.expect ?? '[]') as string[];
+			const draftKey = this.dataset.draftKey;
+			const timeoutMs = Number(this.dataset.timeout) || 20_000;
+
+			const textarea = this.querySelector<HTMLTextAreaElement>('textarea');
+			const runButton = this.querySelector<HTMLButtonElement>('[data-run]');
+			const runLabel = this.querySelector<HTMLElement>('[data-run-label]');
+			const resetButton = this.querySelector<HTMLButtonElement>('[data-reset]');
+			const copyButton = this.querySelector<HTMLButtonElement>('[data-copy]');
+			const hintButton = this.querySelector<HTMLButtonElement>('[data-hint]');
+			const hintText = this.querySelector<HTMLElement>('[data-hint-text]');
+			const output = this.querySelector<HTMLElement>('[data-output]');
+			const status = this.querySelector<HTMLElement>('[data-status]');
+			const feedback = this.querySelector<HTMLElement>('[data-feedback]');
+			if (!textarea || !runButton || !output || !status || !feedback) return;
+
+			if (draftKey) {
+				try {
+					const draft = window.localStorage.getItem(draftKey);
+					if (draft !== null && draft !== textarea.defaultValue) textarea.value = draft;
+				} catch {}
+			}
+			let saveTimer = 0;
+			textarea.addEventListener('input', () => {
+				if (!draftKey) return;
+				window.clearTimeout(saveTimer);
+				saveTimer = window.setTimeout(() => {
+					try {
+						if (textarea.value === textarea.defaultValue) window.localStorage.removeItem(draftKey);
+						else window.localStorage.setItem(draftKey, textarea.value);
+					} catch {}
+				}, 300);
+			});
+
+			textarea.addEventListener('keydown', (event) => {
+				if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+					event.preventDefault();
+					void run();
+					return;
+				}
+				if (event.key === 'Tab') {
+					event.preventDefault();
+					const start = textarea.selectionStart;
+					const end = textarea.selectionEnd;
+					textarea.setRangeText('    ', start, end, 'end');
+					textarea.dispatchEvent(new Event('input'));
+					return;
+				}
+				if (event.key === 'Enter') {
+					const start = textarea.selectionStart;
+					const lineStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
+					const line = textarea.value.slice(lineStart, start);
+					const indent = line.match(/^[ \t]*/)?.[0] ?? '';
+					const extra = line.trimEnd().endsWith(':') ? '    ' : '';
+					event.preventDefault();
+					textarea.setRangeText(`\n${indent}${extra}`, start, textarea.selectionEnd, 'end');
+					textarea.dispatchEvent(new Event('input'));
+				}
+			});
+
+			const setStatus = (text: string, state: 'idle' | 'busy' | 'ok' | 'passed' | 'keep-going' | 'error') => {
+				status.textContent = text;
+				status.dataset.state = state;
+				this.dataset.state = state;
+			};
+
+			const setFeedback = (kind: 'passed' | 'keep-going' | 'error' | null, text?: string, items?: string[]) => {
+				feedback.replaceChildren();
+				if (!kind) {
+					feedback.hidden = true;
+					feedback.className = 'co-play__feedback';
+					return;
+				}
+				feedback.hidden = false;
+				feedback.className = `co-play__feedback is-${kind}`;
+				if (text) feedback.append(text);
+				if (items?.length) {
+					feedback.append(' ');
+					items.forEach((item, index) => {
+						const code = document.createElement('code');
+						code.textContent = item;
+						feedback.append(code);
+						if (index < items.length - 1) feedback.append(', ');
+					});
+				}
+			};
+
+			const renderResult = (result: RunResult) => {
+				output.classList.remove('is-empty');
+				output.replaceChildren();
+				const text = [result.stdout, result.stderr].filter(Boolean).join('\n');
+				if (text) output.append(text);
+
+				if (result.error) {
+					if (text) output.append('\n');
+					const error = document.createElement('span');
+					error.className = 'co-play__error';
+					error.textContent = result.error;
+					output.append(error);
+					setStatus(labels.statusError, 'error');
+					setFeedback('error', labels.errorIntro);
+					return;
+				}
+
+				if (!text) output.append(' ');
+
+				if (expect.length > 0) {
+					const missing = expect.filter((needle) => !result.stdout.includes(needle));
+					if (missing.length === 0) {
+						setStatus(labels.statusPassed, 'passed');
+						setFeedback('passed', labels.passed);
+					} else {
+						setStatus(labels.statusKeepGoing, 'keep-going');
+						setFeedback('keep-going', labels.keepGoing, missing);
+					}
+					return;
+				}
+
+				setStatus(labels.statusOk, 'ok');
+				setFeedback(null);
+			};
+
+			const renderFailure = (message: string) => {
+				output.classList.remove('is-empty');
+				output.replaceChildren();
+				const error = document.createElement('span');
+				error.className = 'co-play__error';
+				error.textContent = message;
+				output.append(error);
+				setStatus(labels.statusError, 'error');
+				setFeedback(null);
+			};
+
+			let busy = false;
+			const run = async () => {
+				if (busy) return;
+				busy = true;
+				runButton.disabled = true;
+				if (runLabel) runLabel.textContent = labels.loading;
+				setStatus(labels.loading, 'busy');
+				setFeedback(null);
+				try {
+					await ensureRuntime();
+					if (runLabel) runLabel.textContent = labels.running;
+					setStatus(labels.running, 'busy');
+					renderResult(await runPython(textarea.value, timeoutMs));
+				} catch (error) {
+					renderFailure(error instanceof PythonTimeoutError ? labels.timeout : labels.loadError);
+				} finally {
+					busy = false;
+					runButton.disabled = false;
+					if (runLabel) runLabel.textContent = labels.run;
+				}
+			};
+
+			runButton.addEventListener('click', () => void run());
+
+			resetButton?.addEventListener('click', () => {
+				textarea.value = textarea.defaultValue;
+				if (draftKey) {
+					try {
+						window.localStorage.removeItem(draftKey);
+					} catch {}
+				}
+				output.classList.add('is-empty');
+				output.textContent = labels.outputEmpty;
+				setStatus(labels.statusIdle, 'idle');
+				setFeedback(null);
+				textarea.focus();
+			});
+
+			copyButton?.addEventListener('click', async () => {
+				try {
+					await navigator.clipboard.writeText(textarea.value);
+					const original = copyButton.textContent;
+					copyButton.textContent = labels.copied;
+					window.setTimeout(() => {
+						copyButton.textContent = original;
+					}, 1500);
+				} catch {
+					textarea.select();
+				}
+			});
+
+			hintButton?.addEventListener('click', () => {
+				if (!hintText) return;
+				const open = hintText.hidden;
+				hintText.hidden = !open;
+				hintButton.setAttribute('aria-expanded', String(open));
+			});
+		}
+	}
+
+	if (!customElements.get('co-playground')) customElements.define('co-playground', Playground);
+</script>

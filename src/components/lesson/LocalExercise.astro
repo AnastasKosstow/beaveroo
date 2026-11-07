@@ -1,0 +1,17 @@
+---
+interface Props {
+	title?: string;
+	file?: string;
+}
+
+const { title = Astro.locals.t('local.title'), file } = Astro.props;
+---
+
+<aside class="co-callout co-callout--local" aria-label={title}>
+	<p class="co-callout__title">
+		<span class="co-callout__icon" aria-hidden="true">⌨️</span>
+		<span>{title}</span>
+		{file && <code class="co-callout__file">{file}</code>}
+	</p>
+	<div class="co-callout__body"><slot /></div>
+</aside>

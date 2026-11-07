@@ -1,16 +1,21 @@
 ---
 import Default from '@astrojs/starlight/components/Sidebar.astro';
 import HeaderLinks from './HeaderLinks.astro';
+import CourseNav from './course/CourseNav.astro';
+import { getCourseForPath, langOf, localeBase } from '../courses';
 
-const { siteTitleHref } = Astro.locals.starlightRoute;
+const { locale } = Astro.locals.starlightRoute;
+const course = getCourseForPath(Astro.url.pathname);
+const lang = langOf(locale);
+const courseHref = `${localeBase(locale)}${course.homeHref}`;
 ---
 
 <div class="hf-course">
-	<a class="hf-course__title" href={siteTitleHref}>
+	<a class="hf-course__title" href={courseHref}>
 		<span class="hf-course__dot" aria-hidden="true"></span>
-		<span>{Astro.locals.t('course.title')}</span>
+		<span>{course.title[lang]}</span>
 	</a>
 	<div class="hf-course__tools md:sl-hidden"><HeaderLinks /></div>
 </div>
 
-<Default><slot /></Default>
+{course.modules ? <CourseNav course={course} /> : <Default><slot /></Default>}

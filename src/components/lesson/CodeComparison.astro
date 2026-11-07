@@ -1,0 +1,37 @@
+---
+interface Props {
+	csharpTitle?: string;
+	pythonTitle?: string;
+	csharpFile?: string;
+	pythonFile?: string;
+}
+
+const t = Astro.locals.t;
+const {
+	csharpTitle = t('compare.csharp'),
+	pythonTitle = t('compare.python'),
+	csharpFile,
+	pythonFile,
+} = Astro.props;
+---
+
+<div class="co-compare not-content">
+	<div class="co-compare__panes">
+	<section class="co-compare__pane co-compare__pane--cs" aria-label={csharpTitle}>
+		<div class="co-compare__bar">
+			<span class="co-lang co-lang--cs">C#</span>
+			<span class="co-compare__title">{csharpTitle}</span>
+			{csharpFile && <code class="co-compare__file">{csharpFile}</code>}
+		</div>
+		<div class="co-compare__code"><slot name="csharp" /></div>
+	</section>
+	<section class="co-compare__pane co-compare__pane--py" aria-label={pythonTitle}>
+		<div class="co-compare__bar">
+			<span class="co-lang co-lang--py">Py</span>
+			<span class="co-compare__title">{pythonTitle}</span>
+			{pythonFile && <code class="co-compare__file">{pythonFile}</code>}
+		</div>
+		<div class="co-compare__code"><slot name="python" /></div>
+	</section>
+	</div>
+</div>

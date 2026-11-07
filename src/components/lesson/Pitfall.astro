@@ -1,0 +1,39 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+	title: string;
+	code?: string;
+	lang?: string;
+	why: string;
+	priority?: boolean;
+}
+
+const { title, code, lang = 'python', why, priority = false } = Astro.props;
+const t = Astro.locals.t;
+const hasExample = Astro.slots.has('default');
+---
+
+<article class="co-pitfall">
+	<header class="co-pitfall__head">
+		<p class="co-eyebrow co-eyebrow--muted">
+			<span>{t('pitfall.dont')}</span>
+			<span class="co-eyebrow__sep">·</span>
+			<span class="co-pitfall__num" aria-hidden="true"></span>
+		</p>
+		{priority && <span class="co-pitfall__priority">{t('pitfall.priority')}</span>}
+	</header>
+	<h3 class="co-pitfall__title">{title}</h3>
+	{code && <div class="co-pitfall__code"><Code code={code} lang={lang} frame="none" /></div>}
+	<p class="co-pitfall__why">{why}</p>
+	{
+		hasExample && (
+			<details class="co-pitfall__example">
+				<summary>{t('pitfall.example')}</summary>
+				<div class="co-pitfall__example-body">
+					<slot />
+				</div>
+			</details>
+		)
+	}
+</article>

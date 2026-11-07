@@ -1,27 +1,52 @@
 ---
 import { Image } from 'astro:assets';
-import thumbnail from '../assets/agents-course-thumbnail.png';
+import type { ImageMetadata } from 'astro';
+import agentsThumbnail from '../assets/agents-course-thumbnail.png';
+import { courses, langOf, localeBase } from '../courses';
 
 const { locale } = Astro.locals.starlightRoute;
-const base = locale ? `/${locale}` : '';
-const t = Astro.locals.t;
+const lang = langOf(locale);
+const base = localeBase(locale);
+
+const artwork: Record<string, ImageMetadata> = {
+	'agents-course': agentsThumbnail,
+};
 ---
 
 <div class="hf-learn__grid not-content">
-	<a class="hf-learn-card" href={`${base}/unit-0/introduction/`}>
-		<Image
-			class="hf-learn-card__image"
-			src={thumbnail}
-			alt=""
-			widths={[640, 1024, 1400]}
-			sizes="(min-width: 50rem) 34rem, 100vw"
-			format="webp"
-			quality={82}
-			loading="eager"
-		/>
-		<div class="hf-learn-card__body">
-			<h2 class="hf-learn-card__title">{t('course.title')}</h2>
-			<p class="hf-learn-card__text">{t('landing.courseDescription')}</p>
-		</div>
-	</a>
+	{
+		courses.map((course) => {
+			const image = artwork[course.id];
+			return (
+				<a class:list={['hf-learn-card', { 'hf-learn-card--art': !image }]} href={`${base}${course.homeHref}`}>
+					{image ? (
+						<Image
+							class="hf-learn-card__image"
+							src={image}
+							alt=""
+							widths={[640, 1024, 1400]}
+							sizes="(min-width: 50rem) 34rem, 100vw"
+							format="webp"
+							quality={82}
+							loading="eager"
+						/>
+					) : (
+						<div class="hf-learn-card__art" aria-hidden="true">
+							<span class="hf-learn-card__art-lang hf-learn-card__art-lang--cs">C#</span>
+							<span class="hf-learn-card__art-arrow">→</span>
+							<span class="hf-learn-card__art-lang hf-learn-card__art-lang--py">Py</span>
+							<code class="hf-learn-card__art-code">{'print(f"Hello, {name}!")'}</code>
+						</div>
+					)}
+					<div class="hf-learn-card__body">
+						<p class="hf-learn-card__meta">
+							<span aria-hidden="true">{course.emoji}</span> {course.meta[lang]}
+						</p>
+						<h2 class="hf-learn-card__title">{course.title[lang]}</h2>
+						<p class="hf-learn-card__text">{course.description[lang]}</p>
+					</div>
+				</a>
+			);
+		})
+	}
 </div>

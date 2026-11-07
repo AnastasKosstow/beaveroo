@@ -1,0 +1,97 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Choice {
+	text: string;
+	correct?: boolean;
+	explain?: string;
+}
+
+interface Props {
+	question: string;
+	choices: Choice[];
+	code?: string;
+	lang?: string;
+}
+
+const { question, choices, code, lang = 'python' } = Astro.props;
+const t = Astro.locals.t;
+const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+---
+
+<co-knowledge-check
+	class="co-check not-content"
+	data-label-correct={t('knowledge.correct')}
+	data-label-incorrect={t('knowledge.incorrect')}
+>
+	<p class="co-check__question">
+		<span class="co-check__num" aria-hidden="true"></span>
+		<span>{question}</span>
+	</p>
+	{code && <div class="co-check__code"><Code code={code} lang={lang} frame="none" /></div>}
+	<p class="co-check__pick">{t('knowledge.pick')}</p>
+	<div class="co-check__options" role="group" aria-label={question}>
+		{
+			choices.map((choice, index) => (
+				<button
+					type="button"
+					class="co-check__option"
+					data-correct={choice.correct ? 'true' : 'false'}
+					data-explain={choice.explain ?? ''}
+					aria-pressed="false"
+				>
+					<span class="co-check__letter" aria-hidden="true">
+						{letters[index]}
+					</span>
+					<span class="co-check__text">{choice.text}</span>
+				</button>
+			))
+		}
+	</div>
+	<p class="co-check__feedback" role="status" aria-live="polite" hidden></p>
+</co-knowledge-check>
+
+<script>
+	class KnowledgeCheck extends HTMLElement {
+		connectedCallback() {
+			const options = [...this.querySelectorAll<HTMLButtonElement>('.co-check__option')];
+			const feedback = this.querySelector<HTMLElement>('.co-check__feedback');
+			const labelCorrect = this.dataset.labelCorrect ?? '';
+			const labelIncorrect = this.dataset.labelIncorrect ?? '';
+
+			options.forEach((option) => {
+				option.addEventListener('click', () => {
+					if (this.classList.contains('is-solved')) return;
+					const isCorrect = option.dataset.correct === 'true';
+
+					options.forEach((other) => {
+						other.classList.remove('is-selected', 'is-incorrect');
+						other.setAttribute('aria-pressed', 'false');
+					});
+					option.classList.add('is-selected', isCorrect ? 'is-correct' : 'is-incorrect');
+					option.setAttribute('aria-pressed', 'true');
+
+					if (feedback) {
+						feedback.hidden = false;
+						feedback.className = `co-check__feedback ${isCorrect ? 'is-correct' : 'is-incorrect'}`;
+						feedback.replaceChildren();
+						const label = document.createElement('strong');
+						label.textContent = isCorrect ? labelCorrect : labelIncorrect;
+						feedback.append(label);
+						const explain = option.dataset.explain;
+						if (explain) feedback.append(` ${explain}`);
+					}
+
+					if (isCorrect) {
+						this.classList.add('is-solved');
+						options.forEach((other) => {
+							other.disabled = true;
+						});
+					}
+				});
+			});
+		}
+	}
+
+	if (!customElements.get('co-knowledge-check')) customElements.define('co-knowledge-check', KnowledgeCheck);
+</script>

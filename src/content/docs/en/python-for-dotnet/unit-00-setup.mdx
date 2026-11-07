@@ -1,0 +1,573 @@
+---
+title: Python Setup & First Script
+description: Install Python, pick the right interpreter in VS Code, run and debug your first script and create an isolated .venv — in about 20 minutes, with parallels to the dotnet CLI, NuGet and Visual Studio.
+course: python-for-dotnet
+unit: '00'
+minutes: 20
+track: fast
+pagination: false
+tableOfContents:
+  minHeadingLevel: 2
+  maxHeadingLevel: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LessonGoals from '../../../../components/lesson/LessonGoals.astro';
+import CodeComparison from '../../../../components/lesson/CodeComparison.astro';
+import MentalModelShift from '../../../../components/lesson/MentalModelShift.astro';
+import PitfallCallout from '../../../../components/lesson/PitfallCallout.astro';
+import LocalExercise from '../../../../components/lesson/LocalExercise.astro';
+import PythonPlayground from '../../../../components/lesson/PythonPlayground.astro';
+import Pitfalls from '../../../../components/lesson/Pitfalls.astro';
+import Pitfall from '../../../../components/lesson/Pitfall.astro';
+import ReadyCheck from '../../../../components/lesson/ReadyCheck.astro';
+import KnowledgeCheck from '../../../../components/lesson/KnowledgeCheck.astro';
+import LessonCheckpoint from '../../../../components/lesson/LessonCheckpoint.astro';
+import greetStart from '../../../../examples/python-for-dotnet/unit-00/greet_start.en.py?raw';
+import tracebackStart from '../../../../examples/python-for-dotnet/unit-00/traceback_start.en.py?raw';
+
+You know what `dotnet new console` → `dotnet run` → <kbd>F5</kbd> looks like. This module does the same for Python: installation, the right interpreter in VS Code, the first script, the debugger and an isolated environment. No explanation of what a function is — only what differs from .NET.
+
+<LessonGoals>
+- install Python and check from the terminal which version and which interpreter actually run;
+- create `main.py`, run it from the terminal and from VS Code, and read a Python traceback;
+- set a breakpoint and step through the code with the debugger;
+- create a `.venv`, activate it and select it as the project interpreter.
+</LessonGoals>
+
+## Installing Python
+
+**Python is an interpreter: there is no separate SDK and runtime, and there is no build step.**
+
+In .NET you install the SDK (CLI + compiler + runtime). In Python you install the interpreter — one program (`python.exe` / `python3`) that compiles code to bytecode at run time and executes it immediately. Several versions can live side by side (like several SDKs), and which one runs depends on `PATH` and — on Windows — on the `py` launcher.
+
+<CodeComparison csharpTitle="What you know in .NET" pythonTitle="The same in Python">
+<Fragment slot="csharp">
+
+```powershell frame="none"
+dotnet --version     # default SDK
+dotnet --list-sdks   # every installed SDK
+dotnet --info
+```
+
+</Fragment>
+<Fragment slot="python">
+
+```powershell frame="none"
+python --version     # first one in PATH
+py -0p               # (Windows) all + paths
+python -c "import sys; print(sys.executable)"
+```
+
+</Fragment>
+</CodeComparison>
+
+The official source is [python.org/downloads](https://www.python.org/downloads/) — the button always points to the current stable version for your operating system. You don't need to remember a version number; any supported 3.x is enough for this course.
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+1. Download the installer from python.org and run it.
+2. On the first screen **tick "Add python.exe to PATH"** and leave **"py launcher"** enabled. Then *Install Now*.
+3. Open a **new** terminal (PATH is read when the process starts) and check:
+
+```powershell
+py --version
+python --version
+py -0p
+```
+
+Alternative with winget — packages are per minor version, so list them first:
+
+```powershell
+winget search Python.Python
+winget install --id Python.Python.3.14   # replace with the newest stable one from the list
+```
+
+</TabItem>
+<TabItem label="macOS">
+
+macOS has not shipped Python for a long time. Two good options:
+
+- **The official installer** from python.org (universal2 `.pkg`). After installing, run *Install Certificates.command* from the `Applications/Python 3.x` folder — without it HTTPS requests from Python fail with a certificate error.
+- **Homebrew**: `brew install python` puts `python3` in `/opt/homebrew/bin`.
+
+```bash
+python3 --version
+which -a python3
+```
+
+On macOS and Linux the command is `python3` — a bare `python` may be missing or point to something else.
+
+</TabItem>
+<TabItem label="Linux">
+
+Debian/Ubuntu ship the venv module as a separate package — install it right away, otherwise `python3 -m venv` fails with "ensurepip is not available":
+
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip
+python3 --version
+```
+
+Fedora: `sudo dnf install python3 python3-pip` (venv is included). Don't replace the system Python and don't install packages globally with `pip` — the system refuses with `externally-managed-environment` (PEP 668). That is exactly what `.venv` in section 07 is for.
+
+</TabItem>
+</Tabs>
+
+<MentalModelShift>
+- **No build artifact.** .NET compiles to IL once and the runtime JITs it. Python compiles each module to bytecode the first time it loads (cached in `__pycache__/*.pyc`) and runs it immediately. There is no `bin/Release` to deploy — you deploy the source.
+- **Several versions are normal.** `global.json` pins the SDK for a repo; in Python the active interpreter is whatever `python` resolves to right now. Later, `.venv` pins the interpreter *per project*.
+- **Windows has a muxer, the others don't.** `py -3.14 main.py` picks a specific version, much like `dotnet` + `global.json`. On macOS/Linux the order in `PATH` decides.
+</MentalModelShift>
+
+<PitfallCallout>
+On Windows without Python installed, the `python` command **opens the Microsoft Store** instead of saying "command not found". That is a Windows *App execution alias* — turn it off under *Settings → Apps → Advanced app settings → App execution aliases*. After installing from python.org with PATH ticked, the problem goes away.
+</PitfallCallout>
+
+## Checking the interpreter and PATH
+
+**The first question in every Python problem is: "which interpreter actually ran?"**
+
+`dotnet` is a single muxer that finds the right SDK by itself. Python has no such layer (apart from `py` on Windows) — the first `python` on `PATH` runs. `sys.executable` always tells the truth:
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+```powershell
+py --version
+py -0p                        # every installation and its path
+python --version
+where.exe python              # which python comes first in PATH (there may be several)
+python -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+<TabItem label="macOS">
+
+```bash
+python3 --version
+which -a python3              # every python3 in PATH, in order
+python3 -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+python3 --version
+which -a python3
+python3 -c "import sys; print(sys.executable)"
+```
+
+</TabItem>
+</Tabs>
+
+This module writes `python` in commands; substitute `py` or `python3` for your system. After section 07 you'll always work inside a `.venv`, where `python` is unambiguous — on every OS.
+
+<PitfallCallout title="Predict the result">
+On Windows `python --version` prints 3.12 and `py --version` prints 3.14. You press *Run* in VS Code. Which version runs `main.py`?
+
+**Neither command decides.** VS Code uses **the interpreter selected in the status bar** (section 03), not the terminal's `PATH`. Three different answers to the same question — which is why `sys.executable` is the first thing you print when in doubt.
+</PitfallCallout>
+
+## VS Code and the Python extension
+
+**Same editor, different extension: `ms-python.python` brings IntelliSense (Pylance), the debugger (debugpy) and interpreter selection.**
+
+1. Install [VS Code](https://code.visualstudio.com/) (if missing) and the **Python** extension by Microsoft (`ms-python.python`). It automatically adds **Pylance** and **Python Debugger**.
+2. Create an empty folder `hello-python` and open it: `code hello-python`.
+3. **Select the interpreter**: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → *Python: Select Interpreter* → choose the installation from the previous section (later you'll choose `.venv` here). The selected interpreter shows **bottom right in the status bar** — that is the equivalent of "target framework + SDK" in one.
+4. Optional: `"editor.formatOnSave": true` and the **Ruff** extension (linter + formatter). We'll systematize those in Unit 08.
+
+<MentalModelShift>
+- **No project file.** C# Dev Kit works around `.sln`/`.csproj`. The Python extension works around **a folder + a selected interpreter**. The "project" is the directory.
+- The interpreter choice is stored in VS Code workspace settings (`.vscode/settings.json`, `python.defaultInterpreterPath`) — optional, but useful in a team.
+- **Pylance ≈ Roslyn in the editor**, but only in the editor. It underlines errors statically; nothing stops you from running the code anyway.
+</MentalModelShift>
+
+## The first script: main.py
+
+**One file, no project, no `Main` — the module runs top to bottom.**
+
+<CodeComparison csharpFile="Program.cs" pythonFile="main.py">
+<Fragment slot="csharp">
+
+```csharp frame="none"
+// dotnet new console (top-level statements)
+string Greet(string name) => $"Hello, {name}!";
+
+Console.WriteLine(Greet("Curious Otter"));
+```
+
+</Fragment>
+<Fragment slot="python">
+
+```python frame="none"
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+
+if __name__ == "__main__":
+    print(greet("Curious Otter"))
+```
+
+</Fragment>
+</CodeComparison>
+
+<MentalModelShift>
+- **`if __name__ == "__main__":` is the entry-point convention**, not a language requirement. The block runs only when the file is executed directly; when another module `import`s it, `__name__` is the module name and the block is skipped (Unit 02). Without the guard the script still works — but every `import` would print the greeting.
+- **Blocks are indentation, not braces.** `:` opens a block; the standard (PEP 8) is 4 spaces. Two blank lines between top-level definitions — formatters do that for you.
+- **Type hints are not checked at run time.** `name: str` and `-> str` are metadata for the editor and for Pyright (Unit 08). `greet(42)` runs and returns `"Hello, 42!"`.
+- `f"Hello, {name}!"` ≈ `$"Hello, {name}!"`. `print` appends a newline, like `Console.WriteLine`.
+- Conventions: `snake_case` for functions and variables, `PascalCase` only for classes.
+</MentalModelShift>
+
+<LocalExercise file="main.py">
+1. In the `hello-python` folder create `main.py` with the Python code above (or [download the ready file](/downloads/python-for-dotnet/unit-00/main.py)).
+2. From the terminal, in the same folder:
+
+```powershell
+python main.py        # Windows: also py main.py · macOS/Linux: python3 main.py
+```
+
+3. In VS Code: the ▷ *Run Python File* button top right or <kbd>Ctrl</kbd>+<kbd>F5</kbd>. It runs in the integrated terminal with the **selected interpreter**.
+
+Expected output:
+
+```text
+Hello, Curious Otter!
+```
+</LocalExercise>
+
+<PythonPlayground
+  id="greet"
+  title="Call the function with two different inputs"
+  task="Call greet a second time — with the name Ada. Then try greet(42): does it run despite the name: str annotation?"
+  code={greetStart}
+  expect={['Hello, Curious Otter!', 'Hello, Ada!']}
+  hint='Below the existing print add a new line with the same indentation: print(greet("Ada")). Annotations do not stop greet(42) — you will get "Hello, 42!".'
+/>
+
+## Running and reading errors
+
+**Errors come at run time, not compile time — and the traceback reads bottom-up.**
+
+There is no compiler between you and the running code. A typo in a name is a `NameError` the moment that line executes — and if the line sits in a branch that never runs, the error never shows up at all. Pylance catches many of these in the editor, but it is not a guarantee like the C# compiler. When something blows up, Python prints a traceback:
+
+```text
+Traceback (most recent call last):
+  File "main.py", line 6, in <module>
+    print(great("Curious Otter"))
+          ^^^^^
+NameError: name 'great' is not defined. Did you mean: 'greet'?
+```
+
+<MentalModelShift>
+- **Reverse order compared to .NET.** A C# stack trace starts with the most recent call. Python says "most recent call last": **the last line is what happened, the line above it is where**. Read bottom-up.
+- **Exit code 1** on an uncaught exception — the same as an unhandled exception in a .NET console app, handy for scripts and CI.
+- First-day errors: `NameError` (typo or undefined name), `IndentationError` / `TabError` (wrong or mixed indentation), `SyntaxError: expected ':'`, `ModuleNotFoundError` (the package is not installed in *this* interpreter — section 07) and `TypeError: can only concatenate str (not "int") to str` — Python does not call `ToString()` for you.
+</MentalModelShift>
+
+<PythonPlayground
+  id="traceback"
+  title="Read the traceback, then fix the line"
+  task="Run the code as is and read the error bottom-up. Then fix describe so it prints Python 3 for Curious Otter."
+  code={tracebackStart}
+  expect={['Python 3 for Curious Otter']}
+  hint='The + operator on strings does not convert numbers. Use an f-string: f"Python {version} for {name}" — or str(version).'
+/>
+
+## Debugging in VS Code
+
+**Same keys, a different debugger (debugpy) — plus a built-in `breakpoint()`.**
+
+1. Click left of the line number of `return f"Hello, {name}!"` (or <kbd>F9</kbd>) — a red dot appears.
+2. <kbd>F5</kbd> → on the first run choose **Python Debugger: Python File**. Execution stops at the breakpoint.
+3. The panels are the familiar ones: **Variables** (the local `name`), **Watch**, **Call Stack** and **Debug Console** — where you evaluate Python expressions in the paused context, like the Immediate Window.
+4. <kbd>F10</kbd> Step Over, <kbd>F11</kbd> Step Into, <kbd>Shift</kbd>+<kbd>F11</kbd> Step Out, <kbd>F5</kbd> Continue — as in Visual Studio.
+5. `breakpoint()` in code is a programmatic breakpoint — the counterpart of `Debugger.Break()`. Under the debugger it stops there; without a debugger it opens the built-in `pdb` in the terminal (`c` continues, `q` quits).
+6. `launch.json` is not required — the *Python File* configuration is built in. You only need it to pass arguments or environment variables (*Run and Debug → create a launch.json file*).
+
+| Visual Studio / C# | VS Code / Python | Note |
+| --- | --- | --- |
+| <kbd>F5</kbd>, <kbd>F9</kbd>, <kbd>F10</kbd>, <kbd>F11</kbd> | the same | default VS Code keymap |
+| Immediate Window | Debug Console | runs real Python in the current frame |
+| `Debugger.Break()` | `breakpoint()` | built into the language since Python 3.7 |
+| Edit & Continue / Hot Reload | — | you restart; scripts start in milliseconds |
+
+<MentalModelShift>
+The Debug Console runs real Python in the paused frame: you can call `greet("x")`, inspect `type(name)` or `dir(name)`. In a dynamic language this is a first-class way to explore an API — not just to hunt bugs.
+</MentalModelShift>
+
+## Virtual environment (.venv)
+
+**`pip install` installs into the active interpreter. Without a `.venv`, "the active interpreter" is the whole machine.**
+
+NuGet restores packages into a global cache (`~/.nuget/packages`), but each project *references* them through its `.csproj` — two projects can use different versions without conflict. `pip` installs into the `site-packages` of the interpreter that invoked it: one shared pool for every project on that version. A `.venv` is an isolated copy (or link) of the interpreter with its own `site-packages` — one environment per project.
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+```powershell
+cd hello-python
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -c "import sys; print(sys.executable)"   # ...\hello-python\.venv\Scripts\python.exe
+python -m pip --version                          # pip ... from ...\.venv\...
+```
+
+If PowerShell refuses to run `Activate.ps1` (execution policy), allow signed local scripts for your user once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. In `cmd` the activation is `.venv\Scripts\activate.bat`.
+
+</TabItem>
+<TabItem label="macOS">
+
+```bash
+cd hello-python
+python3 -m venv .venv
+source .venv/bin/activate
+python -c "import sys; print(sys.executable)"   # .../hello-python/.venv/bin/python
+python -m pip --version
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+cd hello-python
+python3 -m venv .venv
+source .venv/bin/activate
+python -c "import sys; print(sys.executable)"   # .../hello-python/.venv/bin/python
+python -m pip --version
+```
+
+</TabItem>
+</Tabs>
+
+After activation the prompt starts with `(.venv)` and inside it `python` is unambiguous — the end of the `py` / `python3` dance. `deactivate` leaves the environment.
+
+**VS Code** detects the new `.venv` and offers to select it; if not — *Python: Select Interpreter* → `./.venv/...`. New integrated terminals open with the environment activated. Alternative: *Python: Create Environment* → *Venv* creates and selects the environment in one command.
+
+The first dependency, and the check that it landed in the right place:
+
+```powershell
+python -m pip install requests
+python -m pip list
+```
+
+<MentalModelShift>
+- **NuGet: global cache + per-project graph. pip: per-environment install.** `.venv` is what makes "per project" true for Python too.
+- **The environment is disposable.** `dotnet restore` recreates `obj/` from `.csproj`; `python -m venv .venv` + `pip install -r requirements.txt` recreates the environment from the list. That is why `.venv/` goes into `.gitignore`, like `bin/` and `obj/`. The modern counterpart of `.csproj` is `pyproject.toml` — Unit 08.
+- **`python -m pip`, not `pip`.** That way pip is guaranteed to belong to *this* interpreter; a bare `pip` on `PATH` may belong to another installation.
+- **Linux and PEP 668.** The system Python refuses `pip install` precisely so you don't break the OS — `.venv` is the answer, not `--break-system-packages`.
+</MentalModelShift>
+
+<PitfallCallout>
+A terminal opened **before** you selected the `.venv` is not activated — `pip install` there goes to the global interpreter, and then `import` in VS Code raises `ModuleNotFoundError`. Close it and open a new one, or activate manually. Check: `python -m pip --version` must show a path inside `.venv`.
+</PitfallCallout>
+
+## .NET ↔ Python: tooling map
+
+**Analogies for orientation — not equivalents.**
+
+| .NET | Python | Note |
+| --- | --- | --- |
+| `dotnet --version` | `python --version`, `py -0p` | .NET reports the SDK version, Python the interpreter's |
+| SDK + runtime | interpreter | one component: compiles to bytecode and runs |
+| `dotnet new console` | `mkdir` + `main.py` | no template, no project file |
+| `Program.cs` / `Main` | `main.py` / `if __name__ == "__main__":` | convention, not requirement |
+| `dotnet run` | `python main.py` | no build step; bytecode cache in `__pycache__` |
+| `dotnet build` | — | no separate deploy artifact |
+| `.csproj` + NuGet | `pyproject.toml` + PyPI (`pip` / `uv`) | conceptual analogue, different install model |
+| `global.json` | selected interpreter / `.venv` | pins the version for the project |
+| `bin/`, `obj/` | `.venv/`, `__pycache__/` | not committed |
+| `Debugger.Break()` | `breakpoint()` | built into the language |
+| Immediate Window | Debug Console, REPL (`python`) | the REPL is an everyday tool in Python |
+
+## C# instincts to unlearn
+
+**Six .NET habits that cause confusion in Python on day one.**
+
+<Pitfalls>
+  <Pitfall
+    title="The compiler won't save you"
+    code={'prnt("ready")   # NameError — at run time only'}
+    why="In C# this is CS0103 before start-up. In Python the line fails at run time — if it sits in a rare branch, the bug reaches production. Pylance, Ruff and tests take over the compiler's role."
+    priority
+  >
+    Pylance underlines the undefined name in the editor, but <kbd>F5</kbd> will still start the code. Build the habit: red squiggle = don't run until you understand it.
+  </Pitfall>
+  <Pitfall
+    title="“python” is not necessarily this Python"
+    code={'python --version   # 3.12\npy --version       # 3.14 — which one runs?'}
+    why="PATH decides which interpreter starts; VS Code has its own selection. sys.executable tells the truth. Inside a .venv the problem disappears."
+    priority
+  />
+  <Pitfall
+    title="Indentation is syntax, not style"
+    code={'if ready:\nprint("go")   # IndentationError'}
+    why="In C# braces define the block and indentation is cosmetic. In Python indentation is the block. Mixed tabs and spaces give TabError — check “Spaces: 4” in the VS Code status bar."
+    priority
+  />
+  <Pitfall
+    title="The traceback reads bottom-up"
+    code={'NameError: name \'great\' is not defined'}
+    why="A C# stack trace starts with the most recent call. Python ends with it (“most recent call last”): the last line is the error, the line above it is the location."
+  />
+  <Pitfall
+    title="pip install without a .venv installs for the whole machine"
+    code={'pip install requests   # into which interpreter?'}
+    why="There is no per-project restore like NuGet — the package goes into the site-packages of the interpreter that ran pip. Always .venv, always python -m pip."
+    priority
+  />
+  <Pitfall
+    title="Type hints are not types"
+    code={'greet(42)   # works and returns "Hello, 42!"'}
+    why="name: str is not checked at run time. Pyright/mypy check it statically (Unit 08); input from the outside world you validate yourself."
+  />
+</Pitfalls>
+
+## Environment Ready Check
+
+**Before moving on to Unit 01, every item must be true on your machine.**
+
+<ReadyCheck
+  items={[
+    'In a new terminal python --version (or py / python3) prints a 3.x version.',
+    'VS Code has the Python extension (ms-python.python) installed and the status bar shows a selected interpreter.',
+    'python main.py prints Hello, Curious Otter! — both from the terminal and with Run Python File.',
+    'I have stopped at a breakpoint and seen the value of name in the Variables panel.',
+    '.venv is created and activated; python -c "import sys; print(sys.executable)" points to a path inside .venv.',
+    'python -m pip --version shows pip from the .venv.',
+    '.venv/ is added to .gitignore.',
+  ]}
+/>
+
+## Exercise
+
+**Change the function, run it with two different inputs and debug it.**
+
+<LocalExercise file="main.py">
+1. Add a second parameter with a default value: `def greet(name: str, greeting: str = "Hello") -> str` and return `f"{greeting}, {name}!"`.
+2. Call it twice with different inputs under the guard: `greet("Ada")` and `greet("Linus", greeting="Hi")` — the second one is a *keyword argument*, like a named argument in C# (more in Unit 02).
+3. Set a breakpoint on the `return` line, start with <kbd>F5</kbd> and, at the second stop, check `greeting` and `name` in **Variables**.
+4. In the **Debug Console** type `greeting.upper()` — string methods are called just like in C#.
+5. Bonus: add `print(greet(42))`, look at what Pylance says in the editor *before* you run — and what Python does afterwards.
+
+Expected output:
+
+```text
+Hello, Ada!
+Hi, Linus!
+```
+</LocalExercise>
+
+## Check the model
+
+**Four questions. Pick an answer — the explanation appears immediately.**
+
+<KnowledgeCheck
+  question={'What does if __name__ == "__main__": do?'}
+  choices={[
+    {
+      text: 'Declares the entry point that Python requires for every application.',
+      explain: 'Python requires no entry point — every file runs top to bottom. The guard is a convention.',
+    },
+    {
+      text: 'Runs the block only when the file is executed directly, not when it is imported as a module.',
+      explain: 'When run directly, __name__ is "__main__"; when imported, it is the module name. One file is both a script and a library.',
+      correct: true,
+    },
+    {
+      text: 'Compiles the module to bytecode before execution.',
+      explain: 'Compilation to bytecode happens automatically when any module loads, regardless of the guard.',
+    },
+    {
+      text: 'The same as static void Main — without it the script does not start.',
+      explain: 'Without the guard the script starts normally; the difference only shows when the file is imported.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="You ran pip install requests in the terminal, but import requests in VS Code raises ModuleNotFoundError. The most likely cause?"
+  choices={[
+    {
+      text: 'requests does not support this Python version.',
+      explain: 'Then pip would have refused the installation with an error instead of completing it.',
+    },
+    {
+      text: 'The package was installed into a different interpreter than the one VS Code uses.',
+      explain: 'The classic case: the terminal pointed at the global Python and VS Code at the .venv (or the other way round). Check with python -m pip --version and sys.executable.',
+      correct: true,
+    },
+    {
+      text: 'Windows requires a restart after installing a package.',
+      explain: 'Packages are just files in site-packages — nothing is registered with the system.',
+    },
+    {
+      text: 'import requires the full path to the package.',
+      explain: 'import searches sys.path of the active interpreter; you never pass paths.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="Where in a Python traceback is the line that describes the error itself?"
+  choices={[
+    {
+      text: 'At the top, as in a C# stack trace.',
+      explain: 'The opposite of .NET: Python prints the calls in chronological order and ends with the error.',
+    },
+    {
+      text: 'At the bottom — "most recent call last".',
+      explain: 'The last line is the exception type and message; the line above it is the file and line number where it occurred.',
+      correct: true,
+    },
+    {
+      text: 'In the middle, marked with ^.',
+      explain: 'The carets (^) only underline the expression in the failing line; the description itself is on the last line.',
+    },
+    {
+      text: 'There is no such line — you need the debugger.',
+      explain: 'The traceback contains everything you need for most errors; the debugger is for the harder cases.',
+    },
+  ]}
+/>
+
+<KnowledgeCheck
+  question="The function is def greet(name: str) -> str. What happens on greet(42)?"
+  code={'def greet(name: str) -> str:\n    return f"Hello, {name}!"\n\nprint(greet(42))'}
+  choices={[
+    {
+      text: 'TypeError because of the name: str annotation.',
+      explain: 'Annotations are metadata — the interpreter does not check them on call.',
+    },
+    {
+      text: 'It runs and prints Hello, 42! — hints are not checked at run time.',
+      explain: 'The f-string formats 42 as text. Static checking is the job of Pyright/mypy (Unit 08), not the interpreter.',
+      correct: true,
+    },
+    {
+      text: 'Pylance stops the execution.',
+      explain: 'Pylance only underlines in the editor; it never prevents a run.',
+    },
+    {
+      text: 'Python converts 42 to "42" before the call and warns.',
+      explain: 'There is no implicit conversion on call and no warning — the value goes in as an int and the f-string formats it.',
+    },
+  ]}
+/>
+
+## TL;DR
+
+**Six mappings to remember from this module.**
+
+- **Interpreter instead of SDK + runtime.** `python --version` and `sys.executable` are the first commands when in doubt.
+- **Folder + `main.py` instead of a project.** `if __name__ == "__main__":` plays the role of `Main`, but it is a convention.
+- **`python main.py` instead of `dotnet run`.** No build step; the bytecode cache lives in `__pycache__`.
+- **The traceback reads bottom-up.** Last line — what; the line above — where.
+- **Always `.venv`, always `python -m pip`.** `.venv/` in `.gitignore`, like `bin/` and `obj/`.
+- **Same debug keys.** `breakpoint()` ≈ `Debugger.Break()`, Debug Console ≈ Immediate Window.
+
+<LessonCheckpoint />

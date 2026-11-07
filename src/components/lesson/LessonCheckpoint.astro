@@ -1,0 +1,81 @@
+---
+import { getCourseById, langOf, localeBase, moduleHref } from '../../courses';
+
+const { entry, locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+const lang = langOf(locale);
+const base = localeBase(locale);
+
+const course = getCourseById(entry.data.course);
+const modules = course?.modules ?? [];
+const index = modules.findIndex((module) => module.number === entry.data.unit);
+const current = index >= 0 ? modules[index] : undefined;
+const next = index >= 0 ? modules[index + 1] : undefined;
+
+if (!course || !current) {
+	throw new Error('LessonCheckpoint: the page needs `course` and `unit` frontmatter matching src/courses.ts.');
+}
+
+const nextHref = next ? moduleHref(course, next, locale) : undefined;
+const overviewHref = `${base}${course.slug}/`;
+---
+
+<section class="co-checkpoint not-content" data-checkpoint data-course={course.id} data-module={current.id}>
+	<p class="co-eyebrow co-eyebrow--light">{t('lesson.checkpoint')}</p>
+	<p class="co-checkpoint__title">{t('lesson.checkpointTitle')}</p>
+	<p class="co-checkpoint__note">{t('lesson.checkpointNote')}</p>
+
+	<div class="co-checkpoint__actions">
+		<button type="button" class="co-btn co-btn--primary co-checkpoint__complete" data-complete aria-pressed="false">
+			<span data-label-complete>{t('lesson.complete')}</span>
+			<span data-label-completed hidden>{t('lesson.completed')}</span>
+		</button>
+		{
+			next && nextHref && (
+				<a class="co-btn co-btn--ghost" href={nextHref}>
+					{t('lesson.next')}: {next.title[lang]} <span aria-hidden="true">→</span>
+				</a>
+			)
+		}
+	</div>
+
+	{
+		next && !nextHref && (
+			<p class="co-checkpoint__upcoming">
+				{t('lesson.nextUpcoming', { title: `Unit ${next.number} · ${next.title[lang]}` })}
+			</p>
+		)
+	}
+
+	<a class="co-checkpoint__back" href={overviewHref}>
+		<span aria-hidden="true">←</span> {t('lesson.backToCourse')}
+	</a>
+</section>
+
+<script>
+	import { isCompleted, onProgress, setCompleted } from '../../scripts/progress';
+
+	document.querySelectorAll<HTMLElement>('[data-checkpoint]').forEach((section) => {
+		const courseId = section.dataset.course;
+		const moduleId = section.dataset.module;
+		const button = section.querySelector<HTMLButtonElement>('[data-complete]');
+		if (!courseId || !moduleId || !button) return;
+
+		const labelComplete = button.querySelector<HTMLElement>('[data-label-complete]');
+		const labelCompleted = button.querySelector<HTMLElement>('[data-label-completed]');
+
+		const render = (completed: Set<string>) => {
+			const done = completed.has(moduleId);
+			section.classList.toggle('is-complete', done);
+			button.setAttribute('aria-pressed', String(done));
+			if (labelComplete) labelComplete.hidden = done;
+			if (labelCompleted) labelCompleted.hidden = !done;
+		};
+
+		button.addEventListener('click', () => {
+			setCompleted(courseId, moduleId, !isCompleted(courseId, moduleId));
+		});
+
+		onProgress(courseId, render);
+	});
+</script>

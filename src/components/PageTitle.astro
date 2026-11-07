@@ -1,19 +1,46 @@
 ---
+import CourseHero from './course/CourseHero.astro';
+import { getCourseById } from '../courses';
+
 const { entry } = Astro.locals.starlightRoute;
-const isSplash = entry.data.template === 'splash';
+const { title, template, course: courseId, unit, minutes, track } = entry.data;
+const t = Astro.locals.t;
+
+const isSplash = template === 'splash';
+const course = getCourseById(courseId);
+const isCourseLanding = isSplash && !!course;
+const isLesson = !!unit;
+
+const trackLabel = track === 'deep' ? t('course.deepDive') : track === 'fast' ? t('course.fastTrack') : undefined;
 ---
 
 {
-	isSplash ? (
+	isCourseLanding && course ? (
+		<CourseHero course={course} />
+	) : isLesson ? (
+		<header class="co-lesson-head">
+			<p class="co-eyebrow">
+				<span class="co-eyebrow__dot" aria-hidden="true" />
+				<span>{t('lesson.unit', { unit })}</span>
+				{trackLabel && <span class="co-eyebrow__sep">·</span>}
+				{trackLabel && <span>{trackLabel}</span>}
+				{minutes && <span class="co-eyebrow__sep">·</span>}
+				{minutes && <span>{t('course.minutes', { n: minutes })}</span>}
+			</p>
+			<h1 id="_top" class="hf-page-title">
+				{title}
+			</h1>
+		</header>
+	) : isSplash ? (
 		<h1 id="_top" class="hf-learn__heading">
 			<span class="hf-learn__icon" aria-hidden="true">
 				🎓
 			</span>
-			<span>{entry.data.title}</span>
+			<span>{title}</span>
 		</h1>
 	) : (
 		<h1 id="_top" class="hf-page-title">
-			{entry.data.title}
+			{title}
 		</h1>
 	)
 }
