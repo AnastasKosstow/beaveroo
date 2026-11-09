@@ -1,6 +1,6 @@
 ---
 title: What is an Agent?
-description: What an AI Agent is — the Alfred analogy, the formal definition, Brain and Body, the spectrum of agency and example applications.
+description: What an AI Agent is - the Alfred analogy, the formal definition, Brain and Body, the spectrum of agency and example applications.
 ---
 
 import UnitProgress from '../../../../components/UnitProgress.astro';
@@ -79,8 +79,6 @@ Following this definition, Agents exist on a continuous spectrum of increasing a
 | ★★★ | Agent output controls iteration and program continuation | Multi-step Agent | `while (LlmShouldContinue()) ExecuteNextStep();` |
 | ★★★ | One agentic workflow can start another agentic workflow | Multi-Agent | `if (LlmTrigger()) ExecuteAgent();` |
 
-Table from the [smolagents conceptual guide](https://huggingface.co/docs/smolagents/conceptual_guides/intro_agents) (patterns adapted to C# syntax).
-
 ## What type of AI Models do we use for Agents?
 
 The most common AI model found in Agents is an LLM (Large Language Model), which takes **Text** as an input and outputs **Text** as well.
@@ -101,7 +99,7 @@ The answer is that the developers of HuggingChat, ChatGPT and similar apps imple
 
 <figure>
 
-![Eiffel Brocolis](../../../../assets/course/unit1/eiffel-broccoli.jpg)
+![Eiffel Tower made of broccoli](../../../../assets/course/unit1/eiffel-broccoli.jpg)
 
 <figcaption>The model used an Image Generation Tool to generate this image.</figcaption>
 </figure>
@@ -115,10 +113,8 @@ An Agent can perform any task we implement via **Tools** to complete **Actions**
 For example, if I write an Agent to act as my personal assistant (like Siri) on my computer, and I ask it to "send an email to my Manager asking to delay today's meeting", I can give it some code to send emails. This will be a new Tool the Agent can use whenever it needs to send an email. We can write it in C#:
 
 ```csharp
-/// <summary>Useful to send an e-mail message to a recipient.</summary>
 static string SendMessageTo(string recipient, string message)
 {
-    // ... the real e-mail sending logic goes here
     return $"Message to {recipient} has been sent.";
 }
 ```

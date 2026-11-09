@@ -1,6 +1,6 @@
 ---
 title: What are LLMs?
-description: What Large Language Models are — the Transformer architecture, tokens and special tokens, next token prediction, attention, prompting, training and their role in AI Agents.
+description: What Large Language Models are - the Transformer architecture, tokens and special tokens, next token prediction, attention, prompting, training and their role in AI Agents.
 ---
 
 import UnitProgress from '../../../../components/UnitProgress.astro';
@@ -19,7 +19,7 @@ This section offers a concise technical explanation of the use of LLMs. If you w
 
 An LLM is a type of AI model that excels at **understanding and generating human language**. They are trained on vast amounts of text data, allowing them to learn patterns, structure, and even nuance in language. These models typically consist of many millions of parameters.
 
-Most LLMs nowadays are **built on the Transformer architecture**—a deep learning architecture based on the "Attention" algorithm, that has gained significant interest since the release of BERT from Google in 2018.
+Most LLMs nowadays are **built on the Transformer architecture** - a deep learning architecture based on the "Attention" algorithm, that has gained significant interest since the release of BERT from Google in 2018.
 
 <figure>
 <img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/transformer.jpg" alt="Transformer"/>
@@ -40,7 +40,7 @@ There are 3 types of transformers:
 
    - **Example**: Llama from Meta
    - **Use Cases**: Text generation, chatbots, code generation
-   - **Typical Size**: Billions (in the US sense, i.e., 10^9) of parameters
+   - **Typical Size**: Billions (10^9) of parameters
 
 3. **Seq2Seq (Encoder–Decoder)**\
    A sequence-to-sequence Transformer _combines_ an encoder and a decoder. The encoder first processes the input sequence into a context representation, then the decoder generates an output sequence.
@@ -119,10 +119,6 @@ The table below illustrates the diversity of special tokens.
   </tbody>
 </table>
 
-:::tip
-We do not expect you to memorize these special tokens, but it is important to appreciate their diversity and the role they play in the text generation of LLMs. If you want to know more about special tokens, you can check out the configuration of the model in its Hub repository. For example, you can find the special tokens of the SmolLM2 model in its <a href="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/blob/main/tokenizer_config.json">tokenizer_config.json</a>.
-:::
-
 ## Understanding next token prediction
 
 LLMs are said to be **autoregressive**, meaning that **the output from one pass becomes the input for the next one**. This loop continues until the model predicts the next token to be the EOS token, at which point the model can stop.
@@ -146,7 +142,7 @@ You can interact with the decoding process yourself with SmolLM2 in this Space (
 
 <Embed src="https://agents-course-decoding-visualizer.hf.space" title="Decoding Visualizer" />
 
-- But there are more advanced decoding strategies. For example, *beam search* explores multiple candidate sequences to find the one with the maximum total score–even if some individual tokens have lower scores.
+- But there are more advanced decoding strategies. For example, *beam search* explores multiple candidate sequences to find the one with the maximum total score - even if some individual tokens have lower scores.
 
 <Embed src="https://agents-course-beam-search-visualizer.hf.space" title="Beam Search Visualizer" />
 
@@ -160,7 +156,7 @@ A key aspect of the Transformer architecture is **Attention**. When predicting t
 
 This process of identifying the most relevant words to predict the next token has proven to be incredibly effective.
 
-Although the basic principle of LLMs—predicting the next token—has remained consistent since GPT-2, there have been significant advancements in scaling neural networks and making the attention mechanism work for longer and longer sequences.
+Although the basic principle of LLMs - predicting the next token - has remained consistent since GPT-2, there have been significant advancements in scaling neural networks and making the attention mechanism work for longer and longer sequences.
 
 If you've interacted with LLMs, you're probably familiar with the term *context length*, which refers to the maximum number of tokens the LLM can process, and the maximum _attention span_ it has.
 
@@ -182,11 +178,11 @@ After this initial _pre-training_, LLMs can be fine-tuned on a supervised learni
 
 You have two main options:
 
-1. **Run Locally** (if you have sufficient hardware) — in the .NET world, for example, with [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/) or [Ollama](https://ollama.com/) as a local server you connect to through `IChatClient`.
+1. **Run Locally** (if you have sufficient hardware) - in the .NET world, for example, with [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/) or [Ollama](https://ollama.com/) as a local server you connect to through `IChatClient`.
 
-2. **Use a Cloud/API** (e.g., via Hugging Face Inference Providers, which expose an OpenAI-compatible API).
+2. **Use a Cloud/API** (cloud providers such as OpenAI or Azure OpenAI - they require an account and an API key).
 
-Throughout this course, we will primarily use models via APIs on the Hugging Face Hub. Later on, we will explore how to run these models locally on your hardware.
+In this course, we will run the models locally on our own hardware with [Ollama](https://ollama.com/) - no accounts or API keys.
 
 ## How are LLMs used in AI Agents?
 
@@ -200,10 +196,8 @@ We will explore these steps in more detail in this Unit, but for now, what you n
 
 That was a lot of information! We've covered the basics of what LLMs are, how they function, and their role in powering AI agents.
 
-If you'd like to dive even deeper into the fascinating world of language models and natural language processing, don't hesitate to check out the <a href="https://huggingface.co/learn/nlp-course/chapter1/1" target="_blank">free NLP course</a>.
+If you'd like to dive even deeper into the world of language models and natural language processing, check out the <a href="https://huggingface.co/learn/nlp-course/chapter1/1" target="_blank">free NLP course</a>.
 
 Now that we understand how LLMs work, it's time to see **how LLMs structure their generations in a conversational context**.
 
-To run the C# examples in the following sections, **you need a Hugging Face token** that you can get from <a href="https://hf.co/settings/tokens" target="_blank">https://hf.co/settings/tokens</a>. The original course uses a Jupyter notebook; the .NET equivalent is <a href="https://code.visualstudio.com/docs/languages/polyglot" target="_blank">Polyglot Notebooks</a> in VS Code (C# in notebook form) or a plain console application created with `dotnet new console`.
-
-Some models (for example Meta's Llama) are *gated* — to use them you first need to request access on the model page in the Hub, for example <a href="https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct" target="_blank">Meta Llama 3.2</a>.
+The C# examples that call a model (from [Dummy Agent Library](/en/unit-1/dummy-agent-library/) onwards) run entirely on your computer - in a plain console application created with `dotnet new console`, with a local model in Ollama. No accounts or API keys are needed.

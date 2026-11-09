@@ -180,9 +180,9 @@ LLMs се обучават върху големи набори от текст�
 
 1. **Локално изпълнение** (ако имаш достатъчно мощен хардуер) - в .NET света например с [ONNX Runtime GenAI](https://onnxruntime.ai/docs/genai/) или [Ollama](https://ollama.com/) като локален сървър, към който се свързваш чрез `IChatClient`.
 
-2. **Използване на Cloud/API** (например чрез Hugging Face Inference Providers, които предоставят OpenAI-съвместим API).
+2. **Използване на Cloud/API** (облачни доставчици като OpenAI или Azure OpenAI - изискват акаунт и API ключ).
 
-В този курс ще изпълняваме модели локално на собствения си хардуер.
+В този курс ще изпълняваме моделите локално на собствения си хардуер с [Ollama](https://ollama.com/) - без акаунти и API ключове.
 
 ## Как се използват LLMs в AI Agents?
 
@@ -200,6 +200,4 @@ LLMs са ключов компонент на AI Agents, **осигуряващ
 
 Сега, когато разбираме как работят LLMs, е време да видим **как LLMs структурират генерирането си в контекста на разговор**.
 
-За да изпълниш C# примерите от следващите секции, **ти трябва Hugging Face token**, който можеш да получиш от <a href="https://hf.co/settings/tokens" target="_blank">https://hf.co/settings/tokens</a>. Оригиналният курс използва Jupyter notebook; .NET еквивалентът са <a href="https://code.visualstudio.com/docs/languages/polyglot" target="_blank">Polyglot Notebooks</a> във VS Code (C# в notebook формат) или обикновено конзолно приложение, създадено с `dotnet new console`.
-
-Някои модели (например Llama на Meta) са *gated* - за да ги използваш, трябва първо да заявиш достъп на страницата на модела в Hub, например <a href="https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct" target="_blank">Meta Llama 3.2</a>.
+C# примерите, които извикват модел (от [Dummy Agent Library](/unit-1/dummy-agent-library/) нататък), се изпълняват изцяло на твоя компютър - в обикновено конзолно приложение, създадено с `dotnet new console`, и с локален модел в Ollama. Не са нужни акаунти или API ключове.
