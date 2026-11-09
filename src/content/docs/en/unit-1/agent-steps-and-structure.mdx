@@ -3,7 +3,11 @@ title: Understanding AI Agents through the Thought-Action-Observation Cycle
 description: The complete AI Agent workflow — the Thought → Action → Observation cycle, illustrated with Alfred the weather Agent.
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-check-3.jpg" alt="Unit 1 planning"/>
+import CycleDiagram from '../../../../components/CycleDiagram.astro';
+
+import UnitProgress from '../../../../components/UnitProgress.astro';
+
+<UnitProgress done={3} />
 
 In the previous sections, we learned:
 
@@ -30,13 +34,22 @@ The three components work together in a continuous loop. To use an analogy from 
 
 Visually, it looks like this:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/AgentCycle.gif" alt="Think, Act, Observe cycle"/>
+<CycleDiagram />
 
 In many Agent frameworks, **the rules and guidelines are embedded directly into the system prompt**, ensuring that every cycle adheres to a defined logic.
 
 In a simplified version, our system prompt may look like this:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/system_prompt_cycle.png" alt="Think, Act, Observe cycle"/>
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+Tool Name: get_weather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
+
+You should think step by step in order to fulfill the objective with a reasoning divided into Thought/Action/Observation steps that can repeat multiple times if needed.
+
+You should first reflect on the current situation using `Thought: {your_thoughts}`, then (if necessary) call a tool with the proper JSON formatting `Action: {JSON_BLOB}`, or print your final answer starting with the prefix `Final Answer:`.
+```
 
 We see here that in the System Message we defined:
 
@@ -52,7 +65,7 @@ We created Alfred, the Weather Agent.
 
 A user asks Alfred: "What's the current weather in New York?"
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent.jpg)
 
 Alfred's job is to answer this query using a weather API tool.
 
@@ -68,7 +81,7 @@ Upon receiving the query, Alfred's internal dialogue might be:
 
 This step shows the agent breaking the problem into steps: first, gathering the necessary data.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-1.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent-1.jpg)
 
 ### Action
 
@@ -89,7 +102,7 @@ Thought: I need to check the current weather for New York.
 
 Here, the action clearly specifies which tool to call (e.g., `get_weather`) and what parameter to pass (`"location": "New York"`).
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-2.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent-2.jpg)
 
 ### Observation
 
@@ -99,7 +112,7 @@ After the tool call, Alfred receives an observation. This might be the raw weath
 
 *"Current weather in New York: partly cloudy, 15°C, 60% humidity."*
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-3.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent-3.jpg)
 
 This observation is then added to the prompt as additional context. It functions as real-world feedback, confirming whether the action succeeded and providing the needed details.
 
@@ -111,7 +124,7 @@ With the observation in hand, Alfred updates its internal reasoning:
 
 *"Now that I have the weather data for New York, I can compile an answer for the user."*
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-4.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent-4.jpg)
 
 ### Final Action
 
@@ -123,7 +136,7 @@ Final answer: The current weather in New York is partly cloudy with a temperatur
 
 This final action sends the answer back to the user, closing the loop.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-5.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../../assets/course/unit1/alfred-agent-5.jpg)
 
 What we see in this example:
 

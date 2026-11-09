@@ -3,7 +3,9 @@ title: Какво са Tools?
 description: Какво представляват Tools за AI Agents, как работят, как ги описваме за LLM, автоматично генериране на описание чрез reflection в C# и Model Context Protocol (MCP).
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-check-2.jpg" alt="План на Unit 1"/>
+import UnitProgress from '../../../components/UnitProgress.astro';
+
+<UnitProgress done={2} />
 
 Един ключов аспект на AI Agents е способността им да предприемат **actions**. Както видяхме, това се случва чрез използването на **Tools**.
 
@@ -34,7 +36,7 @@ description: Какво представляват Tools за AI Agents, как 
 
 Например, ако попиташ LLM директно (без search tool) какво е времето днес, LLM вероятно ще халюцинира случайна прогноза.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/weather.jpg" alt="Времето"/>
+![Времето](../../../assets/course/unit1/weather.jpg)
 
 - Един Tool трябва да съдържа:
 
@@ -59,7 +61,12 @@ LLMs, както видяхме, могат само да получават т�
 
 Пълният отговор може да изглежда обезкуражаващ, но по същество използваме system prompt-а, за да предоставим на модела текстови описания на наличните tools:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/Agent_system_prompt.png" alt="System prompt за tools"/>
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+{tools_description}
+```
 
 За да работи това, трябва да сме много прецизни и точни относно:
 
@@ -318,7 +325,12 @@ Tool Name: calculator, Description: Multiply two integers., Arguments: a: int, b
 
 Описанието се **инжектира** в system prompt-а. Ако вземем примера, с който започнахме тази секция, ето как би изглеждал той след заместването на `tools_description`:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/Agent_system_prompt_tools.png" alt="System prompt с tools"/>
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+Tool Name: calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
+```
 
 В секцията [Actions](/unit-1/actions/) ще научим повече за това как Agent може да **извика** tool-а, който току-що създадохме.
 

@@ -29,5 +29,17 @@
   "quiz.allCorrect": "Congratulations, you got it right! 🥳",
   "quiz.someWrong": "Looks like at least one of your answers is wrong, try again!",
   "embed.note": "Interactive content from an external source — requires an internet connection.",
-  "embed.open": "Open in a new tab"
+  "embed.open": "Open in a new tab",
+  "progress.label": "Unit 1 progress",
+  "progress.step1": "Understand what are Agents",
+  "progress.step2": "Learn what are LLMs and the Messages system",
+  "progress.step3": "Study Tools and Actions",
+  "progress.step4": "Learn the Agent workflow",
+  "progress.step5": "Code your first Agent",
+  "progress.step6": "Unit Quiz",
+  "cycle.label": "The Thought → Action → Observation cycle",
+  "cycle.thought": "Thought",
+  "cycle.action": "Action",
+  "cycle.observation": "Observation",
+  "cycle.center": "until the objective is fulfilled"
 }

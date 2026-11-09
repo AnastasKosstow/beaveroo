@@ -56,5 +56,17 @@
   "quiz.allCorrect": "Поздравления — отговорът е правилен! 🥳",
   "quiz.someWrong": "Поне един от отговорите е грешен — опитай отново!",
   "embed.note": "Интерактивно съдържание от външен източник — изисква интернет връзка.",
-  "embed.open": "Отвори в нов раздел"
+  "embed.open": "Отвори в нов раздел",
+  "progress.label": "Напредък в Unit 1",
+  "progress.step1": "Разбери какво са Agents",
+  "progress.step2": "Научи какво са LLMs и системата от Messages",
+  "progress.step3": "Изучи Tools и Actions",
+  "progress.step4": "Научи Agent workflow",
+  "progress.step5": "Напиши първия си Agent",
+  "progress.step6": "Unit Quiz",
+  "cycle.label": "Цикълът Thought → Action → Observation",
+  "cycle.thought": "Thought",
+  "cycle.action": "Action",
+  "cycle.observation": "Observation",
+  "cycle.center": "докато целта не бъде постигната"
 }

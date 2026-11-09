@@ -1,0 +1,38 @@
+---
+interface Props {
+	done?: number;
+}
+
+const { done = 0 } = Astro.props;
+const t = Astro.locals.t;
+const steps = [
+	t('progress.step1'),
+	t('progress.step2'),
+	t('progress.step3'),
+	t('progress.step4'),
+	t('progress.step5'),
+	t('progress.step6'),
+];
+---
+
+<ol class="hf-progress not-content" aria-label={t('progress.label')}>
+	{
+		steps.map((label, index) => {
+			const state = index < done ? 'done' : index === done ? 'current' : 'todo';
+			return (
+				<li class={`hf-progress__step is-${state}`} aria-current={state === 'current' ? 'step' : undefined}>
+					<span class="hf-progress__marker" aria-hidden="true">
+						{state === 'done' ? (
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M5 12.5 10 17.5 19 7" />
+							</svg>
+						) : (
+							index + 1
+						)}
+					</span>
+					<span class="hf-progress__label">{label}</span>
+				</li>
+			);
+		})
+	}
+</ol>

@@ -1,0 +1,34 @@
+---
+const t = Astro.locals.t;
+---
+
+<figure class="hf-cycle not-content">
+	<svg viewBox="0 0 640 360" role="img" aria-label={t('cycle.label')}>
+		<defs>
+			<marker id="hf-cycle-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M0 0 10 5 0 10z" fill="currentColor"></path>
+			</marker>
+		</defs>
+		<g class="hf-cycle__arrows" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" marker-end="url(#hf-cycle-arrow)">
+			<path d="M212 92 C 270 48, 370 48, 428 92"></path>
+			<path d="M520 160 C 540 220, 480 290, 400 292"></path>
+			<path d="M240 292 C 160 290, 100 220, 120 160"></path>
+		</g>
+		<g class="hf-cycle__node hf-cycle__node--thought">
+			<rect x="60" y="80" width="160" height="72" rx="20"></rect>
+			<text x="140" y="110" text-anchor="middle">🧠</text>
+			<text x="140" y="140" text-anchor="middle" class="hf-cycle__text">{t('cycle.thought')}</text>
+		</g>
+		<g class="hf-cycle__node hf-cycle__node--action">
+			<rect x="420" y="80" width="160" height="72" rx="20"></rect>
+			<text x="500" y="110" text-anchor="middle">⚙️</text>
+			<text x="500" y="140" text-anchor="middle" class="hf-cycle__text">{t('cycle.action')}</text>
+		</g>
+		<g class="hf-cycle__node hf-cycle__node--observation">
+			<rect x="240" y="256" width="160" height="72" rx="20"></rect>
+			<text x="320" y="286" text-anchor="middle">👀</text>
+			<text x="320" y="316" text-anchor="middle" class="hf-cycle__text">{t('cycle.observation')}</text>
+		</g>
+		<text x="320" y="190" text-anchor="middle" class="hf-cycle__center">{t('cycle.center')}</text>
+	</svg>
+</figure>

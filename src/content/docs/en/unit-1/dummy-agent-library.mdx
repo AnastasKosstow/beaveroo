@@ -3,7 +3,9 @@ title: Dummy Agent Library
 description: Building an Agent from scratch with plain C# — HttpClient against Hugging Face Inference Providers, a system prompt with tools, stopping before the Observation and actually executing a function.
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-unit1sub3DONE.jpg" alt="Unit 1 planning"/>
+import UnitProgress from '../../../../components/UnitProgress.astro';
+
+<UnitProgress done={4} />
 
 This course is framework-agnostic because we want to **focus on the concepts of AI agents and avoid getting bogged down in the specifics of a particular framework**.
 
@@ -135,7 +137,6 @@ example use :
   "action_input": {"location": "New York"}
 }
 
-
 ALWAYS use the following format:
 
 Question: the input question you must answer
@@ -260,7 +261,6 @@ Action:
   "action": "get_weather",
   "action_input": {"location": "London"}
 }
-
 
 ````
 
@@ -397,7 +397,6 @@ example use :
   "action": "get_weather",
   "action_input": {"location": "New York"}
 }
-
 
 ALWAYS use the following format:
 

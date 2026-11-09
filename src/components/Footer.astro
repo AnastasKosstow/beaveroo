@@ -7,17 +7,11 @@ const t = Astro.locals.t;
 <Default><slot /></Default>
 
 <div class="hf-footer">
-	<a class="hf-footer__link" href="https://huggingface.co" target="_blank" rel="noopener" title={}>
+	<a class="hf-footer__link" href="https://huggingface.co" target="_blank" rel="noopener">
 		<img class="hf-footer__icon" src="/images/huggingface.svg" alt="" width="20" height="20" loading="lazy" />
 		<span>{t('footer.huggingFace')}</span>
 	</a>
-	<a
-		class="hf-footer__link"
-		href="https://github.com/AnastasKosstow/curious-otter"
-		target="_blank"
-		rel="noopener"
-		title={}
-	>
+	<a class="hf-footer__link" href="https://github.com/AnastasKosstow/curious-otter" target="_blank" rel="noopener">
 		<span class="hf-footer__icon hf-footer__icon--emoji" aria-hidden="true">🦦</span>
 		<span>{t('footer.sourceCode')}</span>
 	</a>

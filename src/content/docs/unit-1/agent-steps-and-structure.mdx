@@ -3,7 +3,11 @@ title: Разбиране на AI Agents чрез цикъла Thought-Action-Ob
 description: Пълният работен процес на AI Agent — цикълът Thought → Action → Observation, илюстриран с Alfred, weather Agent-ът.
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-check-3.jpg" alt="План на Unit 1"/>
+import CycleDiagram from '../../../components/CycleDiagram.astro';
+
+import UnitProgress from '../../../components/UnitProgress.astro';
+
+<UnitProgress done={3} />
 
 В предишните секции научихме:
 
@@ -30,13 +34,22 @@ description: Пълният работен процес на AI Agent — цик
 
 Визуално изглежда така:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/AgentCycle.gif" alt="Цикълът Think, Act, Observe"/>
+<CycleDiagram />
 
 В много Agent frameworks **правилата и насоките са вградени директно в system prompt-а**, което гарантира, че всеки цикъл следва определена логика.
 
 В опростен вариант нашият system prompt може да изглежда така:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/system_prompt_cycle.png" alt="System prompt с цикъла Think, Act, Observe"/>
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+Tool Name: get_weather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
+
+You should think step by step in order to fulfill the objective with a reasoning divided into Thought/Action/Observation steps that can repeat multiple times if needed.
+
+You should first reflect on the current situation using `Thought: {your_thoughts}`, then (if necessary) call a tool with the proper JSON formatting `Action: {JSON_BLOB}`, or print your final answer starting with the prefix `Final Answer:`.
+```
 
 Тук виждаме, че в System Message сме дефинирали:
 
@@ -52,7 +65,7 @@ description: Пълният работен процес на AI Agent — цик
 
 Потребител пита Alfred: „Какво е времето в Ню Йорк в момента?“
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent.jpg)
 
 Задачата на Alfred е да отговори на тази заявка с помощта на weather API tool.
 
@@ -68,7 +81,7 @@ description: Пълният работен процес на AI Agent — цик
 
 Тази стъпка показва как agent-ът разбива проблема на стъпки: първо — събиране на необходимите данни.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-1.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent-1.jpg)
 
 ### Action
 
@@ -89,7 +102,7 @@ Thought: I need to check the current weather for New York.
 
 Тук action-ът ясно посочва кой tool да бъде извикан (например `get_weather`) и какъв параметър да бъде подаден (`"location": "New York"`).
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-2.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent-2.jpg)
 
 ### Observation
 
@@ -99,7 +112,7 @@ Thought: I need to check the current weather for New York.
 
 *„Current weather in New York: partly cloudy, 15°C, 60% humidity.“*
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-3.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent-3.jpg)
 
 Този observation след това се добавя към prompt-а като допълнителен контекст. Той функционира като обратна връзка от реалния свят, потвърждавайки дали action-ът е бил успешен и предоставяйки нужните детайли.
 
@@ -111,7 +124,7 @@ Thought: I need to check the current weather for New York.
 
 *„Сега, когато имам данните за времето в Ню Йорк, мога да съставя отговор за потребителя.“*
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-4.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent-4.jpg)
 
 ### Финален Action
 
@@ -123,7 +136,7 @@ Final answer: The current weather in New York is partly cloudy with a temperatur
 
 Този финален action изпраща отговора обратно на потребителя и затваря цикъла.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-agent-5.jpg" alt="Alfred Agent"/>
+![Alfred Agent](../../../assets/course/unit1/alfred-agent-5.jpg)
 
 Какво виждаме в този пример:
 

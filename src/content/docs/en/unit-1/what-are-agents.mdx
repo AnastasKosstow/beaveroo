@@ -3,7 +3,9 @@ title: What is an Agent?
 description: What an AI Agent is — the Alfred analogy, the formal definition, Brain and Body, the spectrum of agency and example applications.
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-no-check.jpg" alt="Unit 1 planning"/>
+import UnitProgress from '../../../../components/UnitProgress.astro';
+
+<UnitProgress done={0} />
 
 By the end of this section, you'll feel comfortable with the concept of agents and their various applications in AI.
 
@@ -13,11 +15,11 @@ To explain what an Agent is, let's start with an analogy.
 
 Meet Alfred. Alfred is an **Agent**.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/this-is-alfred.jpg" alt="This is Alfred"/>
+![This is Alfred](../../../../assets/course/unit1/this-is-alfred.jpg)
 
 Imagine Alfred **receives a command**, such as: "Alfred, I would like a coffee please."
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/coffee-please.jpg" alt="I would like a coffee"/>
+![I would like a coffee](../../../../assets/course/unit1/coffee-please.jpg)
 
 Because Alfred **understands natural language**, he quickly grasps our request.
 
@@ -28,23 +30,23 @@ Before fulfilling the order, Alfred engages in **reasoning and planning**, figur
 3. Brew the coffee
 4. Bring the coffee back
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/reason-and-plan.jpg" alt="Reason and plan"/>
+![Reason and plan](../../../../assets/course/unit1/reason-and-plan.jpg)
 
 Once he has a plan, he **must act**. To execute his plan, **he can use tools from the list of tools he knows about**.
 
 In this case, to make a coffee, he uses a coffee machine. He activates the coffee machine to brew the coffee.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/make-coffee.jpg" alt="Make coffee"/>
+![Make coffee](../../../../assets/course/unit1/make-coffee.jpg)
 
 Finally, Alfred brings the freshly brewed coffee to us.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/bring-coffee.jpg" alt="Bring coffee"/>
+![Bring coffee](../../../../assets/course/unit1/bring-coffee.jpg)
 
 And this is what an Agent is: an **AI model capable of reasoning, planning, and interacting with its environment**.
 
 We call it Agent because it has _agency_, aka it has the ability to interact with the environment.
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/process.jpg" alt="Agent process"/>
+![Agent process](../../../../assets/course/unit1/process.jpg)
 
 ## Let's go more formal
 
@@ -98,7 +100,9 @@ However, if you ask a well-known chat application like HuggingChat or ChatGPT to
 The answer is that the developers of HuggingChat, ChatGPT and similar apps implemented additional functionality (called **Tools**), that the LLM can use to create images.
 
 <figure>
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/eiffel_brocolis.jpg" alt="Eiffel Brocolis"/>
+
+![Eiffel Brocolis](../../../../assets/course/unit1/eiffel-broccoli.jpg)
+
 <figcaption>The model used an Image Generation Tool to generate this image.</figcaption>
 </figure>
 

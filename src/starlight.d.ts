@@ -17,5 +17,17 @@ declare namespace StarlightApp {
     'quiz.someWrong': string;
     'embed.note': string;
     'embed.open': string;
+    'progress.label': string;
+    'progress.step1': string;
+    'progress.step2': string;
+    'progress.step3': string;
+    'progress.step4': string;
+    'progress.step5': string;
+    'progress.step6': string;
+    'cycle.label': string;
+    'cycle.thought': string;
+    'cycle.action': string;
+    'cycle.observation': string;
+    'cycle.center': string;
   }
 }

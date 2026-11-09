@@ -3,7 +3,9 @@ title: Dummy Agent Library
 description: Изграждаме Agent „от нулата“ с чист C# — HttpClient към Hugging Face Inference Providers, system prompt с tools, спиране преди Observation и реално изпълнение на функция.
 ---
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/whiteboard-unit1sub3DONE.jpg" alt="План на Unit 1"/>
+import UnitProgress from '../../../components/UnitProgress.astro';
+
+<UnitProgress done={4} />
 
 Този курс е независим от framework, защото искаме **да се фокусираме върху концепциите на AI agents и да избегнем затъването в спецификите на конкретен framework**.
 
@@ -135,7 +137,6 @@ example use :
   "action_input": {"location": "New York"}
 }
 
-
 ALWAYS use the following format:
 
 Question: the input question you must answer
@@ -260,7 +261,6 @@ Action:
   "action": "get_weather",
   "action_input": {"location": "London"}
 }
-
 
 ````
 
@@ -397,7 +397,6 @@ example use :
   "action": "get_weather",
   "action_input": {"location": "New York"}
 }
-
 
 ALWAYS use the following format:
 

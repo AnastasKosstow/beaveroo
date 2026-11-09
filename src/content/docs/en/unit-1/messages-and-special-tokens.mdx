@@ -16,7 +16,9 @@ Just like with ChatGPT, users typically interact with Agents through a chat inte
 Up until now, we've discussed prompts as the sequence of tokens fed into the model. But when you chat with systems like ChatGPT or HuggingChat, **you're actually exchanging messages**. Behind the scenes, these messages are **concatenated and formatted into a prompt that the model can understand**.
 
 <figure>
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/assistant.jpg" alt="Behind models"/>
+
+![Behind models](../../../../assets/course/unit1/assistant.jpg)
+
 <figcaption>We see here the difference between what we see in UI and the prompt fed to the model.</figcaption>
 </figure>
 
@@ -42,7 +44,7 @@ var systemMessage = new ChatMessage(
 
 With this System Message, Alfred becomes polite and helpful:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/polite-alfred.jpg" alt="Polite alfred"/>
+![Polite alfred](../../../../assets/course/unit1/polite-alfred.jpg)
 
 But if we change it to:
 
@@ -54,11 +56,11 @@ var systemMessage = new ChatMessage(
 
 Alfred will act as a rebel Agent 😎:
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/rebel-alfred.jpg" alt="Rebel Alfred"/>
+![Rebel Alfred](../../../../assets/course/unit1/rebel-alfred.jpg)
 
 When using Agents, the System Message also **gives information about the available tools, provides instructions to the model on how to format the actions to take, and includes guidelines on how the thought process should be segmented.**
 
-<img src="https://huggingface.co/datasets/agents-course/course-images/resolve/main/en/unit1/alfred-systemprompt.jpg" alt="Alfred System Prompt"/>
+![Alfred System Prompt](../../../../assets/course/unit1/alfred-systemprompt.jpg)
 
 ### Conversations: User and Assistant Messages
 
