@@ -1,0 +1,91 @@
+---
+title: "Actions: Enabling the Agent to Engage with Its Environment"
+description: The concrete steps an AI agent takes to interact with its environment - types of Actions and Agents, the Stop and Parse approach, function calling and Code Agents.
+---
+
+:::tip
+In this section we look at the second step of the cycle: how an Agent acts. We'll see how an action is written (as JSON or as code), why the model has to stop after it, and what types of agents there are.
+:::
+
+Actions are the concrete steps **an Agent takes to interact with its environment**: searching the web, querying a database, sending an email, controlling a device.
+
+For instance, an agent assisting with customer service might retrieve customer data, offer a support article or hand the case over to a human.
+
+## Types of Actions
+
+| Type of Action | Description |
+|----------------|-------------|
+| Information Gathering | Performing web searches, querying databases, or retrieving documents. |
+| Tool Usage | Making API calls, running calculations, and executing code. |
+| Environment Interaction | Manipulating digital interfaces or controlling physical devices. |
+| Communication | Engaging with users via chat or collaborating with other agents. |
+
+## How is an Action written?
+
+An LLM can only generate text. So an action is **text that describes which tool to call and with what arguments**. Depending on the format of that text, we distinguish three types of agents:
+
+| Type of Agent | How it writes the action |
+|---------------|--------------------------|
+| JSON Agent | As a JSON object with the name of the tool and its arguments. |
+| Function-calling Agent | Also as JSON, but the model is fine-tuned for it and returns the call in a separate field of the response. |
+| Code Agent | As a block of code that is executed by the environment. |
+
+## The Stop and Parse approach
+
+With a JSON Agent everything happens in three steps.
+
+**1. Generation in a structured format.** The model writes the action in a clear, pre-agreed format:
+
+```text
+Thought: I need to check the current weather for New York.
+Action: {"action": "GetWeather", "action_input": {"location": "New York"}}
+```
+
+**2. Stopping.** Right after the action, the model **must stop generating**. That hands control back to our code. If the model keeps writing, the only thing it can do is make up the result of the tool.
+
+**3. Parsing.** Our code reads the text and extracts the tool name and the arguments from it. In C# that is a few lines of `System.Text.Json`:
+
+```csharp
+JsonElement action = JsonDocument.Parse(json).RootElement;
+
+string tool = action.GetProperty("action").GetString()!;
+string location = action
+    .GetProperty("action_input")
+    .GetProperty("location")
+    .GetString()!;
+```
+
+After that, all that is left is to call the real C# method. We will do exactly this in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/) lesson.
+
+## Function calling
+
+Stopping and parsing by hand is fragile: the model may get the format wrong or add extra text. That is why most modern models are **fine-tuned for function calling**. With them:
+
+- we pass the tools in a separate field of the request, and the model's chat template writes them into the prompt for us;
+- the model returns the tool call in a **separate, structured field of the response**, not as part of the text;
+- neither `stop` nor manual parsing is needed.
+
+This is why writing a Thought is optional with these models: the tool call arrives directly as data. In .NET this is exactly how `Microsoft.Extensions.AI` works, the library we will use to build our [first Agent](/en/ai-agents/unit-1/tutorial/).
+
+## Code Agents
+
+With a Code Agent the model does not write JSON but **executable code**. Instead of asking for a single tool, it can combine several calls with ordinary logic:
+
+```csharp
+string london = GetWeather("London");
+string paris = GetWeather("Paris");
+
+return $"London: {london}. Paris: {paris}.";
+```
+
+A JSON Agent would do the same in two separate rounds of the cycle. That is the big advantage of code: **expressiveness**. Loops, conditions and intermediate variables are written naturally, and the result of one tool can be passed straight to another.
+
+The price is **security**. We are executing code written by an LLM, and it may be wrong or even malicious (for example after a prompt injection). Such code must run in an isolated environment: a separate process with restricted rights, or a container.
+
+In .NET, Code Agents are rare. C# code can be executed dynamically with the [Roslyn scripting API](https://github.com/dotnet/roslyn/blob/main/docs/wiki/Scripting-API-Samples.md), but libraries such as `Microsoft.Extensions.AI` and Semantic Kernel rely on function calling. That is what we will use too.
+
+---
+
+Actions connect an Agent's reasoning to the real world. Whether they are written as JSON, a function call or code, the idea is the same: **the model describes what it wants done, and our code does it**.
+
+In the next section we will look at Observations: how the result of an action gets back to the model. After that, we will **finally be ready to build our first Agent!**

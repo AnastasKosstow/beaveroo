@@ -1,0 +1,41 @@
+---
+type Stage = { name: string; type?: string; accent?: boolean };
+type Step = { step: string; accent?: boolean };
+
+const items: (Stage | Step)[] = [
+	{ name: 'Messages', type: 'List<ChatMessage>' },
+	{ step: 'chat template', accent: true },
+	{ name: 'Prompt', type: 'string', accent: true },
+	{ step: 'tokenizer' },
+	{ name: 'Tokens', type: 'int[]' },
+	{ step: '' },
+	{ name: 'LLM' },
+];
+
+const label = items
+	.map((item) => ('name' in item ? item.name : item.step))
+	.filter(Boolean)
+	.join(' → ');
+---
+
+<figure class="hf-pipeline not-content" role="img" aria-label={label}>
+	<div class="hf-pipeline__track">
+		{
+			items.map((item) =>
+				'name' in item ? (
+					<div class:list={['hf-pipeline__stage', { 'is-accent': item.accent }]}>
+						<span class="hf-pipeline__name">{item.name}</span>
+						{item.type && <code class="hf-pipeline__type">{item.type}</code>}
+					</div>
+				) : (
+					<div class:list={['hf-pipeline__step', { 'is-accent': item.accent }]}>
+						{item.step && <span class="hf-pipeline__label">{item.step}</span>}
+						<svg class="hf-pipeline__arrow" viewBox="0 0 44 12" aria-hidden="true">
+							<path d="M2 6h38m-6-5 6 5-6 5" />
+						</svg>
+					</div>
+				)
+			)
+		}
+	</div>
+</figure>

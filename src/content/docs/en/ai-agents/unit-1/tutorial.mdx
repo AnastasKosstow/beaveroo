@@ -1,0 +1,211 @@
+---
+title: Let's Create Our First Agent Using .NET
+description: Building our first Agent with Microsoft.Extensions.AI - Tools with [Description], IChatClient against a local model in Ollama, and an automatic Thought → Action → Observation loop.
+---
+
+In the last section we wrote an Agent by hand and **saw how tedious that is**. Now we will build the same thing with a library that **does the heavy lifting for us**.
+
+In this lesson **you will create your first real Agent**: Alfred, who runs entirely on your computer and can call C# methods to answer questions.
+
+## What is Microsoft.Extensions.AI?
+
+[`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) is Microsoft's library for working with LLMs in .NET. It is small, but it covers exactly the three things we wrote by hand in the previous lesson:
+
+| By hand (Dummy Agent) | With Microsoft.Extensions.AI |
+| --- | --- |
+| `HttpClient` and JSON requests to Ollama | `IChatClient`: one interface for every LLM provider |
+| A tool description written into the system prompt | `AIFunctionFactory`: makes a tool out of an ordinary C# method |
+| `stop`, parsing the Action, calling the method, appending the Observation | `UseFunctionInvocation()`: runs the whole cycle automatically |
+
+There is also one difference under the surface. Our dummy Agent was a **JSON Agent**: we asked the model to write `Action: {...}` in its text and parsed it ourselves. The library uses **function calling** (see [Actions](/en/ai-agents/unit-1/actions/)): the model returns the tool call as structured data, so there is no format to get wrong.
+
+## Let's build Alfred
+
+### 1. The project
+
+We use the same model in Ollama as in the previous lesson. Create a new project and add the two packages:
+
+```bash
+dotnet new console -n FirstAgent
+cd FirstAgent
+dotnet add package Microsoft.Extensions.AI
+dotnet add package OllamaSharp
+```
+
+[`OllamaSharp`](https://github.com/awaescher/OllamaSharp) is the client for Ollama. It implements the `IChatClient` interface, so the rest of the code does not depend on Ollama. If you ever switch model providers, you change one line.
+
+### 2. Tools
+
+Create a file named `AlfredTools.cs`. It holds Alfred's only tool: a method that returns the current time in a given timezone.
+
+```csharp title="AlfredTools.cs"
+using System.ComponentModel;
+
+public static class AlfredTools
+{
+    [Description("Gets the current local time in a given timezone.")]
+    public static string GetCurrentTime(
+        [Description("An IANA timezone name, for example 'Europe/Sofia'.")]
+        string timezone)
+    {
+        try
+        {
+            TimeZoneInfo zone = TimeZoneInfo.FindSystemTimeZoneById(timezone);
+            DateTime now = TimeZoneInfo.ConvertTime(DateTime.UtcNow, zone);
+
+            return $"The current time in {timezone} is {now:yyyy-MM-dd HH:mm:ss}";
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return $"Unknown timezone '{timezone}'.";
+        }
+    }
+}
+```
+
+Three things make a method a good tool:
+
+- **A `[Description]` attribute on the method and on every parameter.** That is all the model knows about the tool (see [Tools](/en/ai-agents/unit-1/tools/)).
+- **Clear types** for the parameters and the result.
+- **Errors are returned as text.** If the model passes an invalid timezone, it will read the message as an Observation and can try again.
+
+### 3. The Agent
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+
+const string Model = "qwen3.5:9b";
+
+const string SystemPrompt =
+    "You are Alfred, a helpful and polite AI assistant. " +
+    "Use your tools when they can help and never invent their results.";
+
+IChatClient model = new OllamaApiClient(new Uri("http://localhost:11434"), Model);
+
+IChatClient agent = new ChatClientBuilder(model)
+    .UseFunctionInvocation()
+    .Build();
+
+var options = new ChatOptions
+{
+    Temperature = 0,
+    Tools = [AIFunctionFactory.Create(AlfredTools.GetCurrentTime)],
+};
+
+List<ChatMessage> history = [new(ChatRole.System, SystemPrompt)];
+
+Console.WriteLine("Alfred is ready. Ask a question (or press Enter to exit).");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    string? input = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
+
+    history.Add(new ChatMessage(ChatRole.User, input));
+
+    ChatResponse response = await agent.GetResponseAsync(history, options);
+    history.AddMessages(response);
+
+    foreach (AIContent content in response.Messages.SelectMany(m => m.Contents))
+    {
+        switch (content)
+        {
+            case TextReasoningContent thought:
+                Console.WriteLine($"  Thought: {thought.Text}");
+                break;
+            case FunctionCallContent call:
+                string arguments = JsonSerializer.Serialize(call.Arguments);
+                Console.WriteLine($"  Action: {call.Name}({arguments})");
+                break;
+            case FunctionResultContent result:
+                Console.WriteLine($"  Observation: {result.Result}");
+                break;
+        }
+    }
+
+    Console.WriteLine($"Alfred: {response.Text}");
+}
+```
+
+The code has four parts:
+
+1. **The model.** `OllamaApiClient` is the connection to the local model, exposed through the `IChatClient` interface.
+2. **The Agent.** `UseFunctionInvocation()` wraps the model and adds the Thought → Action → Observation cycle. When the model asks for a tool, the library calls it, returns the result and asks the model again, until it gives a final answer. To keep it from running forever, the cycle is limited to 40 rounds per request.
+3. **Tools.** `AIFunctionFactory.Create` reads the method name, the `[Description]` attributes and the parameter types, and passes them to the model.
+4. **The chat loop.** We keep the whole conversation in `history`, because the model remembers nothing between requests. After every answer we print the steps the Agent went through.
+
+### 4. Running it
+
+Run `dotnet run` and ask Alfred what time it is in Tokyo:
+
+```text wrap
+Alfred is ready. Ask a question (or press Enter to exit).
+
+You: What time is it in Tokyo right now?
+  Thought: The user is asking for the current time in Tokyo. I need to use the GetCurrentTime function with the appropriate timezone for Tokyo. Tokyo is in the Asia/Tokyo timezone.
+  Action: GetCurrentTime({"timezone":"Asia/Tokyo"})
+  Observation: The current time in Asia/Tokyo is 2026-11-12 00:11:11
+  Thought: The function returned the current time in Tokyo as 2026-11-12 00:11:11. I should present this information clearly to the user.
+Alfred: The current time in Tokyo is November 12, 2026 at 00:11:11 (midnight and 11 minutes past).
+
+You: Hello, who are you?
+  Thought: The user is asking me who I am. This is a straightforward question that doesn't require any tool usage. I should respond politely as Alfred, the helpful AI assistant.
+Alfred: Hello! I'm Alfred, your helpful and polite AI assistant. I'm here to help you with various tasks like checking times in different timezones, answering questions, and assisting with information you need. How can I help you today?
+```
+
+On your machine the time and the exact wording will differ, but the steps will be the same.
+
+Here is the whole cycle, this time without a single line of manual parsing. Every step comes from the library as a separate .NET type:
+
+| Step | Type in Microsoft.Extensions.AI |
+| --- | --- |
+| Thought | `TextReasoningContent` |
+| Action | `FunctionCallContent` |
+| Observation | `FunctionResultContent` |
+| Final answer | `TextContent` (also available through `response.Text`) |
+
+Notice the second question. It needs no tool, so Alfred answers directly, without an Action. The model decides by itself when to use tools.
+
+:::note
+The `Thought` lines appear because `qwen3.5` is a model that thinks before it answers (see [Thoughts](/en/ai-agents/unit-1/thoughts/)). With a model that lacks this ability you will only see the Action and the Observation.
+:::
+
+## Your turn
+
+Alfred has only one tool. **The best way to learn is to give him more.** To start, add the `Calculator` method from the Tools section to the `AlfredTools` class:
+
+```csharp
+[Description("Multiply two integers.")]
+public static int Calculator(int a, int b) => a * b;
+```
+
+and register it in `Program.cs`:
+
+```csharp
+Tools =
+[
+    AIFunctionFactory.Create(AlfredTools.GetCurrentTime),
+    AIFunctionFactory.Create(AlfredTools.Calculator),
+],
+```
+
+Ask "What is 123 times 456?" and you will see `Action: Calculator({"a":123,"b":456})`, followed by `Observation: 56088`.
+
+Then try your own ideas: a tool that reads a file, searches the web with `HttpClient`, or checks the weather through a public API.
+
+---
+
+Congratulations, you've built your first Agent! 🎉
+
+It's normal for it to be a little slow or to make mistakes at first. In the next Units we'll learn how to build better Agents.
+
+In the next section, the final quiz for Unit 1 awaits.

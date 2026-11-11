@@ -1,0 +1,79 @@
+---
+title: "Thought: Internal Reasoning and the ReAct Approach"
+description: How an AI agent reasons and plans - common thought types, Chain-of-Thought (CoT) and the ReAct approach that interleaves reasoning and actions.
+---
+
+:::tip
+In this section we look at the first step of the cycle: how an Agent reasons and plans before it acts. We also introduce the ReAct approach, which makes the model think "step by step".
+:::
+
+A Thought is **the Agent's inner monologue**: text in which the LLM thinks the task over before deciding what to do.
+
+The model has no separate place to think. It reasons **by writing**. The text of a Thought becomes part of the prompt and influences everything the model generates after it. That is why, when we make it write down its reasoning first, its next move is usually better.
+
+With Thoughts, an Agent can:
+
+- **break a complex task into smaller steps**;
+- **assess the latest Observation** and decide what comes next;
+- **change its plan** when it receives new information.
+
+## 🧠 Common types of Thought
+
+| Type of Thought | Example |
+|-----------------|---------|
+| Planning | "I need to break this task into three steps: 1) gather data, 2) analyze trends, 3) generate report" |
+| Analysis | "Based on the error message, the issue appears to be with the database connection parameters" |
+| Decision Making | "Given the user's budget constraints, I should recommend the mid-tier option" |
+| Problem Solving | "To optimize this code, I should first profile it to identify bottlenecks" |
+| Memory Integration | "The user mentioned their preference for C# earlier, so I'll provide examples in C#" |
+| Self-Reflection | "My last approach didn't work well, I should try a different strategy" |
+| Goal Setting | "To complete this task, I need to first establish the acceptance criteria" |
+| Prioritization | "The security vulnerability should be addressed before adding new features" |
+
+> **Note:** With models fine-tuned for function calling, writing a Thought is optional. We will see why in the Actions section.
+
+## 🔗 Chain-of-Thought (CoT)
+
+**Chain-of-Thought (CoT)** is a prompting technique in which we make the model **think a task through step by step before giving a final answer**. The simplest way is to add the sentence *"Let's think step by step."* to the prompt.
+
+The model only reasons "in its head", **without using tools**. That makes CoT a good fit for logical and mathematical tasks:
+
+```text
+Question: What is 15% of 200?
+Thought: Let's think step by step. 10% of 200 is 20, and 5% of 200 is 10, so 15% is 30.
+Answer: 30
+```
+
+## ⚙️ ReAct: Reasoning + Acting
+
+**ReAct** combines reasoning with acting. The model still thinks step by step, but between its thoughts it **uses tools and receives their results**:
+
+- **Thought:** internal reasoning
+- **Action:** a tool call
+- **Observation:** the result of the tool
+
+```text
+Thought: I need to find the latest weather in Paris.
+Action: {"action": "GetWeather", "action_input": {"location": "Paris"}}
+Observation: It's 18°C and cloudy.
+Thought: Now I know the weather and can answer.
+Final Answer: It's 18°C and cloudy in Paris.
+```
+
+This is the same Thought-Action-Observation cycle from the previous section. ReAct is the name of the technique behind it.
+
+## 🔁 Comparison: ReAct vs. CoT
+
+| Feature | Chain-of-Thought (CoT) | ReAct |
+|---------|------------------------|-------|
+| Step-by-step logic | ✅ Yes | ✅ Yes |
+| External tools | ❌ No | ✅ Yes (Actions + Observations) |
+| Best suited for | Logic, math, internal tasks | Info-seeking, dynamic multi-step tasks |
+
+:::tip[Models that think on their own]
+Newer models such as **Deepseek R1** or **OpenAI's o1** are trained to *think before answering*. They separate their reasoning from the final answer with special tokens like `<think>` and `</think>`.
+
+CoT and ReAct are prompting techniques. This is a **training-level technique**: the model has learned to think from examples, and we don't need to ask it to.
+
+The model we will use in the hands-on lessons is one of them. When we build our [first Agent](/en/ai-agents/unit-1/tutorial/), `Microsoft.Extensions.AI` will hand us its thoughts as a separate content type: `TextReasoningContent`.
+:::

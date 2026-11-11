@@ -1,0 +1,120 @@
+---
+title: Quick Quiz 2
+description: A short, ungraded self-check on LLMs, the message system, special tokens and tools.
+---
+
+import Question from '../../../../../components/Question.astro';
+
+What?! Another quiz? We know, we know... 😅 This short, ungraded quiz is here to **help you reinforce the key concepts you've just learned**: Large Language Models (LLMs), the message system and tools.
+
+### Q1: Which of the following best describes an AI tool?
+
+<Question
+  choices={[
+    {
+      text: 'A process that only generates text responses',
+      explain: 'Generating text is the job of the LLM itself. A tool is what gives it abilities beyond text.',
+    },
+    {
+      text: 'A function (for example a C# method or an external API) that lets an Agent perform specific tasks and interact with its environment',
+      explain: 'Tools are functions the Agent runs on behalf of the model: web search, calculations, API calls and so on.',
+      correct: true,
+    },
+    {
+      text: 'A feature that stores the Agent\'s conversations',
+      explain: 'Storing the conversation is memory, not a tool.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: How do AI Agents use tools to act in their environment?
+
+<Question
+  choices={[
+    {
+      text: 'By passively waiting for user instructions',
+      explain: 'The Agent decides on its own when it needs a tool to reach the goal.',
+    },
+    {
+      text: 'By only using pre-programmed responses',
+      explain: 'Then no LLM would be needed. The model decides on the spot which tool to ask for and with what arguments.',
+    },
+    {
+      text: 'The model generates text that describes a tool call, and the Agent runs the tool on its behalf and returns the result',
+      explain: 'An LLM can only write text. Actually running the tool is the Agent\'s job.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q3: What is a Large Language Model (LLM)?
+
+<Question
+  choices={[
+    {
+      text: 'A simple chatbot designed to respond with pre-defined answers',
+      explain: 'An LLM does not pick from ready-made answers. It generates new text token by token.',
+    },
+    {
+      text: 'A deep learning model trained on large amounts of text to understand and generate human-like language',
+      explain: 'An LLM predicts the next token based on the huge amount of text it was trained on.',
+      correct: true,
+    },
+    {
+      text: 'A rule-based AI that follows strict predefined commands',
+      explain: 'An LLM does not follow hand-written rules. Its behavior comes from training on data.',
+    },
+  ]}
+/>
+
+---
+
+### Q4: Which of the following best describes the role of special tokens in LLMs?
+
+<Question
+  choices={[
+    {
+      text: 'They are additional words in the model\'s vocabulary that improve the quality of the generated text',
+      explain: 'Special tokens carry no content. They mark the structure of the text.',
+    },
+    {
+      text: 'They serve specific functions, like marking the end of a sequence (EOS) or separating the message roles in chat models',
+      explain: 'For example, <|im_end|> in SmolLM2 marks the end of a message and is also the model\'s EOS token.',
+      correct: true,
+    },
+    {
+      text: 'They are randomly inserted tokens that make responses more varied',
+      explain: 'They are not random: every special token has a precisely defined role.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: How do AI chat models process user messages internally?
+
+<Question
+  choices={[
+    {
+      text: 'They directly interpret messages as structured commands, with no transformations',
+      explain: 'The model never sees the list of messages. It only receives a single piece of text.',
+    },
+    {
+      text: 'The messages are converted into a formatted prompt by concatenating the system, user and assistant messages',
+      explain: 'That is the job of the chat template: it joins all messages into one prompt with the model\'s special tokens.',
+      correct: true,
+    },
+    {
+      text: 'They generate responses randomly based on previous conversations',
+      explain: 'The model does not remember earlier conversations. It reads the whole prompt from scratch every time.',
+    },
+  ]}
+/>
+
+---
+
+Got it? Great! Now let's **dive into the complete Agent workflow and start building your first AI Agent!**

@@ -1,0 +1,50 @@
+---
+title: "Observe: Integrating Feedback to Reflect and Adapt"
+description: How an Agent perceives the consequences of its actions - types of observations and how results are appended to the context.
+---
+
+An Observation is **how an Agent learns what happened after its action**. It is the third step of the cycle.
+
+In practice, an Observation is **the text the tool returns**: data from an API, an error message, a line from a log. To a .NET developer it is simply the return value of the C# method, turned into text.
+
+In the Observation phase, the Agent:
+
+- **Collects feedback:** it receives the data, or confirmation of whether the action succeeded.
+- **Appends the result to the context:** the Observation is written at the end of the conversation and so updates the Agent's "memory".
+- **Adapts its strategy:** the next Thought builds on this new information.
+
+For example, if a weather API returns *"partly cloudy, 15°C, 60% humidity"*, that text is added to the conversation. The model then decides whether it needs more information or is ready to give the final answer.
+
+:::tip[An error is an Observation too]
+If the tool fails, don't hide the error. Return it as text, for example "Unknown timezone 'Tokio'." The model will read it and will often fix its arguments on the next round by itself.
+:::
+
+## Types of Observations
+
+Observations can be very different: from the text of a web page to the position of a robot arm. You can think of them as the "logs" of a tool.
+
+| Type of Observation | Example |
+|---------------------|---------|
+| System Feedback | Error messages, success notifications, status codes |
+| Data Changes | Database updates, file system modifications, state changes |
+| Environmental Data | Sensor readings, system metrics, resource usage |
+| Response Analysis | API responses, query results, computation outputs |
+| Time-based Events | Deadlines reached, scheduled tasks completed |
+
+## How are the results appended?
+
+After the model asks for an action, the Agent's code (or the library we use) does three things, in this order:
+
+1. **It parses the action** to find out which tool to call and with what arguments.
+2. **It runs the tool.**
+3. **It appends the result** to the conversation as an **Observation**.
+
+Then the whole conversation goes back to the model and the cycle continues.
+
+---
+
+You now know all three steps of the Thought-Action-Observation cycle.
+
+If something still seems unclear, don't worry. We will keep coming back to these concepts in the next Units.
+
+Now it's time to see them in action by coding your very first Agent!

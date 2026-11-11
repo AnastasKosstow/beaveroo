@@ -1,0 +1,267 @@
+---
+title: What are Tools?
+description: What Tools are for AI Agents, how they work, how we describe them to the LLM, auto-generating descriptions through reflection in C#, and the Model Context Protocol (MCP).
+---
+
+import UnitProgress from '../../../../../components/UnitProgress.astro';
+
+<UnitProgress done={2} />
+
+One crucial aspect of AI Agents is their ability to take **actions**. As we saw, this happens through the use of **Tools**.
+
+In this section, we'll learn what Tools are, how to design them effectively, and how to integrate them into your Agent via the System Message.
+
+By giving your Agent the right Tools—and clearly describing how those Tools work—you can dramatically increase what your AI can accomplish. Let's dive in!
+
+## What are AI Tools?
+
+A **Tool is a function given to the LLM**. This function should fulfill a **clear objective**.
+
+Here are some commonly used tools in AI agents:
+
+| Tool | Description |
+|------|-------------|
+| Web Search | Allows the agent to fetch up-to-date information from the internet. |
+| Image Generation | Creates images based on text descriptions. |
+| Retrieval | Retrieves information from an external source. |
+| API Interface | Interacts with an external API (GitHub, YouTube, Spotify, etc.). |
+
+Those are only examples, as you can in fact create a tool for any use case!
+
+A good tool should be something that **complements the power of an LLM**.
+
+For instance, if you need to perform arithmetic, giving a **calculator tool** to your LLM will provide better results than relying on the native capabilities of the model.
+
+Furthermore, **LLMs predict the completion of a prompt based on their training data**, which means that their internal knowledge only includes events prior to their training. Therefore, if your agent needs up-to-date data you must provide it through some tool.
+
+For instance, if you ask an LLM directly (without a search tool) for today's weather, the LLM will potentially hallucinate random weather.
+
+![Weather](../../../../../assets/course/unit1/weather.jpg)
+
+- A Tool should contain:
+
+  - A **textual description of what the function does**.
+  - A *Callable* (something to perform an action).
+  - *Arguments* with typings.
+  - (Optional) Outputs with typings.
+
+## How do tools work?
+
+LLMs, as we saw, can only receive text inputs and generate text outputs. They have no way to call tools on their own. When we talk about providing tools to an Agent, we mean teaching the LLM about the existence of these tools and instructing it to generate text-based invocations when needed.
+
+For example, if we provide a tool to check the weather at a location from the internet and then ask the LLM about the weather in Paris, the LLM will recognize that this is an opportunity to use the "weather" tool. Instead of retrieving the weather data itself, the LLM will generate text that represents a tool call, such as `call weather_tool('Paris')`.
+
+The **Agent** then reads this response, identifies that a tool call is required, executes the tool on the LLM's behalf, and retrieves the actual weather data.
+
+The Tool-calling steps are typically not shown to the user: the Agent appends them as a new message before passing the updated conversation to the LLM again. The LLM then processes this additional context and generates a natural-sounding response for the user. From the user's perspective, it appears as if the LLM directly interacted with the tool, but in reality, it was the Agent that handled the entire execution process in the background.
+
+We'll talk a lot more about this process in future sessions.
+
+## How do we give tools to an LLM?
+
+An LLM can only read text. So "giving a tool to the model" means something very simple: **we describe the tool in text and put that description into the system prompt**.
+
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+{tools_description}
+```
+
+The descriptions of our tools will take the place of `{tools_description}`. In this section we'll see how to write them: first by hand, then automatically from the C# code.
+
+### What does the model need to know about a tool?
+
+When you hover over a method in Visual Studio, IntelliSense shows you its name, its parameters with their types, the return type and a short description. You don't see the method body, and you don't need it to call the method correctly.
+
+The model needs exactly the same information:
+
+1. The **name** of the tool
+2. A **description** of what it does
+3. The **inputs**: the names and types of the arguments
+4. The **output**: the type of the result
+
+Let's take a simplified **calculator** tool that multiplies two integers as an example:
+
+```csharp
+int Calculator(int a, int b)
+{
+    return a * b;
+}
+```
+
+The name is `Calculator`, the description is "multiplies two integers", the inputs are `a` and `b` of type `int`, and the output is an `int`. Written as text, they look like this:
+
+```text wrap
+Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
+```
+
+> **Important:** This text is *everything the model knows about the tool*. It never sees the C# code itself.
+
+This exact format is not mandatory. It could just as well be JSON. What matters is that the description is precise and uses the same format for every tool.
+
+Writing descriptions by hand is fragile, though. Rename a parameter, forget to update the text, and the model starts calling the tool incorrectly, with no warning from the compiler.
+
+### The description comes from the code itself
+
+Look at the `Calculator` method again. Its name, its parameters with their types and its return type are already written in it. Only the description in words is missing. In .NET, the `[Description]` attribute is used for that:
+
+```csharp
+using System.ComponentModel;
+
+public static class MathTools
+{
+    [Description("Multiply two integers.")]
+    public static int Calculator(int a, int b) => a * b;
+}
+```
+
+Why an attribute and not a `///` comment? Comments disappear at compile time. Attributes stay in the compiled program and can be read while it runs. Reading information about your own code at runtime is called **reflection**, and with it we can get all four things automatically from the `MethodInfo` object that describes the method:
+
+| What we need | Where we get it | Result in our example |
+| --- | --- | --- |
+| Name | `method.Name` | `Calculator` |
+| Description | the `[Description]` attribute | `Multiply two integers.` |
+| Inputs | `method.GetParameters()` | `a` and `b` of type `int` |
+| Output | `method.ReturnType` | `int` |
+
+### The Tool class
+
+We put everything together in one small `Tool` class (written as a `record` to keep it short) that we can reuse for every tool. Its first lines list what a tool consists of: the four things from the description plus the method itself (`Func`).
+
+> **Disclaimer:** This implementation is an example, but it closely resembles the real implementations in most libraries.
+
+```csharp
+using System.ComponentModel;
+using System.Reflection;
+
+public record Tool(
+    string Name,
+    string Description,
+    Delegate Func,
+    IReadOnlyList<(string Name, string Type)> Arguments,
+    string Outputs)
+{
+    public static Tool FromMethod(Delegate func)
+    {
+        MethodInfo method = func.Method;
+
+        string name = method.Name;
+        string description =
+            method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
+        var arguments = method.GetParameters()
+            .Select(p => (p.Name!, TypeName(p.ParameterType)))
+            .ToList();
+        string outputs = TypeName(method.ReturnType);
+
+        return new Tool(name, description, func, arguments, outputs);
+    }
+
+    public object? Invoke(params object?[] args) => Func.DynamicInvoke(args);
+
+    public override string ToString()
+    {
+        string arguments = string.Join(
+            ", ", Arguments.Select(a => $"{a.Name}: {a.Type}"));
+
+        return $"Tool Name: {Name}, Description: {Description}, " +
+               $"Arguments: {arguments}, Outputs: {Outputs}";
+    }
+
+    private static string TypeName(Type type) => type.Name switch
+    {
+        "Int32" => "int",
+        "String" => "string",
+        "Boolean" => "bool",
+        "Double" => "double",
+        var other => other,
+    };
+}
+```
+
+The class does three things:
+
+- **`FromMethod`** reads the method through reflection and creates a `Tool` from it.
+- **`ToString`** returns the description as text. This is what the model will see.
+- **`Invoke`** runs the method itself. This is what the Agent will do when the model asks for the tool.
+
+The `TypeName` helper only replaces the .NET names `Int32` and `String` with the familiar `int` and `string`.
+
+Let's try it:
+
+```csharp
+Tool calculator = Tool.FromMethod(MathTools.Calculator);
+
+Console.WriteLine(calculator);
+Console.WriteLine(calculator.Invoke(6, 7));
+```
+
+```text wrap
+Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
+42
+```
+
+First comes the same description we wrote by hand a moment ago. This time the name, the arguments and the types come from the code itself and cannot drift away from it. Then comes `42`: the same object can also run the tool.
+
+All that is left is to **inject** the description into the system prompt in place of `{tools_description}`:
+
+```text wrap
+You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+
+You have access to the following tools:
+Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
+```
+
+That's all. The model now knows that it has a `Calculator`, what it does and what inputs it expects. In the [Actions](/en/ai-agents/unit-1/actions/) section, we will learn how an Agent **calls** the tool we just created.
+
+:::tip[How do real .NET libraries do it?]
+You don't have to write your own `Tool` class. The `Microsoft.Extensions.AI` library does the same through `AIFunctionFactory`: it reads the method name, the `[Description]` attribute and the parameters. The difference is that it describes the inputs as JSON Schema, a format every modern function-calling model understands.
+
+```csharp
+using Microsoft.Extensions.AI;
+
+AIFunction calculator = AIFunctionFactory.Create(MathTools.Calculator);
+
+Console.WriteLine(calculator.Name);
+Console.WriteLine(calculator.Description);
+Console.WriteLine(calculator.JsonSchema);
+```
+
+```text wrap
+Calculator
+Multiply two integers.
+{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}
+```
+
+We'll use this approach when building our [first Agent](/en/ai-agents/unit-1/tutorial/).
+:::
+
+### Model Context Protocol (MCP): a unified tool interface
+
+Our `Tool` only works inside our own program. Every Agent library has a similar class of its own, so the same tool has to be described again for each of them.
+
+Model Context Protocol (MCP) is an **open protocol** that standardizes how applications **provide tools to LLMs**. A tool is implemented once, in a separate program called an MCP server, and **any framework that supports MCP can use it**.
+
+MCP provides:
+
+- A growing list of pre-built integrations that your LLM can directly plug into
+- The flexibility to switch between LLM providers and vendors
+- Best practices for securing your data within your infrastructure
+
+In .NET there is an official [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) (the `ModelContextProtocol` NuGet package) that integrates directly with `Microsoft.Extensions.AI`. If you want to dive deeper into MCP, check out the free [MCP Course](https://huggingface.co/learn/mcp-course/) by Hugging Face.
+
+---
+
+Tools play a crucial role in enhancing the capabilities of AI agents.
+
+To summarize, we learned:
+
+- *What Tools Are*: Functions that give LLMs extra capabilities, such as performing calculations or accessing external data.
+
+- *How to Define a Tool*: By providing a clear textual description, inputs, outputs, and a callable function.
+
+- *Why Tools Are Essential*: They enable Agents to overcome the limitations of static model training, handle real-time tasks, and perform specialized actions.
+
+Now, we can move on to the [Agent Workflow](/en/ai-agents/unit-1/agent-steps-and-structure/) where you'll see how an Agent observes, thinks, and acts. This **brings together everything we've covered so far** and sets the stage for creating your own fully functional AI Agent.
+
+But first, it's time for another short quiz!
