@@ -144,6 +144,18 @@ export default defineConfig({
             { label: 'Заключение', translations: { en: 'Conclusion' }, slug: 'ai-agents/unit-1/conclusion' },
           ],
         },
+        {
+          label: 'Unit 2. Frameworks за AI Agents',
+          translations: { en: 'Unit 2. Frameworks for AI Agents' },
+          collapsed: true,
+          items: [
+            {
+              label: 'Frameworks за AI Agents',
+              translations: { en: 'Frameworks for AI Agents' },
+              slug: 'ai-agents/unit-2/introduction',
+            },
+          ],
+        },
       ],
     }),
   ],

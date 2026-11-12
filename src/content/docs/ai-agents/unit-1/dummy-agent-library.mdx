@@ -1,6 +1,6 @@
 ---
 title: Dummy Agent Library
-description: Изграждаме Agent „от нулата“ с чист C# - HttpClient към локален модел в Ollama, system prompt с tools, спиране преди Observation и реално изпълнение на метод.
+description: Изграждаме Agent „от нулата“ с чист C# и локален модел в Ollama - system prompt с tool, спиране преди Observation, изпълнение на истински метод и цикъл, който събира всичко.
 ---
 
 import UnitProgress from '../../../../components/UnitProgress.astro';
@@ -11,77 +11,112 @@ import UnitProgress from '../../../../components/UnitProgress.astro';
 
 Затова в тази секция ще напишем **съвсем прост Agent на ръка**: само с `HttpClient` и `System.Text.Json`, без нито един NuGet пакет. Не би използвал такъв код в production, но той е най-добрият начин **да разбереш какво правят библиотеките за Agents вместо теб**.
 
-В следващата секция ще изградим същото с `Microsoft.Extensions.AI` и ще видиш колко от този код изчезва.
+Това е първият урок, в който ще извикаме истински модел. Ще минем през цикъла Thought → Action → Observation стъпка по стъпка и след всяка стъпка ще стартираме програмата, за да видиш какво се е променило.
 
 ## Подготовка
 
-Трябват ти двете неща от [Unit 0](/ai-agents/unit-0/introduction/): .NET SDK и Ollama. Увери се, че Ollama е стартиран, изтегли модела, с който ще работим, и създай конзолен проект:
+### 1. Инсталирай Ollama и изтегли модела
+
+[Ollama](https://ollama.com/download) е безплатна програма, която изпълнява езикови модели на твоя компютър. Изтегли я от сайта и я инсталирай. След инсталацията тя работи във фонов режим като локален сървър на адрес `http://localhost:11434`.
+
+Отвори терминал и изтегли модела, с който ще работим:
 
 ```bash
 ollama pull qwen3.5:9b
+```
+
+Моделът е около 6.6 GB и се тегли само веднъж. Когато командата приключи, изпълни `ollama list`. В списъка трябва да виждаш `qwen3.5:9b`.
+
+Ако някоя от командите върне грешка, че не може да се свърже с Ollama, стартирай приложението Ollama или изпълни `ollama serve` в отделен терминал и опитай пак.
+
+:::note[Ако компютърът ти е по-слаб]
+Ако моделът ти е тежък, избери по-малък модел с поддръжка на tools от [библиотеката на Ollama](https://ollama.com/search?c=tools) и използвай неговото име вместо `qwen3.5:9b`: в командата `ollama pull` и в константата `Model` в кода. Отговорите му може да се различават от показаните тук.
+:::
+
+### 2. Създай проекта
+
+```bash
 dotnet new console -n DummyAgent
 cd DummyAgent
 ```
 
-Всички фрагменти по-долу отиват в `Program.cs`, един след друг, и се изпълняват с `dotnet run`.
+Отвори папката `DummyAgent` в редактора си. Ще работим с четири малки файла.
 
-:::note[Ако компютърът ти е по-слаб]
-Моделът `qwen3.5:9b` заема около 6.6 GB. Ако ти е тежък, избери по-малък модел с поддръжка на tools от [библиотеката на Ollama](https://ollama.com/search?c=tools) и смени константата `Model`. Отговорите му може да се различават от показаните тук.
-:::
+Първият е познат от урока [Messages и Special Tokens](/ai-agents/unit-1/messages-and-special-tokens/). Създай файл `ChatMessage.cs`:
+
+```csharp title="ChatMessage.cs"
+public record ChatMessage(string Role, string Content);
+```
 
 ## Разговор с модела
 
-Ollama работи като локален сървър на адрес `http://localhost:11434`. Изпращаме му списък от messages и той връща отговора на модела. Това е същата система от messages, която разгледахме в [Messages и Special Tokens](/ai-agents/unit-1/messages-and-special-tokens/), а chat template-а Ollama прилага вместо нас.
+### 3. Свържи се с модела
 
-Нашата „dummy библиотека“ е един-единствен метод:
+Създай файл `Ollama.cs`. Той е цялата ни „dummy библиотека“: един метод, който изпраща разговора на модела и връща отговора му.
 
-```csharp
+```csharp title="Ollama.cs"
 using System.Net.Http.Json;
 using System.Text.Json;
 
-const string Model = "qwen3.5:9b";
-
-using var client = new HttpClient
+public static class Ollama
 {
-    BaseAddress = new Uri("http://localhost:11434/"),
-    Timeout = TimeSpan.FromMinutes(5),
-};
+    private const string Model = "qwen3.5:9b";
 
-async Task<string> ChatAsync(List<object> messages, params string[] stop)
-{
-    var request = new
+    private static readonly HttpClient Client = new()
     {
-        model = Model,
-        messages,
-        stream = false,
-        think = false,
-        options = new { temperature = 0, stop },
+        BaseAddress = new Uri("http://localhost:11434/"),
+        Timeout = TimeSpan.FromMinutes(5),
     };
 
-    using var response = await client.PostAsJsonAsync("api/chat", request);
-    response.EnsureSuccessStatusCode();
+    public static async Task<string> ChatAsync(
+        List<ChatMessage> messages,
+        params string[] stop)
+    {
+        var request = new
+        {
+            model = Model,
+            messages,
+            stream = false,
+            think = false,
+            options = new { temperature = 0, stop },
+        };
 
-    JsonElement reply = await response.Content.ReadFromJsonAsync<JsonElement>();
-    return reply.GetProperty("message").GetProperty("content").GetString()!;
+        using var response = await Client.PostAsJsonAsync("api/chat", request);
+        response.EnsureSuccessStatusCode();
+
+        JsonElement reply = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return reply.GetProperty("message").GetProperty("content").GetString()!;
+    }
 }
 ```
+
+`ChatAsync` изпраща списъка от messages на адрес `http://localhost:11434/api/chat` и връща текста на отговора. Chat template-а Ollama прилага вместо нас, затова тук няма нито един special token.
 
 Три неща в заявката заслужават внимание:
 
 - **`think = false`** изключва режима, в който моделът „мисли на глас“, преди да отговори. Тук искаме да видим цикъла в чист вид.
-- **`temperature = 0`** кара модела винаги да избира най-вероятния token. Така при всяко пускане получаваш един и същ отговор.
+- **`temperature = 0`** кара модела винаги да избира най-вероятния token, за да са отговорите му възможно най-повторяеми.
 - **`stop`** е списък от текстове, при които генерирането спира. Ще ни потрябва след малко.
 
-Да го изпробваме:
+### 4. Задай първия въпрос
 
-```csharp
-List<object> messages =
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+List<ChatMessage> messages =
 [
-    new { role = "user", content = "What is the capital of France? Be brief." },
+    new("user", "What is the capital of France? Be brief."),
 ];
 
-string output = await ChatAsync(messages);
+string output = await Ollama.ChatAsync(messages);
+
 Console.WriteLine(output);
+```
+
+Стартирай програмата:
+
+```bash
+dotnet run
 ```
 
 изход:
@@ -90,52 +125,51 @@ Console.WriteLine(output);
 The capital of France is Paris.
 ```
 
-Първото пускане може да отнеме повече време, защото Ollama зарежда модела в паметта.
+Току-що получи отговор от модел, който работи на твоя компютър. Първото пускане може да отнеме повече време, защото Ollama зарежда модела в паметта. Във всички примери по-долу точните думи при теб може да са малко различни, но стъпките ще са същите.
 
-## System prompt-ът
+## От модел към Agent
+
+### 5. Добави system prompt
 
 Един LLM се превръща в Agent благодарение на system prompt-а. В него записваме двете неща от предишните секции:
 
 1. **Описанието на tools**, в същия формат като в секцията [Tools](/ai-agents/unit-1/tools/).
 2. **Правилата на цикъла** Thought → Action → Observation.
 
-```csharp wrap
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs" wrap
 const string SystemPrompt = """
-Answer the following questions as best you can. You have access to the following tools:
+    Answer the following questions as best you can. You have access to the following tools:
 
-Tool Name: GetWeather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
+    Tool Name: GetWeather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
 
-To use a tool, write a JSON object with an "action" key (the name of the tool) and an "action_input" key (the arguments of the tool), for example:
+    To use a tool, write a JSON object with an "action" key (the name of the tool) and an "action_input" key (the arguments of the tool), for example:
 
-{"action": "GetWeather", "action_input": {"location": "New York"}}
+    {"action": "GetWeather", "action_input": {"location": "New York"}}
 
-ALWAYS use the following format:
+    ALWAYS use the following format:
 
-Thought: think about what to do next
-Action: the JSON object for one tool call
-Observation: the result of the tool
-... (Thought/Action/Observation can repeat several times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original question
-""";
-```
+    Thought: think about what to do next
+    Action: the JSON object for one tool call
+    Observation: the result of the tool
+    ... (Thought/Action/Observation can repeat several times)
+    Thought: I now know the final answer
+    Final Answer: the final answer to the original question
+    """;
 
-## Първи опит
-
-Добавяме въпроса на потребителя след system prompt-а и питаме модела:
-
-```csharp
-messages =
+List<ChatMessage> messages =
 [
-    new { role = "system", content = SystemPrompt },
-    new { role = "user", content = "What's the weather in London?" },
+    new("system", SystemPrompt),
+    new("user", "What's the weather in London?"),
 ];
 
-output = await ChatAsync(messages);
+string output = await Ollama.ChatAsync(messages);
+
 Console.WriteLine(output);
 ```
 
-изход:
+Разговорът вече има два messages: system prompt-а и въпроса на потребителя. Изпълни `dotnet run`:
 
 ```text wrap
 Thought: The user is asking for the current weather in London. I need to use the GetWeather tool with the location set to "London".
@@ -151,16 +185,15 @@ Final Answer: The current weather in London is 12°C, partly cloudy, with 75% hu
 
 Моделът само продължава текст. Щом форматът изисква ред `Observation:`, той го написва сам, с правдоподобни, но измислени данни. Това е халюцинация.
 
-## Спираме преди Observation
+### 6. Спри модела преди Observation
 
-Решението е подходът **stop and parse** от секцията [Actions](/ai-agents/unit-1/actions/). Казваме на модела да спре точно преди `Observation:`, за да изпълним tool-а ние:
+Решението е подходът **stop and parse** от секцията [Actions](/ai-agents/unit-1/actions/). Казваме на модела да спре точно преди `Observation:`, за да изпълним tool-а ние. В `Program.cs` смени реда с извикването така:
 
 ```csharp
-output = await ChatAsync(messages, "Observation:");
-Console.WriteLine(output);
+string output = await Ollama.ChatAsync(messages, "Observation:");
 ```
 
-изход:
+Изпълни `dotnet run`:
 
 ```text wrap
 Thought: The user is asking for the current weather in London. I need to use the GetWeather tool with the location set to "London".
@@ -170,75 +203,158 @@ Action: {"action": "GetWeather", "action_input": {"location": "London"}}
 
 Много по-добре! Моделът каза какво иска да направи и спря.
 
-## Изпълняваме tool-а
+### 7. Изпълни tool-а
 
-Сега е ред на нашия код. Първо ни трябва самият tool. В реално приложение той би извикал weather API, но тук просто връща готов текст:
+Сега е ред на нашия код. Създай файл `Tools.cs`. Той е същият като в секцията [Actions](/ai-agents/unit-1/actions/): съдържа tool-а `GetWeather` и метода `Run`, който изрязва JSON-а от текста на модела, парсва го и извиква истинския C# метод.
 
-```csharp
-string GetWeather(string location) =>
-    $"the weather in {location} is sunny with low temperatures.";
-```
+```csharp title="Tools.cs"
+using System.Text.Json;
 
-След това парсваме Action-а: изрязваме JSON-а от текста на модела, четем името на tool-а и аргумента му и извикваме съответния C# метод.
-
-```csharp
-string json = output[output.IndexOf('{')..(output.LastIndexOf('}') + 1)];
-JsonElement action = JsonDocument.Parse(json).RootElement;
-
-string tool = action.GetProperty("action").GetString()!;
-string location = action
-    .GetProperty("action_input")
-    .GetProperty("location")
-    .GetString()!;
-
-string observation = tool switch
+public static class Tools
 {
-    "GetWeather" => GetWeather(location),
-    _ => $"Unknown tool: {tool}",
-};
+    public static string GetWeather(string location) =>
+        $"the weather in {location} is sunny with low temperatures.";
 
-Console.WriteLine(observation);
+    public static string Run(string modelOutput)
+    {
+        int start = modelOutput.IndexOf('{');
+        int end = modelOutput.LastIndexOf('}');
+        string json = modelOutput[start..(end + 1)];
+
+        JsonElement action = JsonDocument.Parse(json).RootElement;
+        string tool = action.GetProperty("action").GetString()!;
+        JsonElement input = action.GetProperty("action_input");
+
+        return tool switch
+        {
+            "GetWeather" => GetWeather(input.GetProperty("location").GetString()!),
+            _ => $"Unknown tool: {tool}",
+        };
+    }
+}
 ```
 
-изход:
-
-```text
-the weather in London is sunny with low temperatures.
-```
-
-Това е моментът, в който текстът на модела се превръща в истинско извикване на C# метод.
-
-## Връщаме Observation на модела
-
-Остава да затворим цикъла. Добавяме към разговора това, което моделът написа, и истинския резултат като Observation. После питаме отново:
+Добави в края на `Program.cs`:
 
 ```csharp
-messages.Add(new { role = "assistant", content = output });
-messages.Add(new { role = "user", content = $"Observation: {observation}" });
+string observation = Tools.Run(output);
 
-output = await ChatAsync(messages);
+Console.WriteLine($"Observation: {observation}");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Thought: The user is asking for the current weather in London. I need to use the GetWeather tool with the location set to "London".
+
+Action: {"action": "GetWeather", "action_input": {"location": "London"}}
+Observation: the weather in London is sunny with low temperatures.
+```
+
+Първите два реда написа моделът. Последния отпечата нашата програма, след като `Tools.Run` извика истинския метод `GetWeather`. Този път Observation-ът не е измислен.
+
+### 8. Върни Observation на модела
+
+Остава да затворим обиколката. Добавяме към разговора това, което моделът написа, и истинския резултат като Observation. После питаме модела отново. Добави в края на `Program.cs`:
+
+```csharp
+messages.Add(new("assistant", output));
+messages.Add(new("user", $"Observation: {observation}"));
+
+output = await Ollama.ChatAsync(messages);
+
 Console.WriteLine(output);
 ```
 
-изход:
+Изпълни `dotnet run`:
 
 ```text wrap
+Thought: The user is asking for the current weather in London. I need to use the GetWeather tool with the location set to "London".
+
+Action: {"action": "GetWeather", "action_input": {"location": "London"}}
+Observation: the weather in London is sunny with low temperatures.
 Thought: The tool has returned the weather information for London, stating it is sunny with low temperatures. I now have the final answer to provide to the user.
 
 Final Answer: The weather in London is currently sunny with low temperatures.
 ```
 
-Този път отговорът стъпва върху реалния резултат от нашия метод, а не върху измислени данни.
+Този път отговорът стъпва върху реалния резултат от нашия метод, а не върху измислени данни. Това е една пълна обиколка на цикъла:
+
+1. Моделът написа **Thought** и **Action** и го спряхме със `stop`.
+2. `Tools.Run` парсна action-а и извика истинския C# метод.
+3. Добавихме резултата към разговора като **Observation**.
+4. Моделът прочете разговора отново и даде **Final Answer**.
+
+## От една обиколка към цикъл
+
+### 9. Затвори цикъла
+
+Програмата дотук прави точно една обиколка. Ако на модела му трябва tool-ът два пъти, ще трябва да повторим стъпките на ръка. Затова ги слагаме в `while` цикъл и ще го изпробваме с въпрос за два града.
+
+Първо добави едно правило в system prompt-а. В `SystemPrompt` смени реда, който започва с `Action:`, така:
+
+```text
+    Action: the JSON object for one tool call (only ONE action at a time)
+```
+
+Без това правило моделът понякога написва двата action-а наведнъж и `Tools.Run` спира с грешка, защото очаква един JSON обект.
+
+После замени всичко под `SystemPrompt` със следното:
+
+```csharp
+List<ChatMessage> messages =
+[
+    new("system", SystemPrompt),
+    new("user", "What's the weather in London and in Paris?"),
+];
+
+while (true)
+{
+    string output = await Ollama.ChatAsync(messages, "Observation:");
+    Console.WriteLine(output);
+
+    if (output.Contains("Final Answer:"))
+    {
+        break;
+    }
+
+    string observation = Tools.Run(output);
+    Console.WriteLine($"Observation: {observation}");
+
+    messages.Add(new("assistant", output));
+    messages.Add(new("user", $"Observation: {observation}"));
+}
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Thought: The user wants to know the current weather in two locations: London and Paris. I need to use the GetWeather tool for each location separately. I will start with London.
+
+Action: {"action": "GetWeather", "action_input": {"location": "London"}}
+Observation: the weather in London is sunny with low temperatures.
+Thought: The user also wants to know the weather in Paris. I will now call the GetWeather tool for Paris.
+
+Action: {"action": "GetWeather", "action_input": {"location": "Paris"}}
+Observation: the weather in Paris is sunny with low temperatures.
+Thought: I have received the weather information for both London and Paris. Now I can provide the final answer to the user.
+
+Final Answer: The weather in London is sunny with low temperatures, and the weather in Paris is also sunny with low temperatures.
+```
+
+Цикълът се завъртя три пъти: два пъти моделът поиска tool, а на третия даде финалния отговор. Никъде в кода не пише колко обиколки да има. Моделът сам решава кога е готов.
+
+Сравни кода със скицата от урока за [цикъла Thought-Action-Observation](/ai-agents/unit-1/agent-steps-and-structure/). Тогава методите бяха измислени, а сега всеки от тях е истински:
+
+| В скицата | В нашата програма |
+| --- | --- |
+| `AskModel(messages)` | `Ollama.ChatAsync(messages, "Observation:")` |
+| `IsFinalAnswer(output)` | `output.Contains("Final Answer:")` |
+| `RunTool(output)` | `Tools.Run(output)` |
+| `messages.Add(observation)` | двата реда с `messages.Add` |
 
 ## Какво направихме
 
-Току-що изпълнихме на ръка една пълна обиколка на цикъла:
-
-1. Описахме tool-а и правилата в **system prompt-а**.
-2. Моделът написа **Thought** и **Action** и го спряхме със `stop`.
-3. **Парснахме** Action-а и извикахме истинския C# метод.
-4. Добавихме резултата като **Observation** и моделът даде **Final Answer**.
-
-Ако сложим стъпки 2-4 в `while` цикъл, получаваме истински Agent. Видя обаче колко ръчна работа е това: формат в prompt-а, `stop`, изрязване на JSON, `switch` по името на tool-а. За щастие библиотеките за Agents правят всичко това вместо нас.
+Написа работещ Agent с четири малки файла и нито един NuGet пакет. Видя обаче и колко ръчна работа е това: формат в prompt-а, `stop`, изрязване на JSON, `switch` по името на tool-а, проверка за `Final Answer:`. Всяко от тези места е крехко. За щастие библиотеките за Agents правят всичко това вместо нас.
 
 Сега сме готови **да създадем първия си истински Agent** с библиотеката `Microsoft.Extensions.AI`.

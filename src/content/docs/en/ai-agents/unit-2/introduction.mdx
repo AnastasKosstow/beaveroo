@@ -1,0 +1,54 @@
+---
+title: Introduction to Agentic Frameworks
+description: Unit 2 shows when an agentic framework is worth using, what it has to provide, and how Microsoft Agent Framework covers those needs in .NET.
+---
+
+Welcome to this second unit, where **we'll explore agentic frameworks**: the libraries used to build powerful agentic applications.
+
+The original course studies three Python frameworks: smolagents, LlamaIndex and LangGraph. In .NET we will focus on one, because Microsoft created it as the common successor to Semantic Kernel and AutoGen:
+
+- In Unit 2.1: [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/overview/)
+
+Let's dive in! 🕵
+
+## When to use an agentic framework
+
+An agentic framework is **not always needed when building an application around LLMs**. It makes the workflow flexible so you can solve a specific task efficiently, but it is not mandatory.
+
+Sometimes, **predefined workflows are sufficient** to fulfill user requests, and there is no real need for an agentic framework. If the approach is simple, like a chain of prompts, plain code may be enough. The advantage is that you have **full control and understanding of your system without abstractions**.
+
+However, when the workflow becomes more complex, such as letting an LLM call functions or having multiple Agents work together, these abstractions start to become helpful.
+
+Considering these ideas, we can already identify what a framework has to provide:
+
+- An *LLM engine* that powers the system.
+- A *list of tools* the Agent can access.
+- A *parser* for extracting tool calls from the LLM output.
+- A *system prompt* synced with the parser.
+- A *memory system*.
+- *Error logging and retry mechanisms* to control LLM mistakes.
+
+The list should look familiar. In Unit 1 you wrote the first four by hand in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/), and then got them ready-made from `Microsoft.Extensions.AI`. The last two were left to you: you kept the conversation yourself in the `history` list, and caught errors with `try`/`catch` inside the tool.
+
+## How Microsoft Agent Framework covers these needs
+
+Here is the same list, this time with the framework's answer to each item:
+
+| Need | In Microsoft Agent Framework |
+| --- | --- |
+| LLM engine | Any `IChatClient`, including the `OllamaApiClient` from Unit 1. |
+| List of tools | The same C# methods with `[Description]`. You pass them to the Agent when you create it. |
+| Parser | Built in. The Agent uses function calling and runs the Thought → Action → Observation cycle by itself. |
+| System prompt | The Agent's `instructions` parameter. The tool descriptions are added automatically. |
+| Memory | An `AgentSession` keeps the conversation between separate calls. |
+| Error logging and retry | An error in a tool does not stop the Agent: the model receives it as an Observation and can try again. Middleware and OpenTelemetry let you trace every step. |
+
+The first rows look familiar, and that is no coincidence. Microsoft Agent Framework is built on top of `Microsoft.Extensions.AI`, so what you learned in Unit 1 still applies: `IChatClient`, `AIFunctionFactory` and the `[Description]` attribute.
+
+The framework also works with the same local model in Ollama, so you still need no accounts or API keys.
+
+## Agentic framework units
+
+| Unit | Framework | Description |
+| --- | --- | --- |
+| 2.1 | [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) | An open-source framework for Agents and multi-agent workflows. A single Agent gets tools, memory and middleware, while Workflows connect several Agents and functions into a graph with an explicit execution order. |

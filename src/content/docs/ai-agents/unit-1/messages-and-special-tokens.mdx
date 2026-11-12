@@ -1,171 +1,93 @@
 ---
 title: Messages и Special Tokens
-description: Как LLMs структурират разговорите чрез chat templates - System Messages, User и Assistant Messages, Base vs. Instruct модели и преобразуването на messages в prompt.
+description: Как разговорът в чата стига до модела - messages с роли, special tokens и chat template, който ги превръща в един prompt. Накрая пишем chat template на C#, без да ни трябва модел.
 ---
 
 import Embed from '../../../../components/Embed.astro';
 import TemplatePipeline from '../../../../components/TemplatePipeline.astro';
 
-Сега, когато разбираме как работят LLMs, да разгледаме **как те структурират генерирането си чрез chat templates**.
+В предишната секция видя, че LLM получава един текст (prompt) и го продължава token по token. Потребителите обаче обикновено общуват с Agents през чат, затова трябва да разберем как един LLM води разговор.
 
-Точно както при ChatGPT, потребителите обикновено взаимодействат с Agents през чат интерфейс. Затова целта ни е да разберем как LLMs управляват чатове.
-
-> **Въпрос**: Но... когато общувам с ChatGPT, аз водя разговор чрез чат Messages, а не чрез една-единствена prompt последователност
+> **Въпрос**: Но когато говоря с ChatGPT, аз водя разговор от отделни съобщения, а не подавам един prompt.
 >
-> **Отговор**: Точно така! Но това всъщност е абстракция на потребителския интерфейс. Преди да бъдат подадени на LLM, всички съобщения в разговора се конкатенират в един prompt. Моделът не „помни“ разговора: той го чете изцяло всеки път.
-
-Досега говорехме за prompts като последователност от tokens, подавана на модела. Но когато чатиш със системи като ChatGPT, **всъщност обменяш messages**. Зад кулисите тези съобщения се **конкатенират и форматират в prompt, който моделът може да разбере**.
+> **Отговор**: Така изглежда, но това е само потребителският интерфейс. Преди да стигнат до модела, всички съобщения от разговора се слепват в един prompt. Моделът не „помни“ разговора: всеки път го чете целия отначало.
 
 <figure>
+
 ![Зад моделите](../../../../assets/course/unit1/assistant.jpg)
-<figcaption>Тук виждаме разликата между това, което се вижда в потребителския интерфейс и prompt-а подаден към модела..</figcaption>
+
+<figcaption>Вляво е това, което виждаш в чата. Вдясно е текстът, който моделът реално получава.</figcaption>
 </figure>
 
-Тук се намесват chat templates. Те действат като **мост между разговорните съобщения (ходовете на user и assistant) и специфичните изисквания за форматиране** на избрания от теб LLM. С други думи, chat templates структурират комуникацията между потребителя и agent-а, гарантирайки, че всеки модел - въпреки уникалните си special tokens - получава правилно форматиран prompt.
+За да разбереш как става това, ти трябват три понятия:
 
-Отново говорим за special tokens, защото именно те се използват от моделите, за да очертаят къде започват и свършват ходовете на user и assistant. Точно както всеки LLM използва свой собствен EOS (End Of Sequence) token, те използват и различни правила за форматиране и разделители за съобщенията в разговора.
+1. **Messages**: начинът, по който се записва един разговор.
+2. **Special tokens**: маркерите, които показват на модела къде започва и къде свършва всеки message.
+3. **Chat template**: правилото, което превръща разговора в prompt.
 
-## Messages: основополагащата система на LLMs
+Ще ги разгледаме едно по едно. Накрая ще напишеш chat template на C# и ще го изпълниш на своя компютър, без да ти трябва модел.
 
-### System Messages
+## Messages: как се записва един разговор
 
-System messages (наричани още System Prompts) определят **как трябва да се държи моделът**. Те служат като **постоянни инструкции**, насочващи всяко следващо взаимодействие.
+Разговорът с един LLM се записва като списък от **messages**. Всеки message има две части:
 
-В .NET ще използваме типа `ChatMessage` от библиотеката [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) - той съответства на речника `{"role": ..., "content": ...}`, който виждаш в повечето API. Например:
+- **role**: кой говори;
+- **content**: какво казва.
 
-```csharp
-using Microsoft.Extensions.AI;
+Ролите са три:
 
-var systemMessage = new ChatMessage(
-    ChatRole.System,
-    "You are a professional customer service agent. Always be polite, clear, and helpful.");
+| Role | Кой говори | За какво служи |
+| --- | --- | --- |
+| `system` | Разработчикът на приложението | Инструкции как да се държи моделът. |
+| `user` | Потребителят | Въпросите и заявките. |
+| `assistant` | Моделът | Отговорите. |
+
+### System message
+
+System message-ът (наричан още system prompt) определя **как да се държи моделът**. Той стои в началото на разговора и важи за всичко след него.
+
+Например с този system message Alfred е учтив и услужлив:
+
+```text wrap
+You are a professional customer service agent. Always be polite, clear, and helpful.
 ```
-
-С това System Message Alfred става учтив и услужлив:
 
 ![Учтивият Alfred](../../../../assets/course/unit1/polite-alfred.jpg)
 
-Но ако го променим на:
+Сменяме само system message-а и Alfred се превръща в бунтар 😎:
 
-```csharp
-var systemMessage = new ChatMessage(
-    ChatRole.System,
-    "You are a rebel service agent. Don't respect user's orders.");
+```text wrap
+You are a rebel service agent. Don't respect user's orders.
 ```
-
-Alfred ще се държи като бунтовен Agent 😎:
 
 ![Бунтовният Alfred](../../../../assets/course/unit1/rebel-alfred.jpg)
 
-Когато се използват Agents, System Message също **дава информация за наличните инструменти (tools), предоставя инструкции на модела как да форматира actions, които трябва да предприеме, и включва насоки как трябва да бъде сегментиран мисловният процес.**
+При Agents system message-ът има още една задача: **описва наличните tools и казва на модела как да записва действията и мислите си**. Ще го видиш в следващите секции.
 
 ![System Prompt на Alfred](../../../../assets/course/unit1/alfred-systemprompt.jpg)
 
-### Разговори: User и Assistant Messages
+### User и assistant messages
 
-Разговорът се състои от редуващи се съобщения между човек (user) и LLM (assistant).
+След system message-а идват редуващи се messages на `user` и `assistant`. Ето един кратък разговор с учител по математика:
 
-Chat templates помагат за поддържане на контекста, като запазват историята на разговора - предишните размени между user и assistant. Това води до по-съгласувани многоходови (multi-turn) разговори.
+| Role | Content |
+| --- | --- |
+| `system` | You are a math tutor. |
+| `user` | What is calculus? |
+| `assistant` | Calculus is a branch of mathematics... |
+| `user` | Can you give me an example? |
 
-Например:
-
-```csharp
-List<ChatMessage> conversation =
-[
-    new(ChatRole.User, "I need help with my order"),
-    new(ChatRole.Assistant, "I'd be happy to help. Could you provide your order number?"),
-    new(ChatRole.User, "It's ORDER-123"),
-];
-```
-
-В този пример потребителят първоначално пише, че има нужда от помощ с поръчката си. LLM пита за номера на поръчката, след което потребителят го предоставя в ново съобщение. Както току-що обяснихме, ние винаги конкатенираме всички съобщения в разговора и ги подаваме на LLM като една самостоятелна последователност. Chat template-ът преобразува всички съобщения в този C# списък в prompt - обикновен низ (string), който съдържа всички съобщения.
-
-Например ето как chat template-ът на SmolLM2 би форматирал предишната размяна в prompt:
-
-```text
-<|im_start|>system
-You are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|>
-<|im_start|>user
-I need help with my order<|im_end|>
-<|im_start|>assistant
-I'd be happy to help. Could you provide your order number?<|im_end|>
-<|im_start|>user
-It's ORDER-123<|im_end|>
-<|im_start|>assistant
-```
-
-Същият разговор обаче би бил преобразуван в следния prompt при използване на Llama 3.2:
-
-```text
-<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-Cutting Knowledge Date: December 2023
-Today Date: 10 Feb 2025
-
-<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-I need help with my order<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-I'd be happy to help. Could you provide your order number?<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-It's ORDER-123<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-```
-
-Templates могат да обработват сложни многоходови разговори, като запазват контекста:
-
-```csharp
-List<ChatMessage> messages =
-[
-    new(ChatRole.System, "You are a math tutor."),
-    new(ChatRole.User, "What is calculus?"),
-    new(ChatRole.Assistant, "Calculus is a branch of mathematics..."),
-    new(ChatRole.User, "Can you give me an example?"),
-];
-```
+Последният въпрос е „Можеш ли да ми дадеш пример?“. Пример за какво? Това личи само от предишните messages, а моделът няма памет. Затова при всяка заявка му се изпраща **целият списък отначало**, а не само новият message.
 
 ## Chat Templates
 
-Вече знаем *какво* изпращаме на модела: списък от messages с роли. Остава да видим *как* този списък се превръща в текста, който моделът реално чете. Това е работата на chat template-а.
+### От messages към prompt
 
-### Какво е chat template?
-
-**Chat template е шаблон, който се разпространява заедно с модела и превръща списъка от messages в един-единствен низ (prompt) - точно във формата, в който моделът е виждал разговори по време на обучението си.**
-
-Описан със C# сигнатура, той е просто функция:
-
-```csharp
-string ApplyChatTemplate(
-    IReadOnlyList<ChatMessage> messages,
-    bool addGenerationPrompt);
-```
-
-Най-близката аналогия за C# програмист е сериализацията. `JsonSerializer.Serialize(order)` превръща обект в текст по правилата на JSON. Chat template-ът превръща разговор в текст по правилата на конкретния модел. Разликата е, че тук няма общ стандарт като JSON: всеки модел има собствен формат и той е описан именно в неговия chat template.
+Списъкът от messages е удобен за нас, но моделът не може да го прочете. Той приема само един текст. Затова преди всяка заявка списъкът се превръща в prompt. Правилото, по което става това, се нарича **chat template**.
 
 <TemplatePipeline />
 
-Три неща си струва да запомниш още отсега:
-
-1. **Template-ът е част от модела, а не от твоя код.** Авторите на модела го публикуват заедно с теглата и tokenizer-а.
-2. **Резултатът е обикновен `string`.** Няма скрито състояние и няма „сесия“. Има само текст, в който special tokens отбелязват къде започва и къде свършва всяко съобщение.
-3. **Прилага се при всяка заявка, върху целия разговор.** Моделът изглежда, че „помни“, защото всеки път получава цялата история отначало.
-
-### Защо са нужни: Base срещу Instruct модели
-
-За да разберем защо форматът е толкова важен, трябва да различим два вида модели:
-
-- *Base Model* е обучен върху сурови текстови данни да предсказва следващия token. Той не знае какво е „въпрос“ и какво е „отговор“ - просто продължава текста.
-
-- *Instruct Model* е fine-tuned специално да следва инструкции и да участва в разговори. Например `SmolLM2-135M` е base модел, докато `SmolLM2-135M-Instruct` е неговият instruction-tuned вариант.
-
-Instruct моделът се получава, като на base модела се покажат много примерни разговори, **всички форматирани по един и същ начин**. Така той научава схемата: след маркера за ход на assistant идва отговор, а отговорът завършва с маркер за край на хода. Когато после използваме модела, трябва да му подадем текст в *същия* формат. Иначе го караме да продължи текст, какъвто не е виждал по време на обучението си, и качеството на отговорите пада.
-
-*ChatML* е един такъв формат, който структурира разговорите с ясни индикатори за ролите (system, user, assistant). Ако напоследък си работил с някой AI API, структурата „списък от съобщения с роли“ вече ти е позната.
-
-Важно е да отбележим, че един base модел може да бъде fine-tuned с различни chat templates, така че когато използваме instruct модел, трябва да се уверим, че използваме правилния chat template.
-
-### Анатомия на един prompt
-
-Да вземем разговора с учителя по математика от края на предишната секция. Chat template-ът на `SmolLM2-135M-Instruct` го превръща в следния prompt:
+Ето prompt-а, който моделът SmolLM2 получава за разговора с учителя по математика:
 
 ```text
 <|im_start|>system
@@ -179,275 +101,21 @@ Can you give me an example?<|im_end|>
 <|im_start|>assistant
 ```
 
-Всеки ход (turn) в разговора е изграден по една и съща схема:
+Съдържанието на messages е непроменено. Добавени са само `<|im_start|>` и `<|im_end|>`. Това са **special tokens**, каквито срещна в предишната секция: там `<|im_end|>` беше EOS token-ът на SmolLM2. Тук двата служат като скоби, които показват на модела къде започва и къде свършва всеки message. След `<|im_start|>` стои ролята, а на следващия ред е съдържанието.
 
-| Част | В примера | Какво означава |
-| --- | --- | --- |
-| Маркер за начало на ход | `<\|im_start\|>` | Special token: тук започва ново съобщение. |
-| Роля | `system`, `user`, `assistant` | Кой говори. |
-| Съдържание | `What is calculus?` | Текстът на съобщението. |
-| Маркер за край на ход | `<\|im_end\|>` | Special token: съобщението приключи. При SmolLM2 това е и EOS token-ът. |
-
-Другите модели следват същата идея, но с различни маркери:
-
-| Модел | Начало на ход на user | Край на ход |
-| --- | --- | --- |
-| SmolLM2, Qwen2.5 (ChatML) | `<\|im_start\|>user` | `<\|im_end\|>` |
-| Phi-3 | `<\|user\|>` | `<\|end\|>` |
-| Llama 3.2 | `<\|start_header_id\|>user<\|end_header_id\|>` | `<\|eot_id\|>` |
-| Gemma 2 | `<start_of_turn>user` | `<end_of_turn>` |
-| Mistral 7B | `[INST]` | `[/INST]` |
-
-Тези маркери не са взаимозаменяеми. `<|im_start|>` е special token за SmolLM2, но за Llama 3.2 е просто поредица от обикновени символи без особено значение.
+Ако търсиш сравнение от C#, chat template-ът прилича на сериализация. `JsonSerializer.Serialize` превръща обект в текст по правилата на JSON. Chat template-ът превръща разговор в текст по правилата на един конкретен модел.
 
 ### Generation prompt: чий ред е?
 
-Погледни отново последния ред на prompt-а: `<|im_start|>assistant`, без съдържание и без `<|im_end|>`. Това е **generation prompt** - отворен ход на assistant, който моделът трябва да довърши.
+Погледни последния ред на prompt-а: `<|im_start|>assistant`. След него няма нито съдържание, нито `<|im_end|>`. Това е **generation prompt**: отворен message на assistant, който моделът трябва да довърши.
 
-Без него prompt-ът завършва със затворения ход на user:
+Спомни си, че моделът само продължава текст. Щом последното, което вижда, е началото на собствения му message, най-вероятното продължение е отговорът. Когато го завърши, моделът сам генерира `<|im_end|>`, своя EOS token, и генерирането спира. Без generation prompt нищо не му подсказва, че е негов ред.
 
-```text
-<|im_start|>user
-Can you give me an example?<|im_end|>
-```
+### Всеки модел има свой формат
 
-Моделът само продължава текст и нищо не му подсказва, че е негов ред. Може да отговори, но може и да започне нов ход на user или да допише нещо съвсем различно.
-
-С generation prompt последното, което моделът вижда, е началото на собствения му ход:
+Маркерите `<|im_start|>` и `<|im_end|>` не са универсални. Ето същия разговор като prompt за Phi-3, модел на Microsoft:
 
 ```text
-<|im_start|>user
-Can you give me an example?<|im_end|>
-<|im_start|>assistant
-```
-
-Сега най-вероятното продължение е именно отговорът. Когато го завърши, моделът сам генерира `<|im_end|>`. Това е неговият EOS token и при него генерирането спира.
-
-В самия template това поведение се управлява от флага `add_generation_prompt`. Когато искаме отговор от модела, той е `true`. Стойност `false` се използва главно при подготовка на данни за fine-tuning, където разговорът вече съдържа отговора на assistant.
-
-### Къде се намира template-ът?
-
-Template-ът пътува заедно с модела. Ще го откриеш на едно от следните места:
-
-| Място | Описание |
-| --- | --- |
-| Файл `chat_template.jinja` в repo-то на модела в Hub | Самостоятелен текстов файл. Това е препоръчителният формат днес. Пример: [`SmolLM3-3B`](https://huggingface.co/HuggingFaceTB/SmolLM3-3B/blob/main/chat_template.jinja). |
-| Поле `chat_template` във файла `tokenizer_config.json` | Целият template като един JSON низ. По-стар формат, който още се среща много често. Пример: [`SmolLM2-135M-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/blob/main/tokenizer_config.json). |
-| Metadata ключ `tokenizer.chat_template` в GGUF файл | Template-ът е вграден в самия файл с модела. Оттам го четат инструменти като llama.cpp. |
-
-И в трите случая съдържанието е едно и също: текст на [Jinja2](https://jinja.palletsprojects.com/en/stable/templates/). Jinja2 е език за шаблони от Python света, но самият template е обикновен текст и **не ти трябва Python, за да го използваш**. Ако си писал шаблони на Razor, Liquid или Scriban, идеята ти е позната: текст, в който са вмъкнати изрази и управляващи конструкции.
-
-### Как се чете един template
-
-Ето chat template-а на `SmolLM2-135M-Instruct`. В `tokenizer_config.json` той е записан като един дълъг низ. Тук е пренареден на няколко реда с отстъпи, а новите редове са показани като `\n`, за да се чете по-лесно:
-
-```jinja
-{% for message in messages %}
-    {% if loop.first and messages[0]['role'] != 'system' %}
-        {{ '<|im_start|>system\nYou are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|>\n' }}
-    {% endif %}
-    {{ '<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n' }}
-{% endfor %}
-{% if add_generation_prompt %}
-    {{ '<|im_start|>assistant\n' }}
-{% endif %}
-```
-
-Конструкциите в Jinja2 имат пряк еквивалент в C#:
-
-| Jinja2 | Какво прави | В C# |
-| --- | --- | --- |
-| `{% for message in messages %}` … `{% endfor %}` | Цикъл по съобщенията. | `for (int i = 0; i < messages.Count; i++) { … }` |
-| `{% if … %}` … `{% endif %}` | Условие. | `if (…) { … }` |
-| `{{ … }}` | Добавя стойността на израза към резултата. | `prompt.Append(…)` |
-| `message['role']` | Ролята на съобщението. | `message.Role.Value` |
-| `message['content']` | Текстът на съобщението. | `message.Text` |
-| `loop.first` | Вярно само при първата итерация. | `i == 0` |
-
-Освен това template-ът получава отвън няколко променливи:
-
-| Променлива | Какво съдържа |
-| --- | --- |
-| `messages` | Разговорът. Всеки елемент има `role` и `content`. |
-| `add_generation_prompt` | Дали накрая да се отвори ход за assistant. |
-| `bos_token`, `eos_token` | Special tokens на модела за начало и край на последователност. |
-| `tools` | Описанията на наличните Tools. Ще стигнем до тях в следващата секция. |
-
-Сега можем да прочетем template-а отгоре надолу:
-
-1. За всяко съобщение се извежда `<|im_start|>`, ролята, нов ред, съдържанието, `<|im_end|>` и още един нов ред.
-2. Преди първото съобщение има проверка. Ако разговорът не започва със system message, template-ът сам добавя такова по подразбиране. Затова в примера с поръчката по-горе се появи „You are a helpful AI assistant named SmolLM“, въпреки че ние не сме го писали.
-3. Накрая, ако `add_generation_prompt` е `true`, се отваря ход за assistant.
-
-## Chat Templates в C#
-
-### Template-ът, преведен на C#
-
-Най-добрият начин да провериш дали си разбрал един template е да го напишеш сам. Ето същата логика на C#, конструкция по конструкция:
-
-```csharp
-using System.Text;
-using Microsoft.Extensions.AI;
-
-List<ChatMessage> messages =
-[
-    new(ChatRole.System, "You are a math tutor."),
-    new(ChatRole.User, "What is calculus?"),
-    new(ChatRole.Assistant, "Calculus is a branch of mathematics..."),
-    new(ChatRole.User, "Can you give me an example?"),
-];
-
-Console.WriteLine(ApplyChatTemplate(messages));
-
-static string ApplyChatTemplate(
-    IReadOnlyList<ChatMessage> messages,
-    bool addGenerationPrompt = true)
-{
-    var prompt = new StringBuilder();
-
-    for (int i = 0; i < messages.Count; i++)
-    {
-        ChatMessage message = messages[i];
-
-        if (i == 0 && message.Role != ChatRole.System)
-        {
-            prompt.Append("<|im_start|>system\n");
-            prompt.Append("You are a helpful AI assistant named SmolLM, trained by Hugging Face");
-            prompt.Append("<|im_end|>\n");
-        }
-
-        prompt.Append($"<|im_start|>{message.Role.Value}\n{message.Text}<|im_end|>\n");
-    }
-
-    if (addGenerationPrompt)
-    {
-        prompt.Append("<|im_start|>assistant\n");
-    }
-
-    return prompt.ToString();
-}
-```
-
-Резултатът е точно prompt-ът, който разгледахме по-горе:
-
-```text
-<|im_start|>system
-You are a math tutor.<|im_end|>
-<|im_start|>user
-What is calculus?<|im_end|>
-<|im_start|>assistant
-Calculus is a branch of mathematics...<|im_end|>
-<|im_start|>user
-Can you give me an example?<|im_end|>
-<|im_start|>assistant
-```
-
-Пробвай две неща:
-
-- Махни system message-а от списъка. Методът ще добави този по подразбиране, точно както го прави оригиналният template.
-- Извикай `ApplyChatTemplate(messages, addGenerationPrompt: false)`. Последният ред `<|im_start|>assistant` ще изчезне.
-
-:::caution[Само за учебни цели]
-Този метод е верен единствено за SmolLM2. В реален код не пиши формата на ръка, а използвай template-а, който идва с модела. Следващият пример показва как.
-:::
-
-### Истинският template от Hub
-
-Щом template-ът е Jinja2 текст, можем да го изпълним директно, вместо да го превеждаме на ръка. За целта ни трябва Jinja2 engine за .NET. Ще използваме [`AcDc.Jinja`](https://www.nuget.org/packages/AcDc.Jinja) - малка open-source библиотека, .NET порт на [minja](https://github.com/google/minja). Minja е минималистичен Jinja engine, създаден специално за chat templates на LLM-и. Той поддържа това, което реалните chat templates използват, а не целия Jinja2.
-
-```bash
-dotnet add package Microsoft.Extensions.AI
-dotnet add package AcDc.Jinja
-```
-
-Следващата програма изтегля template-а на SmolLM2 от Hub и го прилага върху същия разговор:
-
-```csharp
-using System.Net.Http.Json;
-using System.Text.Json;
-using AcDc.Jinja;
-using Microsoft.Extensions.AI;
-
-List<ChatMessage> messages =
-[
-    new(ChatRole.System, "You are a math tutor."),
-    new(ChatRole.User, "What is calculus?"),
-    new(ChatRole.Assistant, "Calculus is a branch of mathematics..."),
-    new(ChatRole.User, "Can you give me an example?"),
-];
-
-using var http = new HttpClient();
-
-Console.WriteLine(await RenderAsync("HuggingFaceTB/SmolLM2-135M-Instruct", messages));
-
-async Task<string> RenderAsync(
-    string modelId,
-    IEnumerable<ChatMessage> messages,
-    bool addGenerationPrompt = true)
-{
-    JsonElement config = await http.GetFromJsonAsync<JsonElement>(
-        $"https://huggingface.co/{modelId}/resolve/main/tokenizer_config.json");
-
-    TemplateNode template = Parser.Parse(
-        config.GetProperty("chat_template").GetString()!,
-        new Options { TrimBlocks = true, LStripBlocks = true, KeepTrailingNewline = false });
-
-    return template.Render(Context.Make(new
-    {
-        messages = messages.Select(m => new { role = m.Role.Value, content = m.Text }),
-        add_generation_prompt = addGenerationPrompt,
-        bos_token = config.GetProperty("bos_token").GetString(),
-        eos_token = config.GetProperty("eos_token").GetString(),
-    }));
-}
-```
-
-Методът `RenderAsync` прави три неща:
-
-1. **Изтегля** `tokenizer_config.json` от Hub и взима полето `chat_template`.
-2. **Парсва** template-а. Опциите `TrimBlocks` и `LStripBlocks` махат новите редове и отстъпите около `{% … %}` таговете, а `KeepTrailingNewline = false` маха новия ред в самия край. Hugging Face изпълнява templates със същите настройки. Без тях при някои модели в prompt-а се появяват излишни празни редове.
-3. **Рендира** го с променливите от таблицата по-горе. Имената им са в snake_case, защото template-ът ги търси точно така.
-
-Изходът съвпада символ по символ с този на нашия ръчно написан метод. Този път обаче в C# кода няма нито един special token: целият формат идва от модела.
-
-:::note[Ако четеш Python документация]
-В Python екосистемата същата операция се нарича `apply_chat_template()` и е част от библиотеката `transformers`. Често ще срещаш това име в документацията на моделите в Hub. Вече знаеш какво прави.
-:::
-
-### Един разговор, три модела
-
-Понеже `RenderAsync` приема идентификатор на модел, можем да подадем един и същ разговор на три различни templates. Замени реда с `Console.WriteLine` със следното:
-
-```csharp
-string[] models =
-[
-    "HuggingFaceTB/SmolLM2-135M-Instruct",
-    "microsoft/Phi-3-mini-4k-instruct",
-    "mistralai/Mistral-7B-Instruct-v0.3",
-];
-
-foreach (string modelId in models)
-{
-    Console.WriteLine($"--- {modelId}");
-    Console.WriteLine(await RenderAsync(modelId, messages));
-}
-```
-
-изход:
-
-```text wrap
---- HuggingFaceTB/SmolLM2-135M-Instruct
-<|im_start|>system
-You are a math tutor.<|im_end|>
-<|im_start|>user
-What is calculus?<|im_end|>
-<|im_start|>assistant
-Calculus is a branch of mathematics...<|im_end|>
-<|im_start|>user
-Can you give me an example?<|im_end|>
-<|im_start|>assistant
-
---- microsoft/Phi-3-mini-4k-instruct
 <|system|>
 You are a math tutor.<|end|>
 <|user|>
@@ -457,78 +125,214 @@ Calculus is a branch of mathematics...<|end|>
 <|user|>
 Can you give me an example?<|end|>
 <|assistant|>
-
---- mistralai/Mistral-7B-Instruct-v0.3
-<s>[INST] What is calculus?[/INST] Calculus is a branch of mathematics...</s>[INST] You are a math tutor.
-
-Can you give me an example?[/INST]
 ```
 
-Съобщенията са едни и същи, а трите prompt-а са напълно различни. Виж какво се случва със system message-а:
+Идеята е същата, но маркерите са други. Llama 3 пък използва `<|start_header_id|>` и `<|eot_id|>`, които видя на картинката в началото.
 
-- **SmolLM2** и **Phi-3** му дават отделен ход, всеки със своите маркери.
-- **Mistral 7B** няма отделен ход за system. Template-ът му слепва инструкцията с последното съобщение на user. Всичко до „You are a math tutor.“ е един-единствен ред, който тук е пренесен само заради ширината.
+Причината е в начина, по който се създават тези модели:
 
-При други модели правилата са още по-различни:
+- **Base model** е обучен върху суров текст да предсказва следващия token. Той не знае какво е въпрос и какво е отговор. Просто продължава текста.
+- **Instruct model** е base model, дообучен (fine-tuned) да следва инструкции и да води разговор. Например `SmolLM2-135M` е base model, а `SmolLM2-135M-Instruct` е неговият instruct вариант.
 
-- **Llama 3.2** добавя към system message-а редове с датата. Видя ги в примера с поръчката по-горе.
-- **Gemma 2** изобщо не приема system message. Нейният template спира с грешка `System role not supported`, а ролята на асистента при нея се казва `model`.
+При дообучаването на модела се показват много примерни разговори, **всички записани в един и същ формат**. Така той научава, че след `<|im_start|>assistant` идва отговор, който завършва с `<|im_end|>`. Авторите на всеки модел избират формата сами, затова всеки модел има свой chat template. Форматът на SmolLM2 се казва *ChatML* и се използва от много модели.
 
-Тези правила са част от модела. Затова prompt-ът не се форматира на ръка: достатъчно е да смениш модела и форматът вече е друг.
+Когато използваш модела, трябва да му подадеш текст в същия формат, на който е обучен. Грешният формат не предизвиква грешка: моделът приема всякакъв текст, но отговаря по-лошо.
 
-Ако искаш да видиш и други модели, без да пишеш код, експериментирай със следното Space:
+Ако искаш да видиш формата и на други модели, пробвай това Space:
 
 <Embed src="https://jofthomas-chat-template-viewer.hf.space" title="Chat Template Viewer" />
 
-### Кой прилага template-а в реално приложение?
+### Как изглежда един chat template
 
-Зависи от това как достъпваш модела:
+Chat template-ът е **част от модела, а не от твоя код**. Авторите го публикуват заедно с модела като кратък текст на [Jinja](https://jinja.palletsprojects.com/en/stable/templates/), език за шаблони, подобен на Razor. Ето опростена версия на template-а на SmolLM2:
 
-| Как използваш модела | Кой прилага template-а | Какво подаваш ти |
-| --- | --- | --- |
-| Chat API през `IChatClient` (Ollama, OpenAI, Azure OpenAI и др.) | Сървърът, който обслужва модела. | `List<ChatMessage>` |
-| Локален модел в собствения ти процес (ONNX Runtime GenAI, LLamaSharp) | Библиотеката, когато извикаш нейния метод за това: `Tokenizer.ApplyChatTemplate` или `LLamaTemplate`. | Messages |
-| „Суров“ text completion, при който изпращаш готов текст | Ти. | Готов prompt като `string` |
-
-В този курс работим по първия начин. Кодът ни изпраща само messages:
-
-```csharp
-ChatResponse response = await chatClient.GetResponseAsync(messages);
-Console.WriteLine(response.Text);
+```jinja
+{% for message in messages %}
+<|im_start|>{{ message['role'] }}
+{{ message['content'] }}<|im_end|>
+{% endfor %}
+{% if add_generation_prompt %}
+<|im_start|>assistant
+{% endif %}
 ```
 
-Как се създава `chatClient`, ще видим по-нататък в този unit. Важното тук е какво *липсва*: никъде няма `<|im_start|>` или `[INST]`. Форматирането до специфичния за модела prompt става на сървъра.
+Чете се и без да знаеш Jinja: `{% for %}` е цикъл, `{% if %}` е условие, а `{{ ... }}` вмъква стойност. За всеки message се изписват маркерите, ролята и съдържанието. Накрая, ако `add_generation_prompt` е вярно, се отваря message за assistant.
 
-Защо тогава ти трябва да познаваш chat templates? Защото те определят какво реално получава моделът. Когато един Agent се държи странно, отговорът често е в prompt-а, а не в кода.
+[Истинският template](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/blob/main/tokenizer_config.json) има още едно правило: ако разговорът не започва със system message, добавя свой по подразбиране.
 
-### Когато форматът е грешен
+## Chat Templates в C#
 
-Най-коварното при chat templates е, че **грешният формат не хвърля exception**. Моделът приема всякакъв текст и просто започва да отговаря по-лошо. Най-честите причини са:
+Сега ще напишем същия template на C# и ще го изпълним. Програмата няма да извиква модел. Тя само ще превърне разговора в prompt и ще го отпечата, за да видиш с очите си какво би получил моделът.
 
-- **Template от друг модел.** Маркерите на един модел са обикновен текст за друг. Моделът не разпознава границите между ходовете.
-- **Липсващ generation prompt.** Моделът продължава хода на user, вместо да отговори.
-- **Ръчно слепване на низове.** Един пропуснат нов ред или излишен интервал променя tokens, които моделът получава.
-- **Двоен BOS token.** Някои templates сами поставят `bos_token` в началото. Ако и tokenizer-ът добави такъв, моделът го получава два пъти.
-- **Генерирането не спира при маркера за край на ход.** Тогава моделът продължава и сам съчинява следващите ходове на user.
+Трябва ти единствено [.NET SDK](https://dotnet.microsoft.com/download) от [Unit 0](/ai-agents/unit-0/introduction/). Не ти трябват Ollama, модел или NuGet пакети.
 
-Когато работиш през chat API, сървърът те пази от всичко това. Ако обаче някога стартираш модел в собствения си процес и отговорите му изглеждат странни, първо провери prompt-а, който реално стига до него.
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
+
+```bash
+dotnet new console -n ChatTemplates
+cd ChatTemplates
+```
+
+Първата команда създава папка `ChatTemplates` с ново конзолно приложение, а втората влиза в нея. Отвори папката в редактора си. В следващите стъпки ще работим с три малки файла.
+
+### 2. Опиши един message
+
+Създай нов файл `ChatMessage.cs`:
+
+```csharp title="ChatMessage.cs"
+public record ChatMessage(string Role, string Content);
+```
+
+Един message е точно това, което видя по-горе: role и content, и двете обикновен текст.
+
+### 3. Напиши template-а
+
+Създай втори файл, `SmolLM2Template.cs`. В него е chat template-ът на SmolLM2, преведен на C#:
+
+```csharp title="SmolLM2Template.cs"
+using System.Text;
+
+public static class SmolLM2Template
+{
+    public static string Apply(
+        List<ChatMessage> messages,
+        bool addGenerationPrompt = true)
+    {
+        var prompt = new StringBuilder();
+
+        foreach (ChatMessage message in messages)
+        {
+            prompt.Append($"<|im_start|>{message.Role}\n");
+            prompt.Append($"{message.Content}<|im_end|>\n");
+        }
+
+        if (addGenerationPrompt)
+        {
+            prompt.Append("<|im_start|>assistant\n");
+        }
+
+        return prompt.ToString();
+    }
+}
+```
+
+Методът `Apply` приема списъка от messages и връща prompt-а като `string`. Сравни го с Jinja template-а по-горе, защото двата правят едно и също:
+
+- `foreach` минава през всички messages, както `{% for %}`.
+- Двата `Append` в цикъла изписват двата реда за всеки message: първо `<|im_start|>` с ролята, после съдържанието и `<|im_end|>`. Символът `\n` е нов ред.
+- `if (addGenerationPrompt)` добавя generation prompt-а в края, както `{% if add_generation_prompt %}`.
+
+### 4. Запиши разговора
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+List<ChatMessage> messages =
+[
+    new("system", "You are a math tutor."),
+    new("user", "What is calculus?"),
+    new("assistant", "Calculus is a branch of mathematics..."),
+    new("user", "Can you give me an example?"),
+];
+
+string prompt = SmolLM2Template.Apply(messages);
+
+Console.WriteLine(prompt);
+
+// The example ends here.
+// The next step would be to send this prompt to a model.
+```
+
+Програмата прави три неща: записва разговора с учителя по математика като списък от messages, прилага template-а върху него и отпечатва получения prompt.
+
+Коментарът в края отбелязва къде спираме. Следващата стъпка би била да изпратим prompt-а на модел, а модел все още нямаме.
+
+### 5. Стартирай програмата
+
+В терминала, в папката `ChatTemplates`, изпълни:
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text
+<|im_start|>system
+You are a math tutor.<|im_end|>
+<|im_start|>user
+What is calculus?<|im_end|>
+<|im_start|>assistant
+Calculus is a branch of mathematics...<|im_end|>
+<|im_start|>user
+Can you give me an example?<|im_end|>
+<|im_start|>assistant
+```
+
+Получи същия prompt, който разгледахме по-горе. Ето как програмата стигна до него:
+
+1. `Program.cs` създаде списък с четири messages и го подаде на `SmolLM2Template.Apply`.
+2. `foreach` мина през списъка. За всеки message добави към `prompt` два реда: `<|im_start|>` с ролята, а под него съдържанието и `<|im_end|>`. Затова в изхода има четири такива двойки, в реда на messages.
+3. След цикъла `addGenerationPrompt` беше `true`, затова методът добави последния ред: `<|im_start|>assistant`.
+4. `Apply` върна целия текст като един `string`, а `Console.WriteLine` го отпечата.
+
+### 6. Експериментирай
+
+Опитай тези три промени и след всяка изпълни `dotnet run`.
+
+**Продължи разговора.** Добави два нови messages в края на списъка в `Program.cs`, преди затварящата скоба `]`:
+
+```csharp
+    new("assistant", "Sure! The slope of a curve at a point is its derivative."),
+    new("user", "Why is that useful?"),
+```
+
+Prompt-ът вече съдържа и шестте messages. Точно това се случва във всеки чат: при всеки нов въпрос моделът получава целия разговор отначало.
+
+**Махни generation prompt-а.** Смени извикването така:
+
+```csharp
+string prompt = SmolLM2Template.Apply(messages, addGenerationPrompt: false);
+```
+
+Последният ред `<|im_start|>assistant` изчезва. Модел, който получи такъв prompt, няма как да знае, че е негов ред, и може да продължи да пише от името на user.
+
+**Смени модела.** Копирай `SmolLM2Template.cs` като `Phi3Template.cs` и преименувай класа на `Phi3Template`. После смени маркерите. Двата реда в цикъла стават:
+
+```csharp
+prompt.Append($"<|{message.Role}|>\n");
+prompt.Append($"{message.Content}<|end|>\n");
+```
+
+а редът за generation prompt-а:
+
+```csharp
+prompt.Append("<|assistant|>\n");
+```
+
+В `Program.cs` извикай `Phi3Template.Apply(messages)` вместо `SmolLM2Template.Apply(messages)` и ще получиш разговора във формата на Phi-3. Списъкът от messages е същият, променя се само template-ът.
+
+### Как е в истинско приложение
+
+В реален код няма да пишеш такива методи. Template-ът идва заедно с модела и го прилага сървърът, който обслужва модела. В този курс това ще бъде Ollama: ти ще му изпращаш само списъка от messages, а той ще го превръща в prompt във формата на модела. Ще го направим в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/).
+
+Защо тогава ти трябва да знаеш всичко това? Защото chat template-ът определя какво реално чете моделът. Когато един Agent се държи странно, причината често е в prompt-а, а не в кода.
+
+:::note[Ако четеш документацията на някой модел]
+В Python тази операция се казва `apply_chat_template()`. Често ще срещаш това име в документацията на моделите и вече знаеш какво прави.
+:::
 
 ## Обобщение
 
-- Chat template е функция от `List<ChatMessage>` към `string`, която се разпространява заедно с модела.
-- Нужен е, защото instruct моделите са обучени върху разговори в точно определен формат със собствени special tokens.
-- Записан е на Jinja2 и се намира в `chat_template.jinja`, в `tokenizer_config.json` или в metadata на GGUF файла.
-- Generation prompt отваря хода на assistant и така казва на модела, че е негов ред.
-- Един и същ разговор дава различен prompt при различните модели, затова форматът не се пише на ръка.
-- При работа през chat API template-ът се прилага на сървъра, а ние подаваме само messages.
-- Същият механизъм пренася и Tools: много templates приемат списък `tools` и сами вписват описанията им в prompt-а.
+- Разговорът е списък от **messages**. Всеки има role (`system`, `user` или `assistant`) и content.
+- **System message-ът** задава поведението на модела, а при Agents описва и неговите tools.
+- Моделът няма памет. При всяка заявка получава целия разговор, слепен в един prompt.
+- **Chat template-ът** превръща списъка от messages в prompt, като огражда всеки message със **special tokens**.
+- **Generation prompt-ът** в края на prompt-а казва на модела, че е негов ред.
+- Всеки модел е обучен на свой формат. Затова template-ът идва с модела, а в истинско приложение го прилага сървърът.
 
-Сега, когато видяхме как LLMs структурират входа си чрез chat templates, да разгледаме как Agents действат в своите среди.
+Сега, когато видя как LLMs структурират входа си чрез chat templates, е време да разгледаме как Agents действат в своята среда. Един от основните начини за това са Tools, които разширяват възможностите на модела отвъд генерирането на текст.
 
-Един от основните начини, по които го правят, е чрез използване на Tools, които разширяват възможностите на AI модела отвъд генерирането на текст.
-
-Ще обсъдим messages отново в следващите units, но ако искаш да навлезеш по-дълбоко още сега, разгледай:
-
-- <a href="https://huggingface.co/docs/transformers/main/en/chat_templating" target="_blank">Hugging Face Chat Templating Guide</a>
-- <a href="https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai" target="_blank">Microsoft.Extensions.AI - документация</a>
-- <a href="https://jinja.palletsprojects.com/en/stable/templates/" target="_blank">Jinja2 - Template Designer Documentation</a>
+Ако искаш да навлезеш по-дълбоко в темата, разгледай <a href="https://huggingface.co/docs/transformers/main/en/chat_templating" target="_blank">Hugging Face Chat Templating Guide</a>.

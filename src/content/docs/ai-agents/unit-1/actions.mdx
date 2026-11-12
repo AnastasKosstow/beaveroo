@@ -1,15 +1,15 @@
 ---
 title: "Actions: как Agent взаимодейства със средата си"
-description: Конкретните стъпки, чрез които AI agent взаимодейства със средата - типове Actions и Agents, подходът Stop and Parse, function calling и Code Agents.
+description: Как един AI Agent действа - какво е Action, как моделът го записва като текст, подходът stop and parse, function calling и Code Agents. Накрая парсваме и изпълняваме един Action на C#, без да ни трябва модел.
 ---
 
 :::tip
-В тази секция разглеждаме втората стъпка от цикъла: как един Agent действа. Ще видим как се записва един action (като JSON или като код), защо моделът трябва да спре след него и какви типове agents има.
+В тази секция разглеждаме втората стъпка от цикъла: как един Agent действа. Ще видим как се записва един action (като JSON или като код), защо моделът трябва да спре след него и какви типове Agents има. Накрая ще изпълниш един action на C#.
 :::
 
 Actions са конкретните стъпки, които **един Agent предприема, за да взаимодейства със средата си**: търсене в интернет, заявка към база данни, изпращане на имейл, управление на устройство.
 
-Например agent за обслужване на клиенти може да извлече данните на клиента, да предложи статия от помощния център или да прехвърли случая към човек.
+Например Agent за обслужване на клиенти може да извлече данните на клиента, да предложи статия от помощния център или да прехвърли случая към човек.
 
 ## Типове Actions
 
@@ -17,12 +17,12 @@ Actions са конкретните стъпки, които **един Agent п
 |------------|----------|
 | Information Gathering | Търсене в интернет, заявки към бази данни или извличане на документи. |
 | Tool Usage | Извикване на API, извършване на изчисления и изпълнение на код. |
-| Environment Interaction | Манипулиране на дигитални интерфейси или управление на физически устройства. |
-| Communication | Общуване с потребителите чрез чат или сътрудничество с други agents. |
+| Environment Interaction | Работа с дигитални интерфейси или управление на физически устройства. |
+| Communication | Общуване с потребителите чрез чат или сътрудничество с други Agents. |
 
 ## Как се записва един Action?
 
-LLM може да генерира само текст. Затова един action е **текст, който описва кой tool да бъде извикан и с какви аргументи**. Според формата на този текст различаваме три типа agents:
+LLM може да генерира само текст. Затова един action е **текст, който описва кой tool да бъде извикан и с какви аргументи**. Според формата на този текст различаваме три типа Agents:
 
 | Тип Agent | Как записва action-а |
 |-----------|----------------------|
@@ -32,9 +32,9 @@ LLM може да генерира само текст. Затова един ac
 
 ## Подходът Stop and Parse
 
-При JSON Agent всичко се случва в три стъпки.
+При JSON Agent всичко става в три стъпки.
 
-**1. Генериране в структуриран формат.** Моделът записва action-а в ясен, предварително уговорен формат:
+**1. Генериране в уговорен формат.** Моделът записва action-а в ясен, предварително уговорен формат:
 
 ```text
 Thought: I need to check the current weather for New York.
@@ -43,19 +43,9 @@ Action: {"action": "GetWeather", "action_input": {"location": "New York"}}
 
 **2. Спиране (stop).** Веднага след action-а моделът **трябва да спре да генерира**. Така контролът се връща към нашия код. Ако моделът продължи да пише, единственото, което може да направи, е да си измисли резултата от tool-а.
 
-**3. Парсване (parse).** Нашият код прочита текста и извлича от него името на tool-а и аргументите. В C# това са няколко реда със `System.Text.Json`:
+**3. Парсване (parse).** Нашият код прочита текста, извлича от него името на tool-а и аргументите и извиква истинския C# метод.
 
-```csharp
-JsonElement action = JsonDocument.Parse(json).RootElement;
-
-string tool = action.GetProperty("action").GetString()!;
-string location = action
-    .GetProperty("action_input")
-    .GetProperty("location")
-    .GetString()!;
-```
-
-След това остава само да извикаме истинския C# метод. Ще направим точно това в урока [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/).
+Третата стъпка ще напишеш сам в края на този урок.
 
 ## Function calling
 
@@ -69,7 +59,7 @@ string location = action
 
 ## Code Agents
 
-При Code Agent моделът не пише JSON, а **изпълним код**. Вместо да поиска един tool, той може да комбинира няколко извиквания с обикновена логика:
+При Code Agent моделът не пише JSON, а **изпълним код**. Вместо да поиска един tool, той може да комбинира няколко извиквания с обикновена логика. Ето какво би написал такъв модел:
 
 ```csharp
 string london = GetWeather("London");
@@ -78,11 +68,128 @@ string paris = GetWeather("Paris");
 return $"London: {london}. Paris: {paris}.";
 ```
 
-Един JSON Agent би направил същото на две отделни обиколки на цикъла. Това е голямото предимство на кода: **изразителност**. Цикли, условия и междинни променливи се записват естествено, а резултатът от един tool може веднага да бъде подаден на друг.
+Този код не го пишеш ти. Генерира го моделът, а средата на Agent-а го изпълнява. Един JSON Agent би направил същото на две отделни обиколки на цикъла. Това е голямото предимство на кода: **изразителност**. Цикли, условия и междинни променливи се записват естествено, а резултатът от един tool може веднага да бъде подаден на друг.
 
 Цената е **сигурността**. Изпълняваме код, написан от LLM, а той може да е грешен или дори зловреден (например след prompt injection). Такъв код трябва да работи в изолирана среда: отделен процес с ограничени права или контейнер.
 
 В .NET Code Agents са рядкост. C# код може да се изпълни динамично с [Roslyn scripting API](https://github.com/dotnet/roslyn/blob/main/docs/wiki/Scripting-API-Samples.md), но библиотеки като `Microsoft.Extensions.AI` и Semantic Kernel залагат на function calling. Него ще използваме и ние.
+
+## Stop and Parse в C#
+
+Сега ще напишем третата стъпка от stop and parse: парсването и изпълнението на един action. Първите две стъпки са работа на модела, а модел още нямаме. Затова ще започнем от готов текст: същите Thought и Action от примера по-горе, записани на ръка.
+
+Трябва ти единствено [.NET SDK](https://dotnet.microsoft.com/download) от [Unit 0](/ai-agents/unit-0/introduction/). Не ти трябват Ollama, модел или NuGet пакети.
+
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
+
+```bash
+dotnet new console -n StopAndParse
+cd StopAndParse
+```
+
+Първата команда създава папка `StopAndParse` с ново конзолно приложение, а втората влиза в нея. Отвори папката в редактора си. Ще работим с два малки файла.
+
+### 2. Напиши tool-а и парсването
+
+Създай нов файл `Tools.cs`:
+
+```csharp title="Tools.cs"
+using System.Text.Json;
+
+public static class Tools
+{
+    public static string GetWeather(string location) =>
+        $"the weather in {location} is sunny with low temperatures.";
+
+    public static string Run(string modelOutput)
+    {
+        int start = modelOutput.IndexOf('{');
+        int end = modelOutput.LastIndexOf('}');
+        string json = modelOutput[start..(end + 1)];
+
+        JsonElement action = JsonDocument.Parse(json).RootElement;
+        string tool = action.GetProperty("action").GetString()!;
+        JsonElement input = action.GetProperty("action_input");
+
+        return tool switch
+        {
+            "GetWeather" => GetWeather(input.GetProperty("location").GetString()!),
+            _ => $"Unknown tool: {tool}",
+        };
+    }
+}
+```
+
+В класа има два метода:
+
+- **`GetWeather`** е самият tool. В реално приложение той би извикал weather API, но тук просто връща готов текст.
+- **`Run`** получава текста, написан от модела, и изпълнява action-а в него. Той прави три неща:
+  1. Изрязва JSON-а от текста: всичко от първата `{` до последната `}`.
+  2. Парсва го и прочита `action` (името на tool-а) и `action_input` (аргументите).
+  3. По името избира кой C# метод да извика. Ако моделът поиска tool, който не съществува, връща текст с грешката.
+
+### 3. Изпълни един action
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+string modelOutput = """
+    Thought: I need to check the current weather for New York.
+    Action: {"action": "GetWeather", "action_input": {"location": "New York"}}
+    """;
+
+string observation = Tools.Run(modelOutput);
+
+Console.WriteLine($"Observation: {observation}");
+
+// The example ends here.
+// The next step would be to send the observation back to the model.
+```
+
+В истински Agent текстът в `modelOutput` идва от модела. Тук го записваме на ръка, за да можем да изпълним останалото без модел.
+
+Коментарът в края отбелязва къде спираме. Следващата стъпка би била да върнем резултата на модела, а модел все още нямаме.
+
+### 4. Стартирай програмата
+
+В терминала, в папката `StopAndParse`, изпълни:
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text
+Observation: the weather in New York is sunny with low temperatures.
+```
+
+Ето как програмата стигна до този ред:
+
+1. `Tools.Run` получи двата реда текст и изряза от тях само JSON-а: `{"action": "GetWeather", "action_input": {"location": "New York"}}`.
+2. От JSON-а прочете, че `action` е `GetWeather`, а `location` е `New York`.
+3. `switch` разпозна името `GetWeather` и извика истинския C# метод с аргумент `New York`.
+4. Методът върна текст, а `Program.cs` го отпечата като Observation.
+
+Това е моментът, в който текстът на модела се превръща в истинско извикване на C# метод.
+
+### 5. Експериментирай
+
+Опитай тези три промени в текста на `modelOutput` и след всяка изпълни `dotnet run`.
+
+**Смени града.** Замени `New York` със `Sofia`. Observation вече е за София: аргументът идва от текста, а не от твоя код.
+
+**Поискай tool, който не съществува.** Замени `GetWeather` с `GetTime`. Програмата не спира с грешка, а отпечатва:
+
+```text
+Observation: Unknown tool: GetTime
+```
+
+Така моделът би получил грешката като текст и би могъл да опита нещо друго.
+
+**Развали формата.** Върни `GetWeather` и изтрий последната `}` от реда с Action. Сега програмата спира с `JsonReaderException`. Един липсващ символ в текста на модела е достатъчен, за да се счупи ръчното парсване. Точно затова съществува function calling.
 
 ---
 

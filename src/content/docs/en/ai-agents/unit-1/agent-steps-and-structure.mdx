@@ -1,6 +1,6 @@
 ---
 title: Understanding AI Agents through the Thought-Action-Observation Cycle
-description: The complete AI Agent workflow - the Thought → Action → Observation cycle, illustrated with Alfred the weather Agent.
+description: The complete workflow of an AI Agent - the Thought → Action → Observation cycle, followed step by step with Alfred, the weather Agent.
 ---
 
 import CycleDiagram from '../../../../../components/CycleDiagram.astro';
@@ -19,43 +19,49 @@ In this section we put them together and look at **the complete workflow of an A
 
 The work of an Agent consists of three steps that repeat:
 
-1. **Thought:** the LLM decides what the next step should be.
-2. **Action:** the Agent calls a tool with the right arguments.
-3. **Observation:** the tool's result goes back to the model, which reflects on it.
+| Step | Who does it | What happens |
+| --- | --- | --- |
+| **Thought** | The model | It thinks the situation over and decides what the next step should be. |
+| **Action** | The model and the Agent's code | The model writes which tool it wants and with what arguments, and the code runs it. |
+| **Observation** | The Agent's code | It returns the tool's result to the model. |
 
 <CycleDiagram />
 
 ## The cycle as code
 
-The three steps repeat until the task is solved. To a programmer that is a familiar thing: a **`while` loop**. Here it is as a C# sketch (this is not working code, only the idea):
+The three steps repeat until the task is solved. To a programmer that is a familiar thing: a **`while` loop**. Here it is as a C# sketch:
 
 ```csharp
 while (true)
 {
-    string reply = AskModel(messages);
+    string output = AskModel(messages);
 
-    if (IsFinalAnswer(reply))
+    if (IsFinalAnswer(output))
     {
-        return reply;
+        break;
     }
 
-    string observation = RunTool(reply);
+    string observation = RunTool(output);
     messages.Add(observation);
 }
 ```
 
+This is only a sketch, not a program to run: the methods `AskModel`, `IsFinalAnswer` and `RunTool` do not exist yet. We will write them for real in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/). For now, what matters is which line maps to which step:
+
 | Line in the sketch | Step |
 | --- | --- |
 | `AskModel(messages)` | **Thought:** the model reads the whole conversation and decides what comes next. |
-| `RunTool(reply)` | **Action:** our code runs the tool the model asked for. |
+| `RunTool(output)` | **Action:** the code runs the tool the model asked for. |
 | `messages.Add(observation)` | **Observation:** the result is added to the conversation for the next round. |
+| `IsFinalAnswer(output)` | End: the model is done with the answer and the cycle stops. |
 
 ## The rules live in the system prompt
 
-How does the model know it should work this way? From the system prompt. Besides the tool descriptions, that is where we write the rules of the cycle itself:
+How does the model know it should work this way? From the system prompt. Besides the tool descriptions, that is where we write the rules of the cycle:
 
 ```text wrap
-You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+You are an AI assistant designed to help users efficiently and accurately.
+Your primary goal is to provide helpful, precise, and clear responses.
 
 You have access to the following tools:
 Tool Name: GetWeather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
@@ -65,11 +71,11 @@ You should think step by step in order to fulfill the objective with a reasoning
 You should first reflect on the current situation using `Thought: {your_thoughts}`, then (if necessary) call a tool with the proper JSON formatting `Action: {JSON_BLOB}`, or print your final answer starting with the prefix `Final Answer:`.
 ```
 
-This system prompt contains three things:
+This system prompt has three parts:
 
-- **The Agent's behavior** (the first paragraph).
+- **The Agent's behavior** (the first two lines).
 - **The tools it has access to**, described as in the previous section.
-- **The Thought-Action-Observation cycle**, written as instructions to the model.
+- **The rules of the cycle** (the last two paragraphs): first `Thought`, then `Action` or `Final Answer`.
 
 ## Alfred, the weather Agent
 
@@ -79,7 +85,7 @@ Let's follow the cycle with an example. Alfred is an Agent with a single tool: `
 
 ### 1. Thought
 
-Alfred first reasons about what he needs:
+The model first reasons about what it needs:
 
 *"The user wants current weather information for New York. I have a tool that fetches weather data. First, I need to call it."*
 
@@ -87,32 +93,32 @@ Alfred first reasons about what he needs:
 
 ### 2. Action
 
-Alfred knows about `GetWeather` from the system prompt, so he prepares a call in JSON format:
+The model knows about `GetWeather` from the system prompt and writes the call in the format we gave it:
 
 ```text
 Thought: I need to check the current weather for New York.
 Action: {"action": "GetWeather", "action_input": {"location": "New York"}}
 ```
 
-An Action says two things: **which tool** to call and **with what arguments**. The call itself is made by the Agent's code, not by the model.
+An Action says two things: **which tool** to call and **with what arguments**. The model only writes it. The call itself is made by the Agent's code.
 
 ![Alfred calls the tool](../../../../../assets/course/unit1/alfred-agent-2.jpg)
 
 ### 3. Observation
 
-The tool runs and returns a result:
+The Agent's code runs `GetWeather` and adds the result to the conversation:
 
 ```text
 Observation: Current weather in New York: partly cloudy, 15°C, 60% humidity.
 ```
 
-This text is added to the conversation. That is how the model gets feedback from the real world: whether the action succeeded and what the data is.
+This line was not written by the model. It is feedback from the real world: whether the action succeeded and what the data is.
 
 ![Alfred receives the result](../../../../../assets/course/unit1/alfred-agent-3.jpg)
 
 ### 4. A new Thought
 
-With this Observation, Alfred assesses the situation again:
+The model reads the conversation again, now with the new Observation, and assesses the situation:
 
 *"I now have the weather data for New York. I can answer the user."*
 
@@ -120,7 +126,7 @@ With this Observation, Alfred assesses the situation again:
 
 ### 5. Final answer
 
-Alfred writes the answer in the format we told him to use, and the cycle ends:
+The model writes the answer in the format we told it to use, and the cycle ends:
 
 ```text wrap
 Thought: I have the weather data now.

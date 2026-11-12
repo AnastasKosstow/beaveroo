@@ -1,172 +1,164 @@
 ---
 title: Какво са Tools?
-description: Какво представляват инструментите (Tools) за AI Agents, как работят, как ги описваме за LLM, автоматично генериране на описание чрез reflection в C# и Model Context Protocol (MCP).
+description: Какво е Tool за един AI Agent, как моделът го използва, въпреки че пише само текст, и как му го описваме. Накрая пишем tool на C# и генерираме описанието му автоматично, без да ни трябва модел.
 ---
 
 import UnitProgress from '../../../../components/UnitProgress.astro';
 
 <UnitProgress done={2} />
 
-Един ключов аспект на AI Agents е способността им да предприемат действия (**actions**). Както видяхме, това се случва чрез използването на инструменти (**Tools**).
+Един ключов аспект на AI Agents е способността им да предприемат действия (**actions**). Както видяхме, това става чрез **Tools**.
 
-В тази секция ще научим какво са инструменти (Tools), как да ги проектираме ефективно и как да ги интегрираме в своя Agent чрез System Message.
-
-Като дадеш на своя Agent правилните инструменти (Tools) - и ясно опишеш как работят те - можеш драстично да увеличиш това, което твоят AI може да постигне.
+В тази секция ще научиш какво е Tool, как моделът го използва и как му го описваме чрез system message. Накрая ще напишеш един tool на C# и ще го изпълниш на своя компютър, без да ти трябва модел.
 
 ## Какво са AI Tools?
 
-**Tool е функция, предоставена на LLM**. Тази функция трябва да изпълнява **ясна цел**.
+**Tool е функция, предоставена на LLM.** Тя трябва да има **ясна цел**. За един C# програмист това е обикновен метод.
 
-Ето някои често използвани tools в AI agents:
+Ето някои често използвани tools:
 
 | Tool | Описание |
-|------|----------|
-| Web Search | Позволява на agent-а да извлича актуална информация от интернет. |
-| Image Generation | Създава изображения по текстови описания. |
+| --- | --- |
+| Web Search | Извлича актуална информация от интернет. |
+| Image Generation | Създава изображения по текстово описание. |
 | Retrieval | Извлича информация от външен източник. |
-| API Interface | Взаимодейства с външен API (GitHub, YouTube, Spotify и т.н.). |
+| API Interface | Работи с външен API (GitHub, YouTube, Spotify и т.н.). |
 
-Това са само примери - всъщност можеш да създадеш tool за всякакъв случай!
+Това са само примери. Можеш да създадеш tool за всякаква задача.
 
-Добрият tool трябва да е нещо, което **допълва силата на LLM**.
+Добрият tool **допълва силата на LLM**, тоест прави нещо, което моделът сам не може или не прави добре:
 
-Например, ако трябва да извършваш аритметика, предоставянето на **calculator tool** на твоя LLM ще даде по-добри резултати, отколкото разчитането на вродените възможности на модела.
-
-Освен това **LLMs предсказват допълването на prompt въз основа на данните с които са обучени**, което означава, че вътрешните им знания включват само събития отпреди обучението им. Следователно, ако твоят agent има нужда от актуални данни, трябва да му ги предоставиш чрез някакъв tool.
-
-Например, ако попиташ LLM директно (без search tool) какво е времето днес, LLM вероятно ще халюцинира случайна прогноза.
+- **Точни изчисления.** Моделът предсказва текст, а не смята. Един calculator tool дава верен резултат всеки път.
+- **Актуални данни.** Моделът знае само това, което е било в данните му за обучение. Ако го попиташ за времето днес и той няма tool за това, вероятно ще си измисли прогноза. Това се нарича халюцинация.
 
 ![Времето](../../../../assets/course/unit1/weather.jpg)
 
-- Един Tool трябва да съдържа:
-
-  - **Текстово описание на това, което прави функцията**.
-  - *Callable* (нещо, което изпълнява action).
-  - *Аргументи* с типове.
-  - (По избор) Изходи с типове.
-
 ## Как работят tools?
 
-LLMs, както видяхме, могат само да получават текстов вход и да генерират текстов изход. Те нямат начин сами да извикват tools. Когато говорим за предоставяне на tools на Agent, имаме предвид да научим LLM за съществуването на тези tools и да го инструктираме да генерира текстови извиквания, когато е необходимо.
+LLM може само да чете и да пише текст. Той няма как сам да извика метод. Затова работата се разделя между двама: **моделът казва какво иска, а Agent-ът го изпълнява**. Тук Agent-ът е програмата около модела.
 
-Например, ако предоставим tool за проверка на времето на дадено място от интернет и после попитаме LLM за времето в Париж, LLM ще разпознае, че това е възможност да използва „weather“ tool-а. Вместо сам да извлича данните за времето, LLM ще генерира текст, който представлява извикване на tool, например `call weather_tool('Paris')`.
+Да кажем, че сме дали на модела tool за проверка на времето и потребителят пита какво е времето в Париж:
 
-**Agent-ът** след това чете този отговор, идентифицира, че е необходимо извикване на tool, изпълнява tool-а от името на LLM и извлича реалните данни за времето.
+1. **Моделът** разпознава, че му трябва този tool. Вместо отговор написва текст, който описва извикването, например `GetWeather("Paris")`.
+2. **Agent-ът** прочита този текст, разбира, че е извикване на tool, и изпълнява истинския метод `GetWeather`.
+3. **Agent-ът** добавя резултата към разговора като нов message и подава разговора отново на модела.
+4. **Моделът** прочита резултата и написва отговора за потребителя.
 
-Стъпките по извикването на Tool обикновено не се показват на потребителя: Agent-ът ги добавя като ново съобщение, преди да подаде обновения разговор отново на LLM. LLM след това обработва този допълнителен контекст и генерира естествено звучащ отговор за потребителя. От гледна точка на потребителя изглежда сякаш LLM директно е взаимодействал с tool-а, но в действителност Agent-ът е този, който е извършил целия процес на изпълнение във фонов режим.
-
-Ще говорим много повече за този процес в следващите сесии.
+Потребителят вижда само последната стъпка. За него изглежда, че моделът сам е проверил времето, но цялата работа е свършил Agent-ът.
 
 ## Как даваме tools на LLM?
 
-LLM може да чете само текст. Затова „да дадем tool на модела“ означава нещо съвсем просто: **описваме tool-а с текст и слагаме това описание в system prompt-а**.
+Моделът чете само текст. Затова „да му дадем tool“ означава нещо просто: **описваме tool-а с текст и слагаме описанието в system prompt-а**.
 
-```text wrap
-You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+```text
+You are an AI assistant designed to help users efficiently and accurately.
+Your primary goal is to provide helpful, precise, and clear responses.
 
 You have access to the following tools:
 {tools_description}
 ```
 
-На мястото на `{tools_description}` ще застанат описанията на нашите tools. В тази секция ще видим как да ги напишем: първо на ръка, а после автоматично от C# кода.
+На мястото на `{tools_description}` застават описанията на нашите tools.
 
 ### Какво трябва да знае моделът за един tool?
 
 Когато задържиш мишката върху метод във Visual Studio, IntelliSense ти показва името му, параметрите с техните типове, типа на резултата и кратко описание. Тялото на метода не се вижда, но и не ти трябва, за да го извикаш правилно.
 
-Моделът има нужда от точно същата информация:
+Моделът има нужда от същите четири неща:
 
-1. **Име** на tool-а
-2. **Описание** на това, което прави
-3. **Входове** - имената и типовете на аргументите
-4. **Изход** - типът на резултата
+1. **Име** на tool-а.
+2. **Описание** на това, което прави.
+3. **Входове**: имената и типовете на аргументите.
+4. **Изход**: типът на резултата.
 
-Да вземем за пример опростен **calculator** tool, който умножава две цели числа:
+Да вземем за пример прост **calculator** tool, който умножава две цели числа:
 
 ```csharp
-int Calculator(int a, int b)
-{
-    return a * b;
-}
+int Calculator(int a, int b) => a * b;
 ```
 
-Името е `Calculator`, описанието е „умножава две цели числа“, входовете са `a` и `b` от тип `int`, а изходът е `int`. Записани като текст, те изглеждат така:
+Записани като текст, четирите неща изглеждат така:
 
 ```text wrap
 Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
 ```
 
-> **Важно:** Този текст е *всичко, което моделът знае за tool-а*. Той не вижда самия C# код.
+> **Важно:** Този текст е *всичко, което моделът знае за tool-а*. Самия C# код той не вижда.
 
-Точно този формат не е задължителен. Може да бъде и JSON. Важното е описанието да е прецизно и да е в един и същ формат за всички tools.
+Точно този формат не е задължителен, може да бъде и JSON. Важното е описанието да е точно и да е в един и същ формат за всички tools.
 
-Писането на описания на ръка обаче е крехко. Достатъчно е да преименуваш параметър и да забравиш да поправиш текста, и моделът започва да извиква tool-а грешно, без компилаторът да те предупреди.
+Описанието може да се напише на ръка, но това е крехко. Достатъчно е да преименуваш параметър и да забравиш да поправиш текста, и моделът започва да извиква tool-а грешно, без компилаторът да те предупреди. Затова е по-добре програмата сама да състави описанието от кода. Това ще направим сега.
 
-### Описанието идва от самия код
+## Tools в C#
 
-Погледни пак метода `Calculator`. Името, параметрите с типовете им и типът на резултата вече са записани в него. Липсва само описанието с думи. За него в .NET се използва атрибутът `[Description]`:
+Ще напишем tool-а `Calculator`, ще накараме програмата сама да състави описанието му и ще го вмъкнем в system prompt-а. Програмата няма да извиква модел.
 
-```csharp
+Трябва ти единствено [.NET SDK](https://dotnet.microsoft.com/download) от [Unit 0](/ai-agents/unit-0/introduction/). Не ти трябват Ollama, модел или NuGet пакети.
+
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
+
+```bash
+dotnet new console -n FirstTool
+cd FirstTool
+```
+
+Първата команда създава папка `FirstTool` с ново конзолно приложение, а втората влиза в нея. Отвори папката в редактора си. В следващите стъпки ще работим с три малки файла.
+
+### 2. Напиши tool-а
+
+Създай нов файл `MyTools.cs`:
+
+```csharp title="MyTools.cs"
 using System.ComponentModel;
 
-public static class MathTools
+public static class MyTools
 {
     [Description("Multiply two integers.")]
     public static int Calculator(int a, int b) => a * b;
 }
 ```
 
-Защо атрибут, а не `///` коментар? Коментарите изчезват при компилация. Атрибутите остават в компилираната програма и могат да бъдат прочетени, докато тя работи. Четенето на информация за собствения код по време на изпълнение се нарича **reflection** и с него можем да вземем и четирите неща автоматично от обекта `MethodInfo`, който описва метода:
+Това е методът от по-горе с една добавка: атрибутът `[Description]`. Името, параметрите и типът на резултата вече са записани в самия метод. Липсваше само описанието с думи и атрибутът го добавя.
 
-| Какво ни трябва | Откъде го взимаме | Резултат в примера |
-| --- | --- | --- |
-| Име | `method.Name` | `Calculator` |
-| Описание | атрибутът `[Description]` | `Multiply two integers.` |
-| Входове | `method.GetParameters()` | `a` и `b` от тип `int` |
-| Изход | `method.ReturnType` | `int` |
+Защо атрибут, а не `///` коментар? Коментарите изчезват при компилация. Атрибутите остават в програмата и тя може да ги прочете, докато работи.
 
-### Класът Tool
+### 3. Напиши класа Tool
 
-Събираме всичко в един малък клас `Tool` (записан като `record`, за да е кратък), който можем да използваме за всеки наш tool. Първите му редове изброяват от какво се състои един tool: четирите неща от описанието и самият метод (`Func`).
+Създай втори файл, `Tool.cs`. Той събира на едно място всичко за един tool:
 
-> **Уточнение:** Тази реализация е примерна, но много прилича на реалните реализации в повечето библиотеки.
-
-```csharp
+```csharp title="Tool.cs"
 using System.ComponentModel;
 using System.Reflection;
 
 public record Tool(
     string Name,
     string Description,
-    Delegate Func,
-    IReadOnlyList<(string Name, string Type)> Arguments,
+    Delegate Function,
+    string Arguments,
     string Outputs)
 {
-    public static Tool FromMethod(Delegate func)
+    public static Tool FromMethod(Delegate function)
     {
-        MethodInfo method = func.Method;
+        MethodInfo method = function.Method;
 
         string name = method.Name;
         string description =
             method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
-        var arguments = method.GetParameters()
-            .Select(p => (p.Name!, TypeName(p.ParameterType)))
-            .ToList();
+        string arguments = string.Join(", ", method.GetParameters()
+            .Select(p => $"{p.Name}: {TypeName(p.ParameterType)}"));
         string outputs = TypeName(method.ReturnType);
 
-        return new Tool(name, description, func, arguments, outputs);
+        return new Tool(name, description, function, arguments, outputs);
     }
 
-    public object? Invoke(params object?[] args) => Func.DynamicInvoke(args);
+    public override string ToString() =>
+        $"Tool Name: {Name}, Description: {Description}, " +
+        $"Arguments: {Arguments}, Outputs: {Outputs}";
 
-    public override string ToString()
-    {
-        string arguments = string.Join(
-            ", ", Arguments.Select(a => $"{a.Name}: {a.Type}"));
-
-        return $"Tool Name: {Name}, Description: {Description}, " +
-               $"Arguments: {arguments}, Outputs: {Outputs}";
-    }
+    public object? Invoke(params object?[] args) =>
+        Function.DynamicInvoke(args);
 
     private static string TypeName(Type type) => type.Name switch
     {
@@ -179,89 +171,145 @@ public record Tool(
 }
 ```
 
-Класът прави три неща:
+Първите редове изброяват от какво се състои един tool: четирите неща от описанието и самият метод (`Function`). Под тях има три метода:
 
-- **`FromMethod`** прочита метода с reflection и създава `Tool` от него.
-- **`ToString`** връща описанието като текст. Това е, което ще види моделът.
+- **`FromMethod`** създава `Tool` от подаден метод. Всичко нужно той чете от самия метод, през обекта `MethodInfo`, който го описва.
+- **`ToString`** подрежда описанието в един ред. Това е текстът за модела.
 - **`Invoke`** изпълнява самия метод. Това ще прави Agent-ът, когато моделът поиска tool-а.
 
-Помощният метод `TypeName` само заменя .NET имената `Int32` и `String` с познатите `int` и `string`.
+Ето откъде `FromMethod` взима четирите неща:
 
-Да го изпробваме:
+| Какво ни трябва | Откъде го взима | Резултат за `Calculator` |
+| --- | --- | --- |
+| Име | `method.Name` | `Calculator` |
+| Описание | атрибутът `[Description]` | `Multiply two integers.` |
+| Входове | `method.GetParameters()` | `a: int, b: int` |
+| Изход | `method.ReturnType` | `int` |
 
-```csharp
-Tool calculator = Tool.FromMethod(MathTools.Calculator);
+Когато една програма чете информация за собствения си код, докато работи, това се нарича **reflection**. Помощният метод `TypeName` само заменя .NET имената `Int32` и `String` с познатите `int` и `string`.
+
+### 4. Използвай tool-а
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+Tool calculator = Tool.FromMethod(MyTools.Calculator);
 
 Console.WriteLine(calculator);
 Console.WriteLine(calculator.Invoke(6, 7));
+
+string systemPrompt = $"""
+    You are an AI assistant designed to help users efficiently and accurately.
+    Your primary goal is to provide helpful, precise, and clear responses.
+
+    You have access to the following tools:
+    {calculator}
+    """;
+
+Console.WriteLine();
+Console.WriteLine(systemPrompt);
+
+// The example ends here.
+// The next step would be to send this system prompt to a model.
 ```
+
+Програмата прави три неща: създава `Tool` от метода `Calculator`, отпечатва описанието му и резултата от едно извикване, а накрая вмъква описанието в system prompt-а.
+
+Коментарът в края отбелязва къде спираме. Следващата стъпка би била да изпратим system prompt-а на модел, а модел все още нямаме.
+
+### 5. Стартирай програмата
+
+В терминала, в папката `FirstTool`, изпълни:
+
+```bash
+dotnet run
+```
+
+изход:
 
 ```text wrap
 Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
 42
-```
 
-Първо се отпечатва същото описание, което преди малко написахме на ръка. Този път името, аргументите и типовете идват от самия код и няма как да се разминат с него. След него идва `42`: същият обект може и да изпълни tool-а.
-
-Остава да **вмъкнем** описанието в system prompt-а на мястото на `{tools_description}`:
-
-```text wrap
-You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+You are an AI assistant designed to help users efficiently and accurately.
+Your primary goal is to provide helpful, precise, and clear responses.
 
 You have access to the following tools:
 Tool Name: Calculator, Description: Multiply two integers., Arguments: a: int, b: int, Outputs: int
 ```
 
-Това е всичко. Моделът вече знае, че разполага с `Calculator`, какво прави той и какви входове очаква. В секцията [Actions](/ai-agents/unit-1/actions/) ще научим как Agent **извиква** tool-а, който току-що създадохме.
+Ето как програмата стигна до този изход:
 
-:::tip[Как е в реалните .NET библиотеки?]
-Не е нужно да пишеш собствен клас `Tool`. Библиотеката `Microsoft.Extensions.AI` прави същото чрез `AIFunctionFactory`: чете името на метода, атрибута `[Description]` и параметрите му. Разликата е, че описва входовете във формат JSON Schema, който всички съвременни модели с function calling разбират.
+1. `Tool.FromMethod(MyTools.Calculator)` получи самия метод, без да го изпълнява, и прочете от него името, описанието, параметрите и типа на резултата.
+2. `Console.WriteLine(calculator)` извика `ToString` и отпечата първия ред. Това е същото описание, което по-горе написахме на ръка, но този път идва от кода.
+3. `calculator.Invoke(6, 7)` изпълни истинския метод `Calculator` и върна `42`. В един Agent това става, когато моделът поиска tool-а. Тук го извикахме сами, за да видиш, че работи.
+4. `{calculator}` в `systemPrompt` отново извика `ToString` и постави описанието там, където в шаблона по-горе стоеше `{tools_description}`.
+
+### 6. Експериментирай
+
+Опитай тези две промени и след всяка изпълни `dotnet run`.
+
+**Преименувай параметрите.** В `MyTools.cs` смени `a` и `b` с `x` и `y`:
 
 ```csharp
-using Microsoft.Extensions.AI;
-
-AIFunction calculator = AIFunctionFactory.Create(MathTools.Calculator);
-
-Console.WriteLine(calculator.Name);
-Console.WriteLine(calculator.Description);
-Console.WriteLine(calculator.JsonSchema);
+public static int Calculator(int x, int y) => x * y;
 ```
+
+В изхода вече пише `Arguments: x: int, y: int`, и то на двете места. Не си пипал нито един текст: описанието идва от кода и няма как да се размине с него.
+
+**Добави втори tool.** Добави още един метод в класа `MyTools`:
+
+```csharp
+[Description("Get the current weather in a given location.")]
+public static string GetWeather(string location) =>
+    $"the weather in {location} is sunny with low temperatures.";
+```
+
+В `Program.cs` създай `Tool` и за него, под първия ред:
+
+```csharp
+Tool weather = Tool.FromMethod(MyTools.GetWeather);
+```
+
+и го добави в system prompt-а на нов ред под `{calculator}`:
+
+```csharp
+    You have access to the following tools:
+    {calculator}
+    {weather}
+    """;
+```
+
+В края на изхода ще се появи втори tool, описан в същия формат:
 
 ```text wrap
-Calculator
-Multiply two integers.
-{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}
+Tool Name: GetWeather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
 ```
 
-Ще използваме този подход, когато изграждаме [първия си Agent](/ai-agents/unit-1/tutorial/).
-:::
+Това описание ще срещнеш отново в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/), където ще го изпратим на истински модел.
 
-### Model Context Protocol (MCP): унифициран интерфейс за tools
+### Как е в истинско приложение
 
-Нашият `Tool` работи само в нашата програма. Всяка библиотека за Agents има свой подобен клас, така че един и същ tool трябва да се описва наново за всяка от тях.
+Класът `Tool` е учебен пример, но реалните библиотеки работят по същия начин. В .NET това прави `AIFunctionFactory` от библиотеката `Microsoft.Extensions.AI`. С `AIFunctionFactory.Create(MyTools.Calculator)` и той чете името на метода, атрибута `[Description]` и параметрите. Разликата е, че описва входовете във формат JSON Schema, който съвременните модели разбират.
 
-Model Context Protocol (MCP) е **отворен протокол**, който стандартизира начина, по който приложенията **предоставят tools на LLMs**. Tool-ът се реализира веднъж, в отделна програма, наречена MCP server, и **всеки framework, който поддържа MCP, може да го използва**.
+Ще го използваме, когато изграждаме [първия си Agent](/ai-agents/unit-1/tutorial/). Как един Agent **извиква** tool-а, ще научим в секцията [Actions](/ai-agents/unit-1/actions/).
 
-MCP предоставя:
+## Model Context Protocol (MCP)
 
-- Нарастващ списък от готови интеграции, към които твоят LLM може директно да се включи
-- Гъвкавост при смяна на доставчици на LLM
-- Добри практики за защита на данните в твоята инфраструктура
+Нашият клас `Tool` работи само в нашата програма. Всяка библиотека за Agents има свой подобен клас, така че един и същ tool трябва да се описва наново за всяка от тях.
 
-В .NET има официален [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) (NuGet пакетът `ModelContextProtocol`), който се интегрира директно с `Microsoft.Extensions.AI`. Ако искаш да навлезеш по-дълбоко в MCP, разгледай безплатния [MCP Course](https://huggingface.co/learn/mcp-course/) на Hugging Face.
+**Model Context Protocol (MCP)** е отворен протокол, който стандартизира начина, по който приложенията **предоставят tools на LLMs**. Tool-ът се реализира веднъж, в отделна програма, наречена MCP server, и **всеки framework, който поддържа MCP, може да го използва**. Вече има и много готови MCP сървъри, към които твоят Agent може директно да се включи.
 
----
+В .NET има официален [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) (NuGet пакетът `ModelContextProtocol`), който работи директно с `Microsoft.Extensions.AI`. Ако искаш да навлезеш по-дълбоко в MCP, разгледай безплатния [MCP Course](https://huggingface.co/learn/mcp-course/) на Hugging Face.
 
-Tools играят ключова роля в разширяването на възможностите на AI agents.
+## Обобщение
 
-В обобщение, научихме:
+- **Tool** е функция, която дава на LLM възможности отвъд генерирането на текст: точни изчисления, актуални данни, действия във външни системи.
+- Моделът не изпълнява tools. Той само написва кой tool иска и с какви аргументи, а **Agent-ът го изпълнява** и му връща резултата.
+- За да използва един tool, моделът трябва да знае **името, описанието, входовете и изхода** му. Това описание стои в system prompt-а.
+- В C# описанието се взима от самия метод с **reflection** и атрибута `[Description]`, за да не се разминава с кода.
+- **MCP** позволява един tool да се реализира веднъж и да се използва от различни frameworks.
 
-- *Какво са Tools*: функции, които дават на LLMs допълнителни възможности, като извършване на изчисления или достъп до външни данни.
-
-- *Как да дефинираме Tool*: като предоставим ясно текстово описание, входове, изходи и callable функция.
-
-- *Защо Tools са съществени*: те позволяват на Agents да преодолеят ограниченията на статичното обучение на модела, да се справят със задачи в реално време и да изпълняват специализирани actions.
-
-Сега можем да преминем към [работния процес на Agent](/ai-agents/unit-1/agent-steps-and-structure/), където ще видиш как Agent наблюдава, мисли и действа. Това **събира всичко, което разгледахме досега**, и подготвя сцената за създаването на твой собствен напълно функционален AI Agent.
+Сега можем да преминем към [работния процес на Agent](/ai-agents/unit-1/agent-steps-and-structure/), където ще видиш как един Agent наблюдава, мисли и действа. Той **събира всичко, което разгледахме досега**, и подготвя сцената за създаването на твой собствен AI Agent.
 
 Но първо е време за още един кратък quiz!

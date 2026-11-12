@@ -1,29 +1,32 @@
 ---
 title: Да създадем първия си Agent с .NET
-description: Изграждаме първия си Agent с Microsoft.Extensions.AI - Tools с [Description], IChatClient към локален модел в Ollama и автоматичен цикъл Thought → Action → Observation.
+description: Изграждаме първия си Agent с Microsoft.Extensions.AI - tool с [Description], IChatClient към локален модел в Ollama и автоматичен цикъл Thought → Action → Observation.
 ---
 
-В предишната секция написахме Agent на ръка и **видяхме колко досадно е това**. Сега ще изградим същото с библиотека, която **поема тежката работа вместо нас**.
+В предишната секция написахме Agent на ръка и **видяхме колко ръчна работа е това**. Сега ще изградим същото с библиотека, която **поема тежката работа вместо нас**.
 
 В този урок **ще създадеш първия си истински Agent**: Alfred, който работи изцяло на твоя компютър и може да извиква C# методи, за да отговаря на въпроси.
 
 ## Какво е Microsoft.Extensions.AI?
 
-[`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) е библиотеката на Microsoft за работа с LLMs в .NET. Тя е малка, но покрива точно трите неща, които в предишния урок писахме на ръка:
+[`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) е библиотеката на Microsoft за работа с LLMs в .NET. Тя е малка, но покрива точно нещата, които в предишния урок писахме сами:
 
-| На ръка (Dummy Agent) | С Microsoft.Extensions.AI |
+| В Dummy Agent го писахме сами | С Microsoft.Extensions.AI |
 | --- | --- |
-| `HttpClient` и JSON заявки към Ollama | `IChatClient`: един интерфейс за всеки доставчик на LLM |
-| Описание на tool-а, написано в system prompt-а | `AIFunctionFactory`: прави tool от обикновен C# метод |
-| `stop`, парсване на Action, извикване на метода, добавяне на Observation | `UseFunctionInvocation()`: изпълнява целия цикъл автоматично |
+| `Ollama.cs`: заявки към модела с `HttpClient` | `IChatClient`: един интерфейс за всеки доставчик на LLM |
+| `ChatMessage.cs`: наш record за един message | `ChatMessage`: готов тип със същото име |
+| Описание на tool-а, написано на ръка в system prompt-а | `AIFunctionFactory`: прави tool от обикновен C# метод |
+| `Tools.Run` и `while` цикълът | `UseFunctionInvocation()`: изпълнява целия цикъл автоматично |
 
-Има и една разлика под повърхността. Нашият dummy Agent беше **JSON Agent**: молехме модела да пише `Action: {...}` в текста и сами го парсвахме. Библиотеката използва **function calling** (виж [Actions](/ai-agents/unit-1/actions/)): моделът връща извикването на tool като структурирани данни, така че няма какво да се обърка във формата.
+Има и една разлика под повърхността. Нашият dummy Agent беше **JSON Agent**: молехме модела да пише `Action: {...}` в текста и сами го парсвахме. Библиотеката използва **function calling** (виж [Actions](/ai-agents/unit-1/actions/)): моделът връща извикването на tool като структурирани данни, така че няма формат, който да се обърка.
 
 ## Да изградим Alfred
 
-### 1. Проектът
+Ще ни трябват Ollama и моделът от предишния урок. Увери се, че Ollama работи, преди да започнеш.
 
-Използваме същия модел в Ollama като в предишния урок. Създай нов проект и добави двата пакета:
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
 
 ```bash
 dotnet new console -n FirstAgent
@@ -32,9 +35,11 @@ dotnet add package Microsoft.Extensions.AI
 dotnet add package OllamaSharp
 ```
 
-[`OllamaSharp`](https://github.com/awaescher/OllamaSharp) е клиентът за Ollama. Той реализира интерфейса `IChatClient`, така че останалият код не зависи от Ollama. Ако някой ден смениш доставчика на модела, променяш един ред.
+Първите две команди създават проекта, а другите две добавят двата NuGet пакета. [`OllamaSharp`](https://github.com/awaescher/OllamaSharp) е клиентът за Ollama. Той реализира интерфейса `IChatClient`, така че останалият код не зависи от Ollama. Ако някой ден смениш доставчика на модела, променяш един ред.
 
-### 2. Tools
+Отвори папката `FirstAgent` в редактора си. Ще работим с три файла.
+
+### 2. Напиши tool-а
 
 Създай файл `AlfredTools.cs`. В него е единственият tool на Alfred: метод, който връща текущия час в дадена часова зона.
 
@@ -69,12 +74,11 @@ public static class AlfredTools
 - **Ясни типове** на параметрите и на резултата.
 - **Грешките се връщат като текст.** Ако моделът подаде невалидна часова зона, той ще прочете съобщението като Observation и може да опита отново.
 
-### 3. Agent-ът
+### 3. Създай Agent-а
 
-Замени съдържанието на `Program.cs` със следното:
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
 
 ```csharp title="Program.cs"
-using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 
@@ -96,6 +100,104 @@ var options = new ChatOptions
     Tools = [AIFunctionFactory.Create(AlfredTools.GetCurrentTime)],
 };
 
+List<ChatMessage> history =
+[
+    new(ChatRole.System, SystemPrompt),
+    new(ChatRole.User, "What time is it in Tokyo right now?"),
+];
+
+ChatResponse response = await agent.GetResponseAsync(history, options);
+
+AgentLog.PrintSteps(response);
+Console.WriteLine($"Alfred: {response.Text}");
+```
+
+Кодът има четири части:
+
+1. **Моделът.** `OllamaApiClient` е връзката с локалния модел, достъпна през интерфейса `IChatClient`. Той заема мястото на нашия `Ollama.cs`.
+2. **Agent-ът.** `UseFunctionInvocation()` обвива модела и добавя цикъла Thought → Action → Observation. Когато моделът поиска tool, библиотеката го извиква, връща резултата и пита модела отново, докато той не даде финален отговор. За да не се върти безкрайно, цикълът има лимит от 40 обиколки на заявка.
+3. **Tools.** `AIFunctionFactory.Create` чете името на метода, атрибутите `[Description]` и типовете на параметрите и ги подава на модела.
+4. **Разговорът.** `history` е списъкът от messages: system prompt-ът и един въпрос. `GetResponseAsync` го изпраща на Agent-а и връща отговора.
+
+Редът `AgentLog.PrintSteps(response)` още не се компилира, защото този метод не съществува. Ще го напишем в следващата стъпка.
+
+### 4. Покажи стъпките на цикъла
+
+Библиотеката изпълнява целия цикъл вътре в `GetResponseAsync`. За да видим какво се е случило, ще отпечатаме стъпките, през които Agent-ът е минал. Създай файл `AgentLog.cs`:
+
+```csharp title="AgentLog.cs"
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+
+public static class AgentLog
+{
+    public static void PrintSteps(ChatResponse response)
+    {
+        foreach (AIContent content in response.Messages.SelectMany(m => m.Contents))
+        {
+            switch (content)
+            {
+                case TextReasoningContent thought:
+                    Console.WriteLine($"  Thought: {thought.Text}");
+                    break;
+                case FunctionCallContent call:
+                    string arguments = JsonSerializer.Serialize(call.Arguments);
+                    Console.WriteLine($"  Action: {call.Name}({arguments})");
+                    break;
+                case FunctionResultContent result:
+                    Console.WriteLine($"  Observation: {result.Result}");
+                    break;
+            }
+        }
+    }
+}
+```
+
+`response.Messages` съдържа всичко, което Agent-ът е произвел по пътя към отговора. Всяка стъпка от цикъла идва като отделен .NET тип:
+
+| Стъпка | Тип в Microsoft.Extensions.AI |
+| --- | --- |
+| Thought | `TextReasoningContent` |
+| Action | `FunctionCallContent` |
+| Observation | `FunctionResultContent` |
+| Финален отговор | `TextContent` (достъпен и през `response.Text`) |
+
+### 5. Стартирай програмата
+
+В терминала, в папката `FirstAgent`, изпълни:
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+  Thought: The user is asking for the current time in Tokyo. I need to use the GetCurrentTime function with the appropriate timezone for Tokyo. Tokyo is in the Asia/Tokyo timezone.
+  Action: GetCurrentTime({"timezone":"Asia/Tokyo"})
+  Observation: The current time in Asia/Tokyo is 2026-11-12 20:32:31
+  Thought: The function returned the current time in Tokyo as 2026-11-12 20:32:31. I should present this information clearly to the user.
+Alfred: The current time in Tokyo is November 12, 2026 at 8:32:31 PM (20:32:31).
+```
+
+При теб часът и точните думи ще са различни, но стъпките ще са същите. Ето какво се случи вътре в `GetResponseAsync`:
+
+1. Библиотеката изпрати на модела разговора заедно с описанието на `GetCurrentTime`.
+2. Моделът поиска tool-а с аргумент `Asia/Tokyo`. Това е редът `Action`.
+3. Библиотеката извика истинския метод `AlfredTools.GetCurrentTime` и върна резултата на модела. Това е редът `Observation`.
+4. Моделът прочете резултата и написа финалния отговор.
+
+Това е същият цикъл от [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/), но в нашия код няма нито `stop`, нито парсване, нито `while`.
+
+:::note
+Редовете `Thought` се появяват, защото `qwen3.5` е модел, който мисли, преди да отговори (виж [Thoughts](/ai-agents/unit-1/thoughts/)). При модел без тази възможност ще видиш само Action и Observation.
+:::
+
+### 6. Превърни го в разговор
+
+Засега Alfred отговаря на един въпрос, записан в кода. В `Program.cs` замени всичко от реда `List<ChatMessage> history` надолу със следното:
+
+```csharp
 List<ChatMessage> history = [new(ChatRole.System, SystemPrompt)];
 
 Console.WriteLine("Alfred is ready. Ask a question (or press Enter to exit).");
@@ -115,37 +217,14 @@ while (true)
     ChatResponse response = await agent.GetResponseAsync(history, options);
     history.AddMessages(response);
 
-    foreach (AIContent content in response.Messages.SelectMany(m => m.Contents))
-    {
-        switch (content)
-        {
-            case TextReasoningContent thought:
-                Console.WriteLine($"  Thought: {thought.Text}");
-                break;
-            case FunctionCallContent call:
-                string arguments = JsonSerializer.Serialize(call.Arguments);
-                Console.WriteLine($"  Action: {call.Name}({arguments})");
-                break;
-            case FunctionResultContent result:
-                Console.WriteLine($"  Observation: {result.Result}");
-                break;
-        }
-    }
-
+    AgentLog.PrintSteps(response);
     Console.WriteLine($"Alfred: {response.Text}");
 }
 ```
 
-Кодът има четири части:
+Този `while` не е цикълът на Agent-а. Той само чете въпроси от конзолата. Важните редове са двата с `history`: моделът не помни нищо между заявките, затова добавяме в списъка всеки въпрос и всичко, което Agent-ът е отговорил.
 
-1. **Моделът.** `OllamaApiClient` е връзката с локалния модел, достъпна през интерфейса `IChatClient`.
-2. **Agent-ът.** `UseFunctionInvocation()` обвива модела и добавя цикъла Thought → Action → Observation. Когато моделът поиска tool, библиотеката го извиква, връща резултата и пита модела отново, докато той не даде финален отговор. За да не се върти безкрайно, цикълът има лимит от 40 обиколки на заявка.
-3. **Tools.** `AIFunctionFactory.Create` чете името на метода, атрибутите `[Description]` и типовете на параметрите и ги подава на модела.
-4. **Чат цикълът.** Пазим целия разговор в `history`, защото моделът не помни нищо между заявките. След всеки отговор отпечатваме стъпките, през които Agent-ът е минал.
-
-### 4. Стартиране
-
-Изпълни `dotnet run` и попитай Alfred колко е часът в Токио:
+Изпълни `dotnet run` и задай на Alfred три въпроса:
 
 ```text wrap
 Alfred is ready. Ask a question (or press Enter to exit).
@@ -153,31 +232,26 @@ Alfred is ready. Ask a question (or press Enter to exit).
 You: What time is it in Tokyo right now?
   Thought: The user is asking for the current time in Tokyo. I need to use the GetCurrentTime function with the appropriate timezone for Tokyo. Tokyo is in the Asia/Tokyo timezone.
   Action: GetCurrentTime({"timezone":"Asia/Tokyo"})
-  Observation: The current time in Asia/Tokyo is 2026-11-12 00:11:11
-  Thought: The function returned the current time in Tokyo as 2026-11-12 00:11:11. I should present this information clearly to the user.
-Alfred: The current time in Tokyo is November 12, 2026 at 00:11:11 (midnight and 11 minutes past).
+  Observation: The current time in Asia/Tokyo is 2026-11-12 20:33:16
+  Thought: The function returned the current time in Tokyo. I should present this information clearly to the user.
+Alfred: The current time in Tokyo is 8:33 PM on November 12, 2026 (20:33:16).
+
+You: And in Sofia?
+  Thought: The user is asking for the current time in Sofia. I need to use the GetCurrentTime function with the timezone "Europe/Sofia" since Sofia is in Bulgaria which uses the Europe/Sofia timezone.
+  Action: GetCurrentTime({"timezone":"Europe/Sofia"})
+  Observation: The current time in Europe/Sofia is 2026-11-12 13:33:43
+  Thought: The function returned the current time in Sofia as 2026-11-12 13:33:43. I should present this information clearly to the user, converting it to a more readable format if needed.
+Alfred: The current time in Sofia is 1:33 PM on November 12, 2026 (13:33:43).
 
 You: Hello, who are you?
-  Thought: The user is asking me who I am. This is a straightforward question that doesn't require any tool usage. I should respond politely as Alfred, the helpful AI assistant.
-Alfred: Hello! I'm Alfred, your helpful and polite AI assistant. I'm here to help you with various tasks like checking times in different timezones, answering questions, and assisting with information you need. How can I help you today?
+  Thought: The user is asking me who I am. I should introduce myself as Alfred, a helpful and polite AI assistant. This doesn't require any tool calls - it's just a conversational response.
+Alfred: Hello! I'm Alfred, your helpful and polite AI assistant. How can I help you today?
 ```
 
-При теб часът и точните думи ще са различни, но стъпките ще са същите.
+Обърни внимание на две неща:
 
-Ето го целият цикъл, този път без нито един ред ръчно парсване. Всяка стъпка идва от библиотеката като отделен .NET тип:
-
-| Стъпка | Тип в Microsoft.Extensions.AI |
-| --- | --- |
-| Thought | `TextReasoningContent` |
-| Action | `FunctionCallContent` |
-| Observation | `FunctionResultContent` |
-| Финален отговор | `TextContent` (достъпен и през `response.Text`) |
-
-Обърни внимание на втория въпрос. За него не е нужен tool, затова Alfred отговаря директно, без Action. Моделът сам преценява кога да използва tools.
-
-:::note
-Редовете `Thought` се появяват, защото `qwen3.5` е модел, който мисли, преди да отговори (виж [Thoughts](/ai-agents/unit-1/thoughts/)). При модел без тази възможност ще видиш само Action и Observation.
-:::
+- **Вторият въпрос е само „And in Sofia?“.** Alfred го разбира, защото заедно с него получава целия разговор от `history`.
+- **За третия въпрос не е нужен tool**, затова Alfred отговаря директно, без Action. Моделът сам преценява кога да използва tools.
 
 ## Твой ред
 

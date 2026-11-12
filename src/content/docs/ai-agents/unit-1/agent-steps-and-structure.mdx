@@ -1,6 +1,6 @@
 ---
 title: Разбиране на AI Agents чрез цикъла Thought-Action-Observation
-description: Пълният работен процес на AI Agent - цикълът Thought → Action → Observation, илюстриран с Alfred, weather Agent-ът.
+description: Пълният работен процес на един AI Agent - цикълът Thought → Action → Observation, проследен стъпка по стъпка с Alfred, weather Agent-а.
 ---
 
 import CycleDiagram from '../../../../components/CycleDiagram.astro';
@@ -13,49 +13,55 @@ import UnitProgress from '../../../../components/UnitProgress.astro';
 - **Agent е система, която може да разсъждава (reason), да планира и да взаимодейства със средата си.**
 - **Tools се предоставят на модела като текстово описание в system prompt-а.**
 
-В тази секция ще ги съберем в едно и ще разгледаме **пълния работен процес на един Agent**: цикъла Thought-Action-Observation. В следващите три секции ще минем през всяка от стъпките поотделно.
+В тази секция ще ги съберем в едно и ще разгледаме **пълния работен процес на един Agent**: цикъла Thought-Action-Observation. В следващите три секции ще минем през всяка стъпка поотделно.
 
 ## Трите стъпки
 
 Работата на един Agent се състои от три стъпки, които се повтарят:
 
-1. **Thought (мисъл):** LLM-ът решава каква да бъде следващата стъпка.
-2. **Action (действие):** Agent-ът извиква tool със съответните аргументи.
-3. **Observation (наблюдение):** резултатът от tool-а се връща на модела, който го осмисля.
+| Стъпка | Кой я прави | Какво се случва |
+| --- | --- | --- |
+| **Thought** (мисъл) | Моделът | Обмисля ситуацията и решава каква да бъде следващата стъпка. |
+| **Action** (действие) | Моделът и кодът на Agent-а | Моделът написва кой tool иска и с какви аргументи, а кодът го изпълнява. |
+| **Observation** (наблюдение) | Кодът на Agent-а | Връща резултата от tool-а на модела. |
 
 <CycleDiagram />
 
 ## Цикълът като код
 
-Трите стъпки се повтарят, докато задачата не бъде решена. За програмист това е добре познато: **`while` цикъл**. Ето го като скица на C# (това не е работещ код, а само идеята):
+Трите стъпки се повтарят, докато задачата не бъде решена. За програмист това е добре познато: **`while` цикъл**. Ето го като скица на C#:
 
 ```csharp
 while (true)
 {
-    string reply = AskModel(messages);
+    string output = AskModel(messages);
 
-    if (IsFinalAnswer(reply))
+    if (IsFinalAnswer(output))
     {
-        return reply;
+        break;
     }
 
-    string observation = RunTool(reply);
+    string observation = RunTool(output);
     messages.Add(observation);
 }
 ```
 
+Това е само скица, а не програма за изпълнение: методите `AskModel`, `IsFinalAnswer` и `RunTool` още не съществуват. Ще ги напишем наистина в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/). Засега е важно само кой ред на коя стъпка отговаря:
+
 | Ред от скицата | Стъпка |
 | --- | --- |
 | `AskModel(messages)` | **Thought:** моделът чете целия разговор и решава какво следва. |
-| `RunTool(reply)` | **Action:** нашият код изпълнява tool-а, който моделът е поискал. |
+| `RunTool(output)` | **Action:** кодът изпълнява tool-а, който моделът е поискал. |
 | `messages.Add(observation)` | **Observation:** резултатът се добавя към разговора за следващата обиколка. |
+| `IsFinalAnswer(output)` | Край: моделът е готов с отговора и цикълът спира. |
 
 ## Правилата са в system prompt-а
 
-Откъде моделът знае, че трябва да работи по този начин? От system prompt-а. Освен описанието на tools, там записваме и самите правила на цикъла:
+Откъде моделът знае, че трябва да работи така? От system prompt-а. Освен описанието на tools, там записваме и правилата на цикъла:
 
 ```text wrap
-You are an AI assistant designed to help users efficiently and accurately. Your primary goal is to provide helpful, precise, and clear responses.
+You are an AI assistant designed to help users efficiently and accurately.
+Your primary goal is to provide helpful, precise, and clear responses.
 
 You have access to the following tools:
 Tool Name: GetWeather, Description: Get the current weather in a given location., Arguments: location: string, Outputs: string
@@ -65,11 +71,11 @@ You should think step by step in order to fulfill the objective with a reasoning
 You should first reflect on the current situation using `Thought: {your_thoughts}`, then (if necessary) call a tool with the proper JSON formatting `Action: {JSON_BLOB}`, or print your final answer starting with the prefix `Final Answer:`.
 ```
 
-В този system prompt има три неща:
+В този system prompt има три части:
 
-- **Поведението на Agent-а** (първият абзац).
+- **Поведението на Agent-а** (първите два реда).
 - **Tools, до които той има достъп**, описани както в предишната секция.
-- **Цикълът Thought-Action-Observation**, записан като инструкции към модела.
+- **Правилата на цикъла** (последните два абзаца): първо `Thought`, после `Action` или `Final Answer`.
 
 ## Alfred, weather Agent-ът
 
@@ -79,7 +85,7 @@ You should first reflect on the current situation using `Thought: {your_thoughts
 
 ### 1. Thought
 
-Alfred първо разсъждава какво му трябва:
+Моделът първо разсъждава какво му трябва:
 
 *„Потребителят иска актуална информация за времето в Ню Йорк. Имам tool, който извлича данни за времето. Първо трябва да го извикам.“*
 
@@ -87,32 +93,32 @@ Alfred първо разсъждава какво му трябва:
 
 ### 2. Action
 
-Alfred знае за `GetWeather` от system prompt-а, затова подготвя извикване във формат JSON:
+Моделът знае за `GetWeather` от system prompt-а и написва извикването му във формата, който сме му задали:
 
 ```text
 Thought: I need to check the current weather for New York.
 Action: {"action": "GetWeather", "action_input": {"location": "New York"}}
 ```
 
-Един Action казва две неща: **кой tool** да бъде извикан и **с какви аргументи**. Самото извикване го прави кодът на Agent-а, а не моделът.
+Един Action казва две неща: **кой tool** да бъде извикан и **с какви аргументи**. Моделът само го написва. Самото извикване прави кодът на Agent-а.
 
 ![Alfred извиква tool-а](../../../../assets/course/unit1/alfred-agent-2.jpg)
 
 ### 3. Observation
 
-Tool-ът се изпълнява и връща резултат:
+Кодът на Agent-а изпълнява `GetWeather` и добавя резултата към разговора:
 
 ```text
 Observation: Current weather in New York: partly cloudy, 15°C, 60% humidity.
 ```
 
-Този текст се добавя към разговора. Така моделът получава обратна връзка от реалния свят: дали action-ът е успял и какви са данните.
+Този ред не е написан от модела. Той е обратната връзка от реалния свят: показва дали action-ът е успял и какви са данните.
 
 ![Alfred получава резултата](../../../../assets/course/unit1/alfred-agent-3.jpg)
 
 ### 4. Нов Thought
 
-С този Observation Alfred преценява ситуацията отново:
+Моделът прочита разговора отново, вече с новия Observation, и преценява ситуацията:
 
 *„Вече имам данните за времето в Ню Йорк. Мога да отговоря на потребителя.“*
 
@@ -120,7 +126,7 @@ Observation: Current weather in New York: partly cloudy, 15°C, 60% humidity.
 
 ### 5. Финален отговор
 
-Alfred пише отговора във формата, който сме му задали, и цикълът приключва:
+Моделът написва отговора във формата, който сме му задали, и цикълът приключва:
 
 ```text wrap
 Thought: I have the weather data now.
