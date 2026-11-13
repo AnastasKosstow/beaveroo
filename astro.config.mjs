@@ -4,7 +4,8 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   integrations: [
     starlight({
-      title: 'Curious Otter',
+      title: 'Beaveroo',
+      favicon: '/favicon.svg?v=beaver',
       description:
         'AI Agents Course на български с C# примери — неофициална адаптация на Hugging Face Agents Course.',
 
