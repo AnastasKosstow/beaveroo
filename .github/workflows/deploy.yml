@@ -1,5 +1,5 @@
 
-name: Deploy Curious Otter
+name: Deploy Beaveroo
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: curious-otter-production
+  group: beaveroo-production
   cancel-in-progress: false
 
 jobs:
