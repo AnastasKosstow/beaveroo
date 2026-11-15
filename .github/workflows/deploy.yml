@@ -1,5 +1,5 @@
 
-name: Deploy Beaveroo
+name: Deployment
 
 on:
   push:
