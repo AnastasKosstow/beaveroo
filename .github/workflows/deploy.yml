@@ -34,7 +34,7 @@ jobs:
       - name: Build website
         run: npm run build
 
-      - name: Deploy to SuperHosting
+      - name: Deploy to server
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_SERVER }}
