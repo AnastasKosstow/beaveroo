@@ -1,0 +1,121 @@
+---
+title: Защо Microsoft Agent Framework?
+description: Какво е Microsoft Agent Framework, откъде идва, от какви части се състои и кога е добър избор - Agents срещу Workflows и връзката с Microsoft.Extensions.AI.
+---
+
+В този урок няма код. Ще видим какво е Microsoft Agent Framework и кога си струва да го ползваш. Писането започва от следващия урок.
+
+## Какво е Microsoft Agent Framework?
+
+**Microsoft Agent Framework** е framework с отворен код за изграждане на AI Agents и multi-agent системи. Има версии за .NET и за Python, както и preview версия за Go. Ние ще използваме тази за .NET.
+
+Както научи в Unit 1, Agent е програма, която използва LLM, за да мисли (Thought), да действа чрез tools (Action) и да наблюдава резултата (Observation). Framework-ът ти дава готови части за всичко около този цикъл, така че да пишеш само това, което е специфично за твоята задача.
+
+### Откъде идва
+
+Преди него Microsoft имаше две отделни библиотеки за Agents:
+
+- **Semantic Kernel**: библиотека за production приложения, със силна поддръжка на много модели, филтри и телеметрия.
+- **AutoGen**: изследователски проект с прости абстракции за един и за много Agents.
+
+Agent Framework е техният общ наследник, създаден от същите екипи. Той взима простотата на AutoGen и production възможностите на Semantic Kernel и добавя нещо ново: **Workflows**, при които ти определяш реда, в който работят няколко Agents.
+
+### Стъпва върху това, което вече знаеш
+
+Agent Framework не започва от нулата. Той е изграден върху `Microsoft.Extensions.AI`, библиотеката от [последния урок на Unit 1](/ai-agents/unit-1/tutorial/):
+
+```text
+Твоето приложение
+        │
+        ▼
+Microsoft Agent Framework     AIAgent, AgentSession, middleware, Workflows
+        │
+        ▼
+Microsoft.Extensions.AI       IChatClient, ChatMessage, AIFunctionFactory
+        │
+        ▼
+Моделът                       Ollama, OpenAI, Azure OpenAI, Anthropic...
+```
+
+Затова три неща от Unit 1 се пренасят без промяна:
+
+- **`IChatClient`** остава връзката с модела. Същият `OllamaApiClient` работи и тук.
+- **Tools** остават C# методи с атрибута `[Description]`, превърнати в tools с `AIFunctionFactory.Create`.
+- **Messages** остават от типа `ChatMessage`, със същите роли `system`, `user` и `assistant`.
+
+## От какво се състои
+
+Пет неща ще срещаш във всеки урок оттук нататък:
+
+| Понятие | Какво е | Урок |
+| --- | --- | --- |
+| `AIAgent` | Самият Agent: модел, инструкции и tools, събрани в един обект. | [Първият ти Agent](/ai-agents/unit-2/agent-framework/first-agent/) |
+| Tools | Функциите, които Agent-ът може да извиква. | [Tools](/ai-agents/unit-2/agent-framework/tools/) |
+| `AgentSession` | Паметта на един разговор. | [Sessions](/ai-agents/unit-2/agent-framework/sessions/) |
+| Middleware | Код, който се изпълнява около всяка стъпка на Agent-а: за наблюдение, проверки и одобрение. | [Middleware](/ai-agents/unit-2/agent-framework/middleware/) |
+| `Workflow` | Граф от стъпки (функции или Agents) с ясно зададен ред. | [Workflows](/ai-agents/unit-2/agent-framework/workflows/) |
+
+Ако си спомняш списъка от [въведението на Unit 2](/ai-agents/unit-2/introduction/) с нещата, които един framework трябва да предлага, това са точно те: LLM engine, tools, parser, system prompt, памет и овладяване на грешките.
+
+## Какво се променя за теб
+
+- **Малко код.** Agent се създава с един ред върху всеки `IChatClient`. Цикълът Thought → Action → Observation е включен и не се настройва отделно.
+- **Работи с всеки модел.** Ollama, OpenAI, Azure OpenAI, Anthropic, Microsoft Foundry: кодът на Agent-а е един и същ, сменя се само клиентът. Ако някой ден преминеш от локален модел към облачен, променяш един ред.
+- **Памет.** `AgentSession` пази разговора и може да се запише като JSON, за да продължи по-късно.
+- **Контрол.** С middleware виждаш и можеш да спреш всяко извикване на модела и на tool, без да пипаш кода на самия Agent.
+- **Няколко Agents.** Един Agent може да стане tool на друг. С Workflows свързваш няколко Agents и обикновени функции в ред, който си задал ти.
+- **Проследяване.** С OpenTelemetry виждаш всяка стъпка, а за няколко Agents има готови шаблони.
+
+## Agent или Workflow?
+
+Преди да избереш, питай се **кой решава каква е следващата стъпка**:
+
+- При **Agent** решава моделът. Ти му даваш цел и tools, а той сам избира какво да направи и в какъв ред.
+- При **Workflow** решаваш ти. Стъпките и връзките между тях са записани в кода, а моделът работи само вътре в отделните стъпки.
+
+| Използвай Agent, когато… | Използвай Workflow, когато… |
+| --- | --- |
+| Задачата е отворена или е разговор. | Процесът има ясно определени стъпки. |
+| Искаш моделът сам да избира tools и да планира. | Искаш пълен контрол върху реда на изпълнение. |
+| Един Agent с няколко tools е достатъчен. | Няколко Agents или функции трябва да работят съгласувано. |
+
+Agent-ът ти дава **свобода**, а Workflow-ът **предвидимост**. Двете не се изключват: една стъпка в Workflow може да бъде Agent, а и цял Workflow може да се използва като Agent. Ще направим и двете в [урока за Workflows](/ai-agents/unit-2/agent-framework/workflows/).
+
+:::tip[Правилото на документацията]
+Официалната документация дава едно просто правило: *ако можеш да решиш задачата с обикновена функция, напиши функция, а не AI Agent.* Agent-ът е по-бавен, по-скъп и по-непредвидим от кода. Използвай го там, където наистина ти трябва разбиране на език или избор според ситуацията.
+:::
+
+## Кога да го използваш?
+
+Ползваш го, когато Agent-ът трябва да помни, да вика няколко tools или да работи с други Agents, и когато искаш това да остане в същото .NET приложение.
+
+Не ти трябва за едно извикване на модел или за верига от prompts. Тогава стига `IChatClient` от `Microsoft.Extensions.AI`, както видя в Unit 1.
+
+## Как стои спрямо frameworks от оригиналния курс
+
+Оригиналният курс на Hugging Face разглежда три Python frameworks. Ако ги срещнеш в статии или примери, ето на какво съответстват тук:
+
+| В оригиналния курс | Основна идея | В Agent Framework |
+| --- | --- | --- |
+| smolagents | Лек framework за Agents, които извикват tools. | `AIAgent` с tools |
+| LlamaIndex | Agents, tools и workflows върху твои данни. | `AIAgent` и готовите orchestrations за няколко Agents |
+| LangGraph | Граф от стъпки с изричен контрол върху хода. | `Workflow`, изграден с `WorkflowBuilder` |
+
+Има и една разлика в подхода. smolagents залага на **Code Agents**, при които моделът пише Python код вместо JSON (виж [Actions](/ai-agents/unit-1/actions/)). В Agent Framework един Agent по подразбиране използва **function calling**: моделът връща извикването на tool като структурирани данни. Това е същият подход, който използва в Unit 1.
+
+## С кои модели работи
+
+Agent Framework приема всеки `IChatClient`. Ето някои от поддържаните доставчици:
+
+| Доставчик | Къде работи моделът |
+| --- | --- |
+| Ollama | На твоя компютър. Това използваме в курса. |
+| OpenAI | В облака на OpenAI. |
+| Azure OpenAI и Microsoft Foundry | В облака на Microsoft. |
+| Anthropic | В облака на Anthropic. |
+
+Каквото и да избереш, кодът на Agent-а остава същият. Сменя се само редът, който създава клиента.
+
+---
+
+Вече знаеш какво е Agent Framework, от какво се състои и кога да го използваш. Време е да го видиш в действие: в следващия урок ще създадеш първия си Agent с него.

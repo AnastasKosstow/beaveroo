@@ -1,0 +1,207 @@
+---
+title: Your First Agent with Agent Framework
+description: We create the PartyPlanner project, connect to the local model in Ollama and turn an IChatClient into an Agent with AsAIAgent. We compare the code with the one from Unit 1 and try streaming.
+---
+
+In the last lesson of Unit 1 you built Alfred with `Microsoft.Extensions.AI`. Now we will create him again, this time with Microsoft Agent Framework, and see what changes.
+
+In this lesson Alfred has no tools yet. The goal is to get to a working Agent with as little code as possible and to understand every line of it. The project you create here will be used until the end of the module.
+
+## Setup
+
+We will need Ollama and the `qwen3.5:9b` model from Unit 1. Make sure Ollama is running before you start.
+
+### 1. Create the project
+
+Open a terminal and run:
+
+```bash
+dotnet new console -n PartyPlanner
+cd PartyPlanner
+dotnet add package Microsoft.Agents.AI
+dotnet add package OllamaSharp
+```
+
+The first two commands create the project, and the other two add the two NuGet packages:
+
+- **`Microsoft.Agents.AI`** is Agent Framework itself. It brings `Microsoft.Extensions.AI` along with it, so we don't add that separately.
+- **`OllamaSharp`** is the same Ollama client you used in Unit 1.
+
+Open the `PartyPlanner` folder in your editor.
+
+:::note[Versions]
+The examples in this module were run with `Microsoft.Agents.AI` 1.28 and `OllamaSharp` 5.5. If a newer version gets installed on your machine and something does not compile, check the [documentation](https://learn.microsoft.com/agent-framework/overview/) for changes.
+:::
+
+### 2. Connect to the model
+
+All the Agents in this module will use the same local model. So we will describe the connection to it once, in a separate file. Create a file `LocalModel.cs`:
+
+```csharp title="LocalModel.cs"
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+using OllamaSharp.Models;
+
+public static class LocalModel
+{
+    private const string Model = "qwen3.5:9b";
+
+    public static IChatClient Create()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromMinutes(5),
+        };
+
+        return new ChatClientBuilder(new OllamaApiClient(http, Model))
+            .ConfigureOptions(options =>
+            {
+                options.Temperature = 0;
+                options.AddOllamaOption(OllamaOption.Think, false);
+            })
+            .Build();
+    }
+}
+```
+
+The `Create` method returns an `IChatClient`, the same interface from Unit 1. There is nothing from Agent Framework in it. It is only the connection to the model, with three settings:
+
+- **`Timeout`**: by default `HttpClient` gives up if it gets no response within 100 seconds. The local model is sometimes slower than that, especially on the first request, when Ollama loads it into memory. So we give it 5 minutes.
+- **`Temperature = 0`**: the model always picks the most likely token, so its answers are as repeatable as possible. We did the same in Unit 1.
+- **`Think = false`**: turns off the mode in which the model "thinks out loud" before answering.
+
+`ConfigureOptions` applies the last two settings to every request, so we don't have to repeat them for each Agent.
+
+:::note[Why we turn thinking off]
+In Unit 1 you saw the thoughts of `qwen3.5` as `Thought` lines. They are useful, but they cost time. On the computer these lessons were written on, the same short question took **155 seconds** with thinking on and **7 seconds** without it.
+
+In this module one question often leads to several calls to the model, so we keep thinking off. If your computer is powerful, you can delete the line with `OllamaOption.Think` and compare.
+:::
+
+If you use a different model, change its name in the `Model` constant.
+
+## Create Alfred
+
+### 3. Write the Agent
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions: "You are Alfred, the butler of Wayne Manor. You are polite and concise.");
+
+AgentResponse response = await alfred.RunAsync(
+    "We are hosting a party at the manor. Suggest a theme in one sentence.");
+
+Console.WriteLine(response.Text);
+```
+
+That is the whole Agent. The code has three parts:
+
+1. **The model.** `LocalModel.Create()` returns the connection to the local model as an `IChatClient`.
+2. **The Agent.** `AsAIAgent` turns that `IChatClient` into an `AIAgent`. We pass it two things:
+   - `name` is the Agent's name. For now it is just a label, but we will need it once we have several Agents.
+   - `instructions` is the system prompt: the text that defines how the model should behave (see [Messages and Special Tokens](/en/ai-agents/unit-1/messages-and-special-tokens/)).
+3. **The run.** `RunAsync` sends the question to the Agent and returns an `AgentResponse`. Its `Text` property holds the answer as text.
+
+:::tip[If the code does not compile]
+`AsAIAgent` is an extension method that lives in `Microsoft.Extensions.AI`, while the `AIAgent` and `AgentResponse` types are in `Microsoft.Agents.AI`. You need both `using` lines. If you leave out `using Microsoft.Extensions.AI;`, the compiler will say that `AsAIAgent` does not exist.
+:::
+
+### 4. Start the program
+
+In the terminal, in the `PartyPlanner` folder, run:
+
+```bash
+dotnet run
+```
+
+output:
+
+```text wrap
+Given the eclectic mix of guests we anticipate, I propose a "Gothic Noir" theme to ensure an atmosphere of sophisticated mystery that complements the Manor's architecture perfectly.
+```
+
+On your machine the words may differ a little, but you will get one polite sentence suggesting a theme. Here is what happened:
+
+1. `RunAsync` assembled two messages: `instructions` as the `system` message and your question as the `user` message.
+2. The Agent sent them to the model through the `IChatClient`.
+3. The model returned an answer, and the Agent wrapped it in an `AgentResponse`.
+
+You wrote neither a `ChatMessage` nor a `history` list. The framework created them for you.
+
+### 5. Get the answer in pieces
+
+`RunAsync` waits for the whole answer and only then returns it. With a longer text that means staring at an empty screen. Chat applications solve this with **streaming**: they show the text while the model is writing it.
+
+In `Program.cs` replace everything below the creation of `alfred` with the following:
+
+```csharp
+await foreach (AgentResponseUpdate update in alfred.RunStreamingAsync(
+    "Write a two-sentence welcome toast for the guests."))
+{
+    Console.Write(update.Text);
+}
+
+Console.WriteLine();
+```
+
+Run `dotnet run`:
+
+```text wrap
+Welcome, everyone, to this evening's gathering at Wayne Manor. Please, make yourselves comfortable as we celebrate together.
+```
+
+This time the text is written out word by word. `RunStreamingAsync` returns a sequence of small pieces (`AgentResponseUpdate`), and `await foreach` handles them one by one, the moment they arrive. We use `Console.Write` instead of `Console.WriteLine` so that each piece does not start on a new line.
+
+Both methods do the same job:
+
+| Method | What it returns | When to use it |
+| --- | --- | --- |
+| `RunAsync` | The whole answer at once, as an `AgentResponse`. | When your program processes the answer. |
+| `RunStreamingAsync` | The answer in pieces, as `AgentResponseUpdate`. | When a person is waiting in front of the screen. |
+
+## What changed compared to Unit 1
+
+Compare the code with the one from the lesson [Let's Create Our First Agent Using .NET](/en/ai-agents/unit-1/tutorial/). Back then we used only `Microsoft.Extensions.AI` and assembled the Agent from parts. Now the same parts have their own place:
+
+| In Unit 1 with `Microsoft.Extensions.AI` | With Agent Framework |
+| --- | --- |
+| `ChatClientBuilder` with `UseFunctionInvocation()` | Included in `AsAIAgent`. |
+| The system prompt as the first message in `history` | The `instructions` parameter. |
+| `ChatOptions.Tools`, passed with every request | The `tools` parameter, set once at creation. |
+| `GetResponseAsync(history, options)` | `RunAsync("question")` |
+| `ChatResponse` | `AgentResponse` |
+| The `history` list you maintain yourself | `AgentSession` |
+
+The last rows of the table are the topics of the next lessons: `tools` in [Tools](/en/ai-agents/unit-2/agent-framework/tools/) and `AgentSession` in [Sessions](/en/ai-agents/unit-2/agent-framework/sessions/).
+
+There is a more important difference too. In Unit 1 the "Agent" was your code: a client, options and a list that you kept together. Here the Agent is **one object**, an `AIAgent`. You can pass it to a method, wrap it with middleware, give it to another Agent as a tool, or put it as a step in a Workflow. We will do all of that in the next lessons.
+
+## Experiment
+
+Try these changes and run `dotnet run` after each one.
+
+**Change the character.** Replace `instructions` with a different character, for example:
+
+```csharp
+instructions: "You are Alfred, a grumpy butler who thinks parties are a waste of time.");
+```
+
+The tone of the answer changes without you touching anything else. Just like in Unit 1, the system prompt defines the behavior.
+
+**Change the task.** Ask Alfred for something else for the party: a list of five games for the guests, a short note for the neighbors, or an hour-by-hour plan for the evening. No new code is needed. You only change the text you pass to the Agent.
+
+## Summary
+
+- **`AsAIAgent`** turns any `IChatClient` into an `AIAgent`. You give it a name and `instructions`, which play the role of the system prompt.
+- **`RunAsync`** returns the whole answer as an `AgentResponse`, while **`RunStreamingAsync`** returns it in pieces as the model writes.
+- The Thought → Action → Observation cycle is built into the Agent and needs no separate setup.
+- The connection to the model is described in one place, `LocalModel.cs`, and every Agent in the module will use it.
+
+Alfred can talk now, but he still cannot do anything, and he does not remember what you asked him a moment ago. We will fix both in the next lessons. Before that, a short quiz awaits you.

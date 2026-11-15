@@ -1,0 +1,233 @@
+---
+title: Multi-Agent Systems
+description: We build a team of Agents with Microsoft Agent Framework - a manager who delegates tasks to specialists through AsAIFunction. Why several small Agents are often better than one big one.
+---
+
+So far Alfred has done everything alone. For one menu and one order that is perfectly enough. But the party is growing: someone has to think about the food, about the music, and soon about the invitations. If we give everything to a single Agent, it will have long instructions, many tools, and more and more reasons to get confused.
+
+People solve this problem with a team. We can do the same with Agents. In this lesson you will build a **multi-agent system**: Alfred becomes a manager who delegates tasks to two specialists.
+
+## Why more than one Agent?
+
+Remember how the model picks a tool: it reads the descriptions of all the tools and the instructions, and makes a judgment. The more of them there are, the harder the judgment gets. Splitting the work between several Agents helps in three ways:
+
+- **Focus.** Each specialist has short instructions and only its own tools. So it makes fewer mistakes.
+- **Separate context.** Each Agent holds its own conversation with the model. The specialist's steps do not fill up the manager's context. The manager only receives the final answer.
+- **Easy to change.** You can improve or replace one specialist without touching the others.
+
+There is a price too: more Agents mean **more calls to the model**, which means a slower answer. So a multi-agent system is not the first thing to reach for. Use it when a single Agent really starts to struggle.
+
+Here is the team we will build:
+
+```text
+Alfred (manager)
+├── Chef (food specialist)
+│   ├── SuggestMenu
+│   └── FindBestCatering
+└── DJ (music specialist)
+    └── SuggestPlaylist
+```
+
+Alfred has no tools for the party at all. He only has the two specialists, and they have the tools.
+
+## An Agent as a tool
+
+How does one Agent "ask" another? In Agent Framework the simplest way is to turn the specialist into a **tool** of the manager. One method does that: `AsAIFunction()`.
+
+```csharp
+AIFunction chefTool = chef.AsAIFunction();
+```
+
+To the manager, the resulting tool looks like any other:
+
+| Part of the tool | Where it comes from |
+| --- | --- |
+| Name | The specialist's `name` parameter, for example `Chef`. |
+| Description | The specialist's `description` parameter. |
+| Input | A single text parameter `query`: the task, written in words. |
+| Output | The text of the specialist's answer. |
+
+The manager does not even know that another Agent stands behind the tool. It sees a name, a description and a text input, exactly as with `SuggestMenu`. When it calls the tool, the framework runs the specialist with the given task and returns its answer as the Observation.
+
+That is why a new parameter appears here: **`description`**. It is important to tell it apart from `instructions`:
+
+| Parameter | Who reads it | What it is for |
+| --- | --- | --- |
+| `instructions` | The specialist's own model. | How to do its job. |
+| `description` | The manager's model. | When to turn to this specialist. |
+
+## Build Alfred's team
+
+We continue in the `PartyPlanner` project. You will need `LocalModel.cs` and `PartyTools.cs` from the previous lessons.
+
+### 1. Add a tool for the music
+
+The DJ needs a tool of its own. Add this method to the `PartyTools` class:
+
+```csharp title="PartyTools.cs"
+[Description("Suggests a playlist for a given party theme.")]
+public static string SuggestPlaylist(
+    [Description("The party theme. Allowed values: 'classic heroes', 'villain masquerade', 'futuristic gotham'.")]
+    string theme) => theme.ToLowerInvariant() switch
+{
+    "classic heroes" => "Orchestral film scores with triumphant brass.",
+    "villain masquerade" => "Dark tango, cabaret and mysterious waltzes.",
+    "futuristic gotham" => "Synthwave and neon electronic beats.",
+    _ => $"Unknown theme '{theme}'. Allowed values: 'classic heroes', 'villain masquerade', 'futuristic gotham'.",
+};
+```
+
+It follows the same rules as `SuggestMenu`: the allowed values are in the description, and for an unknown value it returns clear text.
+
+### 2. Show who calls whom
+
+In a system with several Agents, the most interesting part is who delegates work to whom. To see it, we will use function calling middleware from the [previous lesson](/en/ai-agents/unit-2/agent-framework/middleware/). Create a file `TeamTrace.cs`:
+
+```csharp title="TeamTrace.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class TeamTrace
+{
+    public static AIAgent WithTrace(this AIAgent agent) =>
+        agent.AsBuilder().Use(LogCall).Build();
+
+    private static async ValueTask<object?> LogCall(
+        AIAgent agent,
+        FunctionInvocationContext context,
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
+        CancellationToken cancellationToken)
+    {
+        string arguments = JsonSerializer.Serialize(context.Arguments);
+        Console.WriteLine($"  [{agent.Name}] calls {context.Function.Name}({arguments})");
+
+        return await next(context, cancellationToken);
+    }
+}
+```
+
+The class has two methods:
+
+- **`LogCall`** is middleware that prints the name of the Agent and the tool it calls. Then it continues with `next`, without changing anything.
+- **`WithTrace`** is a short way to add this middleware to an Agent. Instead of writing `AsBuilder().Use(...).Build()` three times, we will write `.WithTrace()`.
+
+This middleware has one more benefit. Running the team takes time, and its lines appear live, so you can see how far the work has got.
+
+### 3. Create the team
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+IChatClient model = LocalModel.Create();
+
+AIAgent chef = model
+    .AsAIAgent(
+        name: "Chef",
+        description: "Plans the food for an event: suggests a menu and finds a catering service.",
+        instructions:
+            "You are the chef of Wayne Manor. You plan the food for events. " +
+            "Use your tools and never invent their results. Answer in one or two sentences.",
+        tools:
+        [
+            AIFunctionFactory.Create(PartyTools.SuggestMenu),
+            AIFunctionFactory.Create(PartyTools.FindBestCatering),
+        ])
+    .WithTrace();
+
+AIAgent dj = model
+    .AsAIAgent(
+        name: "DJ",
+        description: "Plans the music for an event: suggests a playlist for the party theme.",
+        instructions:
+            "You are the DJ of Wayne Manor. You plan the music for events. " +
+            "Use your tools and never invent their results. Answer in one or two sentences.",
+        tools: [AIFunctionFactory.Create(PartyTools.SuggestPlaylist)])
+    .WithTrace();
+
+AIAgent alfred = model
+    .AsAIAgent(
+        name: "Alfred",
+        instructions:
+            "You are Alfred, the butler of Wayne Manor. You organise events with the help of your team. " +
+            "Ask the Chef about food and the DJ about music, then give the host one short summary.",
+        tools: [chef.AsAIFunction(), dj.AsAIFunction()])
+    .WithTrace();
+
+AgentResponse response = await alfred.RunAsync(
+    "We are hosting a formal villain masquerade. Plan the food and the music.");
+
+Console.WriteLine();
+Console.WriteLine($"Alfred: {response.Messages.Last().Text}");
+```
+
+The code creates three Agents on top of the same model:
+
+1. **`chef`** is in charge of the food. It has the two tools from the Tools lesson and a `description` that tells the manager what to turn to it for.
+2. **`dj`** is in charge of the music and has one tool.
+3. **`alfred`** is the manager. He has no tools for the party at all. His only tools are the two specialists, turned into tools with `AsAIFunction()`.
+
+All three share one `IChatClient`, that is, one and the same model. They differ only in their instructions and tools. A "specialist" does not mean a different model, it means a different role.
+
+The last line prints only the last message of Alfred's response, that is, his summary. The steps before it we will see from `TeamTrace`.
+
+### 4. Start the program
+
+```bash
+dotnet run
+```
+
+output:
+
+```text wrap
+  [Alfred] calls Chef({"query":"formal villain masquerade menu"})
+  [Chef] calls SuggestMenu({"occasion":"formal"})
+  [Chef] calls FindBestCatering({})
+  [Alfred] calls DJ({"query":"formal villain masquerade playlist"})
+  [DJ] calls SuggestPlaylist({"theme":"villain masquerade"})
+
+Alfred: Master Bruce, the arrangements for our formal villain masquerade are complete. Gotham Catering Co. will provide an exquisite three-course dinner with wine and dessert, while the DJ has curated a playlist of dark tangos, cabaret tunes, and mysterious waltzes to set the perfect sinister tone.
+```
+
+Be patient: this run involves several calls to the model, and on our machine it took close to two minutes. The lines appear one by one while the team is working.
+
+Follow them from top to bottom:
+
+1. Alfred received the question and turned to `Chef`. He phrased the task for it himself: `formal villain masquerade menu`.
+2. `Chef` is a separate Agent with its own loop. It asked for its two tools, received their results and wrote an answer.
+3. That answer came back to Alfred as an Observation.
+4. In the same way Alfred turned to `DJ`. The DJ picked the exact value `villain masquerade` out of the task and called its tool.
+5. With the two answers, Alfred wrote one summary for the host.
+
+## What the example shows
+
+- **The manager does not know how the work is done.** Alfred has no access to `SuggestMenu` and does not know it exists. He only knows there is a `Chef` who understands food.
+- **Tasks are handed over in words.** The specialist's input is plain text that the manager writes itself. So it matters that the manager's instructions say clearly whom to ask about what.
+- **Everyone has their own context.** The calls to `SuggestMenu` and `FindBestCatering` stayed in the `Chef`'s conversation. Only the finished answer reached Alfred.
+- **The model decides.** Nowhere in the code does it say "first the chef, then the DJ". Alfred chose for himself whom to ask and in what order.
+
+The manager picks the path itself, so you cannot be sure what it will be. When the order has to be the same every time, use a Workflow. That is the next lesson.
+
+## Your turn
+
+**Ask about only one thing.** Change the question to `What music fits a futuristic Gotham party?` and run `dotnet run`. On our machine a single line appeared in the trace:
+
+```text wrap
+  [Alfred] calls DJ({"query":"futuristic Gotham party"})
+```
+
+Alfred turned only to the DJ, because the question is only about music. But look at what is missing: a `[DJ] calls SuggestPlaylist` line. This time the DJ answered without calling its tool, despite the instruction not to invent results. Small local models sometimes do that. So the rules you really care about are enforced with code, for example with middleware, and not with instructions alone.
+
+**Add a third specialist.** Write a tool `SuggestDecoration` that returns a decoration idea for the theme, and an Agent `Decorator` that uses it. Do not forget three things: a `description` for the new Agent, `AsAIFunction()` in Alfred's list of tools, and one sentence in Alfred's instructions saying that he now has a decorator too.
+
+## Summary
+
+- In a **multi-agent system** the work is split between several Agents with different roles.
+- **`AsAIFunction()`** turns an Agent into a tool. The Agent's name and `description` become the name and description of the tool, and the input is a task written in words.
+- **`instructions`** tell the specialist how to work. **`description`** tells the manager when to turn to it.
+- Every Agent has **its own context**. The manager only sees the specialists' final answers.
+- More Agents mean **more calls to the model**. Use a team when a single Agent cannot cope.
+- Which specialist gets called is **decided by the model**.

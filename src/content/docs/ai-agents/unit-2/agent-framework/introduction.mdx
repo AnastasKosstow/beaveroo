@@ -1,0 +1,72 @@
+---
+title: Въведение в Microsoft Agent Framework
+description: Unit 2.1 представя Microsoft Agent Framework - какво ще изградиш, какво ти трябва и през кои теми минава модулът - Agents, tools, sessions, middleware, multi-agent системи и workflows.
+---
+
+Добре дошъл в този модул, в който ще се научиш да изграждаш Agents с **Microsoft Agent Framework**: framework-а с отворен код на Microsoft за Agents и multi-agent системи.
+
+В Unit 1 мина по дългия път. Първо написа Agent на ръка в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/), а после го изгради с [`Microsoft.Extensions.AI`](/ai-agents/unit-1/tutorial/). Библиотеката пое цикъла Thought → Action → Observation, но две неща останаха за теб: сам пазеше разговора в списъка `history` и сам се грижеше за грешките. За един въпрос и един tool това е достатъчно. Когато Agent-ът трябва да помни, да иска разрешение преди важно действие или да работи в екип с други Agents, ти трябва нещо повече.
+
+Това добавя Microsoft Agent Framework. Той стъпва върху `Microsoft.Extensions.AI`, така че наученото дотук остава в сила.
+
+## Преглед на модула
+
+Модулът минава през основните концепции на framework-а и ги показва с код, който изпълняваш на своя компютър. Двете му големи теми са:
+
+- **Agents**: един Agent, който мисли с LLM, използва tools, помни разговора и може да бъде наблюдаван и контролиран.
+- **Workflows**: няколко стъпки, функции или Agents, свързани в граф, в който ти определяш реда на изпълнение.
+
+В този Unit Alfred от Unit 1 се връща. Този път отвътре го задвижва Microsoft Agent Framework. Семейство Wayne 🦇 отсъства, а той трябва да организира парти в Wayne Manor: тема, меню, кетъринг, музика, покани и списък с гости. Ще го следим урок по урок.
+
+## Съдържание
+
+### 1️⃣ Защо Microsoft Agent Framework
+
+Agent Framework е един от многото frameworks за Agents. Оригиналният курс разглежда три за Python: smolagents, LlamaIndex и LangGraph. Тук ще видим откъде идва този и кога си струва да го ползваш.
+
+### 2️⃣ Първият ти Agent
+
+Ще създадеш проекта, с който ще работим през целия модул, и ще превърнеш локалния модел в Agent с един ред: `AsAIAgent`. Ще сравним кода с този от Unit 1, за да видиш какво точно поема framework-ът.
+
+### 3️⃣ Tools
+
+Както видя в Unit 1, tools са функциите, чрез които един Agent действа. Ще дадем на Alfred tools за менюто и кетъринга, ще видим как избира между тях и какво се случва, когато един tool се провали.
+
+### 4️⃣ Sessions
+
+Моделът не помни нищо между заявките. `AgentSession` пази разговора вместо теб. Ще превърнем Alfred в чат, а после ще запишем разговора във файл, за да продължи и след рестарт на програмата.
+
+### 5️⃣ Middleware
+
+Middleware е код, който се изпълнява около всяка стъпка на Agent-а. С него ще измерим колко време и tokens отнема един отговор и ще накараме Alfred да иска разрешение, преди да похарчи пари.
+
+### 6️⃣ Multi-Agent Systems
+
+Един Agent с много задачи лесно се обърква. Ще разделим работата между специалисти: готвач и DJ, които Alfred управлява като свои tools.
+
+### 7️⃣ Workflows
+
+Понякога не искаш Agent-ът да решава какво следва. С Workflows ти задаваш стъпките и връзките между тях. Ще изградим workflow, който сортира отговорите на поканите, и екип от двама Agents, които пишат покана един след друг.
+
+Между уроците има два кратки quiz-а, а накрая те очаква финален quiz за целия модул.
+
+## Какво ти трябва
+
+Същото като в Unit 1, нищо ново за инсталиране:
+
+- [.NET SDK](https://dotnet.microsoft.com/download) от [Unit 0](/ai-agents/unit-0/introduction/).
+- [Ollama](https://ollama.com/download) и моделът `qwen3.5:9b`, който изтегли в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/).
+
+Всичко отново работи на твоя компютър, без акаунти и API ключове.
+
+:::tip[Един проект за целия модул]
+В Unit 1 всеки урок имаше свой малък проект. Тук ще работим в един проект, `PartyPlanner`, и във всеки урок ще го надграждаме. Затова минавай уроците по ред.
+:::
+
+## Ресурси
+
+- [Документация на Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/overview/) - официалната документация с примери на C#, Python и Go.
+- [microsoft/agent-framework в GitHub](https://github.com/microsoft/agent-framework) - изходният код и много готови примери в папката `dotnet/samples`.
+- [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) - библиотеката, върху която стъпва framework-ът.
+
+Готов ли си? Да започнем с въпроса защо изобщо ни трябва framework. 🚀

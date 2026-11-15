@@ -8,7 +8,7 @@ export default defineConfig({
       title: 'Beaveroo',
       favicon: '/favicon.svg?v=beaver',
       description:
-        'AI Agents Course на български с C# примери — неофициална адаптация на Hugging Face Agents Course.',
+        'AI Agents Course на български със C# примери - неофициална адаптация на Hugging Face Agents Course.',
 
       defaultLocale: 'root',
       locales: {
@@ -156,6 +156,53 @@ export default defineConfig({
               translations: { en: 'Frameworks for AI Agents' },
               slug: 'ai-agents/unit-2/introduction',
             },
+          ],
+        },
+        {
+          label: 'Unit 2.1. Microsoft Agent Framework',
+          translations: { en: 'Unit 2.1. Microsoft Agent Framework' },
+          collapsed: true,
+          items: [
+            {
+              label: 'Въведение в Microsoft Agent Framework',
+              translations: { en: 'Introduction to Microsoft Agent Framework' },
+              slug: 'ai-agents/unit-2/agent-framework/introduction',
+            },
+            {
+              label: 'Защо Microsoft Agent Framework?',
+              translations: { en: 'Why use Microsoft Agent Framework?' },
+              slug: 'ai-agents/unit-2/agent-framework/why-agent-framework',
+            },
+            {
+              label: 'Първият ти Agent с Agent Framework',
+              translations: { en: 'Your First Agent with Agent Framework' },
+              slug: 'ai-agents/unit-2/agent-framework/first-agent',
+            },
+            { label: 'Quick Quiz 1', translations: { en: 'Quick Quiz 1' }, slug: 'ai-agents/unit-2/agent-framework/quiz1' },
+            { label: 'Tools', translations: { en: 'Tools' }, slug: 'ai-agents/unit-2/agent-framework/tools' },
+            {
+              label: 'Sessions: паметта на Agent-а',
+              translations: { en: "Sessions: the Agent's Memory" },
+              slug: 'ai-agents/unit-2/agent-framework/sessions',
+            },
+            {
+              label: 'Middleware: контрол над всяка стъпка',
+              translations: { en: 'Middleware: Control over Every Step' },
+              slug: 'ai-agents/unit-2/agent-framework/middleware',
+            },
+            { label: 'Quick Quiz 2', translations: { en: 'Quick Quiz 2' }, slug: 'ai-agents/unit-2/agent-framework/quiz2' },
+            {
+              label: 'Multi-Agent Systems',
+              translations: { en: 'Multi-Agent Systems' },
+              slug: 'ai-agents/unit-2/agent-framework/multi-agent-systems',
+            },
+            { label: 'Workflows', translations: { en: 'Workflows' }, slug: 'ai-agents/unit-2/agent-framework/workflows' },
+            {
+              label: 'Final Quiz за Unit 2.1',
+              translations: { en: 'Unit 2.1 Final Quiz' },
+              slug: 'ai-agents/unit-2/agent-framework/final-quiz',
+            },
+            { label: 'Заключение', translations: { en: 'Conclusion' }, slug: 'ai-agents/unit-2/agent-framework/conclusion' },
           ],
         },
       ],

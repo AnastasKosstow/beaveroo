@@ -1,0 +1,207 @@
+---
+title: Първият ти Agent с Agent Framework
+description: Създаваме проекта PartyPlanner, свързваме се с локалния модел в Ollama и превръщаме IChatClient в Agent с AsAIAgent. Сравняваме кода с този от Unit 1 и пробваме streaming.
+---
+
+В последния урок на Unit 1 изгради Alfred с `Microsoft.Extensions.AI`. Сега ще го създадем отново, този път с Microsoft Agent Framework, и ще видим какво се променя.
+
+В този урок Alfred още няма tools. Целта е да стигнеш до работещ Agent с възможно най-малко код и да разбереш всеки ред от него. Проектът, който създаваш тук, ще използваме до края на модула.
+
+## Подготовка
+
+Ще ни трябват Ollama и моделът `qwen3.5:9b` от Unit 1. Увери се, че Ollama работи, преди да започнеш.
+
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
+
+```bash
+dotnet new console -n PartyPlanner
+cd PartyPlanner
+dotnet add package Microsoft.Agents.AI
+dotnet add package OllamaSharp
+```
+
+Първите две команди създават проекта, а другите две добавят двата NuGet пакета:
+
+- **`Microsoft.Agents.AI`** е самият Agent Framework. Заедно с него идва и `Microsoft.Extensions.AI`, затова не я добавяме отделно.
+- **`OllamaSharp`** е същият клиент за Ollama, който използва в Unit 1.
+
+Отвори папката `PartyPlanner` в редактора си.
+
+:::note[Версии]
+Примерите в този модул са изпълнени с `Microsoft.Agents.AI` 1.28 и `OllamaSharp` 5.5. Ако при теб се инсталира по-нова версия и нещо не се компилира, виж [документацията](https://learn.microsoft.com/agent-framework/overview/) за промените.
+:::
+
+### 2. Свържи се с модела
+
+Всички Agents в този модул ще използват един и същ локален модел. Затова ще опишем връзката с него веднъж, в отделен файл. Създай файл `LocalModel.cs`:
+
+```csharp title="LocalModel.cs"
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+using OllamaSharp.Models;
+
+public static class LocalModel
+{
+    private const string Model = "qwen3.5:9b";
+
+    public static IChatClient Create()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromMinutes(5),
+        };
+
+        return new ChatClientBuilder(new OllamaApiClient(http, Model))
+            .ConfigureOptions(options =>
+            {
+                options.Temperature = 0;
+                options.AddOllamaOption(OllamaOption.Think, false);
+            })
+            .Build();
+    }
+}
+```
+
+Методът `Create` връща `IChatClient`, същия интерфейс от Unit 1. В него няма нищо от Agent Framework. Това е само връзката с модела, с три настройки:
+
+- **`Timeout`**: по подразбиране `HttpClient` се отказва, ако не получи отговор за 100 секунди. Локалният модел понякога е по-бавен, особено при първата заявка, когато Ollama го зарежда в паметта. Затова му даваме 5 минути.
+- **`Temperature = 0`**: моделът винаги избира най-вероятния token, за да са отговорите му възможно най-повторяеми. Същото направихме в Unit 1.
+- **`Think = false`**: изключва режима, в който моделът „мисли на глас“, преди да отговори.
+
+`ConfigureOptions` прилага последните две настройки към всяка заявка, така че не се налага да ги повтаряме за всеки Agent.
+
+:::note[Защо изключваме thinking]
+В Unit 1 видя мислите на `qwen3.5` като редове `Thought`. Те са полезни, но струват време. На компютъра, на който са писани тези уроци, един и същ кратък въпрос отне **155 секунди** с включен thinking и **7 секунди** без него.
+
+В този модул един въпрос често води до няколко извиквания на модела, затова държим thinking изключен. Ако компютърът ти е мощен, можеш да изтриеш реда с `OllamaOption.Think` и да сравниш.
+:::
+
+Ако използваш друг модел, смени името му в константата `Model`.
+
+## Създай Alfred
+
+### 3. Напиши Agent-а
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions: "You are Alfred, the butler of Wayne Manor. You are polite and concise.");
+
+AgentResponse response = await alfred.RunAsync(
+    "We are hosting a party at the manor. Suggest a theme in one sentence.");
+
+Console.WriteLine(response.Text);
+```
+
+Това е целият Agent. Кодът има три части:
+
+1. **Моделът.** `LocalModel.Create()` връща връзката с локалния модел като `IChatClient`.
+2. **Agent-ът.** `AsAIAgent` превръща този `IChatClient` в `AIAgent`. Подаваме му две неща:
+   - `name` е името на Agent-а. Засега е само етикет, но ще ни потрябва, когато имаме няколко Agents.
+   - `instructions` е system prompt-ът: текстът, който определя как да се държи моделът (виж [Messages и Special Tokens](/ai-agents/unit-1/messages-and-special-tokens/)).
+3. **Изпълнението.** `RunAsync` изпраща въпроса на Agent-а и връща `AgentResponse`. Свойството `Text` съдържа отговора като текст.
+
+:::tip[Ако кодът не се компилира]
+`AsAIAgent` е extension метод и се намира в `Microsoft.Extensions.AI`, а типовете `AIAgent` и `AgentResponse` са в `Microsoft.Agents.AI`. Трябват ти и двата `using` реда. Ако изпуснеш `using Microsoft.Extensions.AI;`, компилаторът ще каже, че `AsAIAgent` не съществува.
+:::
+
+### 4. Стартирай програмата
+
+В терминала, в папката `PartyPlanner`, изпълни:
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+Given the eclectic mix of guests we anticipate, I propose a "Gothic Noir" theme to ensure an atmosphere of sophisticated mystery that complements the Manor's architecture perfectly.
+```
+
+При теб думите може да са малко по-различни, но ще получиш едно учтиво изречение с предложение за тема. Ето какво се случи:
+
+1. `RunAsync` събра два messages: `instructions` като `system` message и твоя въпрос като `user` message.
+2. Agent-ът ги изпрати на модела през `IChatClient`.
+3. Моделът върна отговор, а Agent-ът го опакова в `AgentResponse`.
+
+Не написа нито `ChatMessage`, нито списък `history`. Framework-ът ги създаде вместо теб.
+
+### 5. Получи отговора на части
+
+`RunAsync` чака целия отговор и чак тогава го връща. При по-дълъг текст това означава да гледаш празен екран. Чат приложенията решават проблема със **streaming**: показват текста, докато моделът го пише.
+
+В `Program.cs` замени всичко под създаването на `alfred` със следното:
+
+```csharp
+await foreach (AgentResponseUpdate update in alfred.RunStreamingAsync(
+    "Write a two-sentence welcome toast for the guests."))
+{
+    Console.Write(update.Text);
+}
+
+Console.WriteLine();
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Welcome, everyone, to this evening's gathering at Wayne Manor. Please, make yourselves comfortable as we celebrate together.
+```
+
+Този път текстът се изписва дума по дума. `RunStreamingAsync` връща поредица от малки парчета (`AgentResponseUpdate`), а `await foreach` ги обработва едно по едно в момента, в който пристигнат. Използваме `Console.Write` вместо `Console.WriteLine`, за да не започва всяко парче на нов ред.
+
+И двата метода вършат една и съща работа:
+
+| Метод | Какво връща | Кога да го използваш |
+| --- | --- | --- |
+| `RunAsync` | Целия отговор наведнъж като `AgentResponse`. | Когато програмата ти обработва отговора. |
+| `RunStreamingAsync` | Отговора на части като `AgentResponseUpdate`. | Когато човек чака пред екрана. |
+
+## Какво се промени спрямо Unit 1
+
+Сравни кода с този от урока [Да създадем първия си Agent с .NET](/ai-agents/unit-1/tutorial/). Тогава използвахме само `Microsoft.Extensions.AI` и сглобявахме Agent-а на части. Сега същите части имат свое място:
+
+| В Unit 1 с `Microsoft.Extensions.AI` | С Agent Framework |
+| --- | --- |
+| `ChatClientBuilder` с `UseFunctionInvocation()` | Включено в `AsAIAgent`. |
+| System prompt-ът като първи message в `history` | Параметърът `instructions`. |
+| `ChatOptions.Tools`, подавани при всяка заявка | Параметърът `tools`, зададен веднъж при създаването. |
+| `GetResponseAsync(history, options)` | `RunAsync("въпрос")` |
+| `ChatResponse` | `AgentResponse` |
+| Списъкът `history`, който поддържаш сам | `AgentSession` |
+
+Последните редове на таблицата са темите на следващите уроци: `tools` в [Tools](/ai-agents/unit-2/agent-framework/tools/) и `AgentSession` в [Sessions](/ai-agents/unit-2/agent-framework/sessions/).
+
+Има и по-важна разлика. В Unit 1 „Agent“ беше твой код: клиент, опции и списък, които държеше заедно. Тук Agent-ът е **един обект**, `AIAgent`. Можеш да го подадеш на метод, да го обвиеш с middleware, да го дадеш като tool на друг Agent или да го сложиш като стъпка в Workflow. Всичко това ще направим в следващите уроци.
+
+## Експериментирай
+
+Опитай тези промени и след всяка изпълни `dotnet run`.
+
+**Смени характера.** Замени `instructions` с друг характер, например:
+
+```csharp
+instructions: "You are Alfred, a grumpy butler who thinks parties are a waste of time.");
+```
+
+Тонът на отговора се променя, без да си пипал нищо друго. Точно както в Unit 1, system prompt-ът определя поведението.
+
+**Смени задачата.** Поискай от Alfred нещо друго за партито: списък с пет игри за гостите, кратко съобщение за съседите или план за вечерта по часове. Не е нужен нов код. Сменяш само текста, който подаваш на Agent-а.
+
+## Обобщение
+
+- **`AsAIAgent`** превръща всеки `IChatClient` в `AIAgent`. Подаваш му име и `instructions`, които играят ролята на system prompt.
+- **`RunAsync`** връща целия отговор като `AgentResponse`, а **`RunStreamingAsync`** го връща на части, докато моделът пише.
+- Цикълът Thought → Action → Observation е вграден в Agent-а и не се настройва отделно.
+- Връзката с модела е описана на едно място, в `LocalModel.cs`, и всички Agents в модула ще я използват.
+
+Alfred вече говори, но все още не може да направи нищо и не помни какво си го питал преди малко. Ще поправим и двете в следващите уроци. Преди това те очаква кратък quiz.

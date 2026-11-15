@@ -1,0 +1,303 @@
+---
+title: Tools
+description: Даваме tools на Alfred в Microsoft Agent Framework - C# методи с [Description], няколко tools в един въпрос, защо описанието е толкова важно и какво се случва, когато един tool се провали.
+---
+
+Alfred вече говори, но партито няма да се организира само с приказки. За да избере меню и да намери кетъринг, му трябват **tools**.
+
+Както научи в [Unit 1](/ai-agents/unit-1/tools/), tool е функция, която даваме на модела. Моделът не я изпълнява сам. Той само казва кой tool иска и с какви аргументи, а Agent-ът го изпълнява и му връща резултата.
+
+В този урок ще дадеш на Alfred два tools, ще видиш как избира между тях и ще разбереш защо **описанието на един tool е по-важно от кода му**.
+
+## Tools в Agent Framework
+
+Тук няма нищо ново за учене. Tool-ът е същият C# метод с атрибута `[Description]`, а `AIFunctionFactory.Create` го превръща в tool, точно както в [първия ти Agent](/ai-agents/unit-1/tutorial/). От метода се взимат четирите неща, които моделът трябва да знае:
+
+| Какво трябва да знае моделът | Откъде идва |
+| --- | --- |
+| Име | Името на метода. |
+| Описание | Атрибутът `[Description]` върху метода. |
+| Входове | Параметрите, техните типове и техните `[Description]`. |
+| Изход | Типът на резултата. |
+
+Разликата е само в това къде подаваш tools. В Unit 1 ги слагаше в `ChatOptions` при всяка заявка. Тук ги даваш на Agent-а **веднъж, когато го създаваш**, в параметъра `tools`.
+
+## Дай tools на Alfred
+
+Продължаваме в проекта `PartyPlanner` от [предишния урок](/ai-agents/unit-2/agent-framework/first-agent/). Файлът `LocalModel.cs` остава без промяна.
+
+### 1. Напиши tools
+
+Създай файл `PartyTools.cs`:
+
+```csharp title="PartyTools.cs"
+using System.ComponentModel;
+
+public static class PartyTools
+{
+    [Description("Suggests a menu for a given type of occasion.")]
+    public static string SuggestMenu(
+        [Description("The type of occasion. Allowed values: 'casual', 'formal', 'superhero'.")]
+        string occasion) => occasion.ToLowerInvariant() switch
+    {
+        "casual" => "Pizza, snacks and drinks.",
+        "formal" => "Three-course dinner with wine and dessert.",
+        "superhero" => "Buffet with high-energy and healthy food.",
+        _ => $"Unknown occasion '{occasion}'. Allowed values: 'casual', 'formal', 'superhero'.",
+    };
+
+    [Description("Returns the highest-rated catering service in Gotham City.")]
+    public static string FindBestCatering()
+    {
+        Dictionary<string, int> ratings = new()
+        {
+            ["Gotham Catering Co."] = 98,
+            ["Wayne Manor Catering"] = 96,
+            ["Gotham City Events"] = 94,
+        };
+
+        var best = ratings.MaxBy(rating => rating.Value);
+
+        return $"{best.Key} (rating {best.Value}/100)";
+    }
+}
+```
+
+В класа има два tools:
+
+- **`SuggestMenu`** приема вида на събитието и връща подходящо меню. В реално приложение би чел от база данни. Тук отговорите са записани в кода, за да се фокусираме върху Agent-а.
+- **`FindBestCatering`** няма параметри. Той връща кетъринг фирмата с най-висок рейтинг.
+
+Обърни внимание на две неща в `SuggestMenu`. Описанието на параметъра изброява позволените стойности. А последният ред на `switch` не хвърля грешка, а връща текст, който обяснява какво не е наред. След малко ще видиш защо и двете са важни.
+
+### 2. Покажи стъпките на Agent-а
+
+Agent-ът изпълнява целия цикъл вътре в `RunAsync`. За да видим какво се е случило, ще отпечатаме стъпките, както направихме в Unit 1. Създай файл `AgentLog.cs`:
+
+```csharp title="AgentLog.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class AgentLog
+{
+    public static void Print(AgentResponse response)
+    {
+        foreach (ChatMessage message in response.Messages)
+        {
+            foreach (AIContent content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent text:
+                        Console.WriteLine($"{message.AuthorName}: {text.Text}");
+                        break;
+                    case FunctionCallContent call:
+                        string arguments = JsonSerializer.Serialize(call.Arguments);
+                        Console.WriteLine($"  Action: {call.Name}({arguments})");
+                        break;
+                    case FunctionResultContent result:
+                        Console.WriteLine($"  Observation: {result.Result}");
+                        break;
+                }
+            }
+        }
+    }
+}
+```
+
+`response.Messages` съдържа всичко, което Agent-ът е произвел по пътя към отговора, в реда, в който се е случило. Методът `Print` минава през него и отпечатва три вида съдържание:
+
+| Съдържание | Тип | Как го отпечатваме |
+| --- | --- | --- |
+| Текст, написан от модела | `TextContent` | `Alfred: ...` |
+| Извикване на tool | `FunctionCallContent` | `Action: ...` |
+| Резултат от tool | `FunctionResultContent` | `Observation: ...` |
+
+Името пред текста идва от `message.AuthorName`. Framework-ът го попълва с името, което даде на Agent-а.
+
+### 3. Дай tools на Agent-а
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor. You are polite and concise. " +
+        "Use your tools when they can help and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(PartyTools.SuggestMenu),
+        AIFunctionFactory.Create(PartyTools.FindBestCatering),
+    ]);
+
+AgentResponse response = await alfred.RunAsync(
+    "What menu do you suggest for a formal party?");
+
+AgentLog.Print(response);
+```
+
+Спрямо предишния урок има три промени:
+
+- Новият параметър **`tools`** съдържа двата метода, превърнати в tools с `AIFunctionFactory.Create`.
+- В **`instructions`** добавихме изречение, което казва на модела да използва tools и да не си измисля резултатите им.
+- Вместо `Console.WriteLine(response.Text)` извикваме **`AgentLog.Print`**, за да видим и стъпките.
+
+### 4. Стартирай програмата
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+Alfred: I shall consult my resources to ensure the menu befitting such an occasion is presented to you, Master Bruce.
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: A three-course dinner with wine and dessert, Master Bruce. It is a fitting arrangement for a formal gathering.
+```
+
+Това е една пълна обиколка на цикъла от Unit 1:
+
+1. **Thought.** Първият ред е изречение, което моделът написа, преди да поиска tool-а. В Unit 1 го виждаше като ред `Thought`. Тук thinking е изключен, затова моделът понякога казва на глас какво смята да направи.
+2. **Action.** Моделът поиска `SuggestMenu` с аргумент `formal`. Сам извлече стойността от въпроса.
+3. **Observation.** Framework-ът изпълни истинския C# метод и върна резултата му на модела.
+4. **Финален отговор.** Моделът прочете резултата и го предаде на потребителя със свои думи.
+
+Не написа нито `while`, нито парсване. Целият цикъл се изпълни вътре в `RunAsync`.
+
+### 5. Задай въпрос за два tools
+
+Смени въпроса в `Program.cs`:
+
+```csharp
+AgentResponse response = await alfred.RunAsync(
+    "We are planning a superhero party. What should we serve, and who should cater it?");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Alfred: I shall immediately arrange for the appropriate menu and catering service for our superhero gathering.
+  Action: SuggestMenu({"occasion":"superhero"})
+  Action: FindBestCatering({})
+  Observation: Buffet with high-energy and healthy food.
+  Observation: Gotham Catering Co. (rating 98/100)
+Alfred: For our superhero gathering, I have arranged a buffet featuring high-energy and healthy food. The catering will be handled by Gotham Catering Co., which holds the highest rating in Gotham City.
+```
+
+Въпросът има две части и моделът поиска **два tools в една стъпка**: двата реда `Action` идват един след друг, преди който и да е `Observation`. Framework-ът изпълни и двата метода и върна и двата резултата заедно. Никъде в кода не си казал кой tool за какво служи. Моделът избра според описанията им.
+
+### 6. Задай въпрос без tool
+
+Смени въпроса още веднъж:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Good evening, Alfred. Who are you?");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Alfred: Good evening, sir. I am Alfred Pennyworth, your loyal butler. How may I assist you tonight?
+```
+
+Няма нито `Action`, нито `Observation`. За този въпрос не е нужен tool и моделът отговаря направо. Както в Unit 1, **моделът сам преценява кога да използва tools**.
+
+## Описанието е интерфейсът
+
+Нашият `SuggestMenu` познава три вида събития. Какво ще стане, ако попиташ за четвърти? Смени въпроса:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("What menu do you suggest for a wedding?");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Alfred: I would be happy to assist with that inquiry, sir. However, our current culinary database only provides suggestions for casual, formal, or superhero occasions. A wedding is typically considered a formal event; therefore, I shall proceed with the suggestion for a formal occasion.
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: I have secured a suggestion for the wedding, sir. A three-course dinner with wine and dessert is recommended.
+```
+
+Моделът не подаде `wedding`. Той знаеше, че tool-ът приема само три стойности, прецени, че сватбата е официално събитие, и подаде `formal`. Откъде знаеше? От описанието на параметъра:
+
+```csharp
+[Description("The type of occasion. Allowed values: 'casual', 'formal', 'superhero'.")]
+```
+
+Спомни си правилото от Unit 1: **описанието е всичко, което моделът знае за един tool**. Той не вижда тялото на метода и няма как да познае кои стойности работят. Затова доброто описание казва не само какво прави tool-ът, но и какви стойности приема.
+
+## Когато един tool се провали
+
+Какво става, ако моделът все пак подаде стойност, която tool-ът не познава? Има два начина да го обработиш и разликата между тях е голяма. За да я видиш, първо махни подсказката от описанието на параметъра в `PartyTools.cs`:
+
+```csharp
+[Description("The type of occasion.")]
+```
+
+Въпросът в `Program.cs` остава този за сватбата.
+
+**Вариант 1: tool-ът връща текст с обяснение.** Това прави нашият код в момента, с последния ред на `switch`. Изпълни `dotnet run`:
+
+```text wrap
+  Action: SuggestMenu({"occasion":"wedding"})
+  Observation: Unknown occasion 'wedding'. Allowed values: 'casual', 'formal', 'superhero'.
+Alfred: I apologize, sir. The system does not have a specific suggestion for a wedding. However, given the formality of such an event, I would recommend selecting the 'formal' menu option.
+```
+
+Без подсказката моделът подаде `wedding`. Tool-ът му отговори с ясен текст: какво е сбъркано и кои стойности са позволени. Моделът го прочете като Observation и даде на потребителя смислен отговор.
+
+**Вариант 2: tool-ът хвърля exception.** Смени последния ред на `switch` в `SuggestMenu`:
+
+```csharp
+_ => throw new ArgumentException($"Unknown occasion '{occasion}'."),
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+  Action: SuggestMenu({"occasion":"wedding"})
+  Observation: Error: Function failed.
+Alfred: I apologize, but the function to suggest a menu for a wedding has encountered an error. I am unable to provide a specific menu at this time.
+```
+
+Програмата не спря. Framework-ът прихвана грешката и я върна на модела като Observation. Това е добре, но виж какво получи моделът: само `Error: Function failed.`. Подробностите за грешката не се изпращат на модела, за да не изтече случайно вътрешна информация. Така той няма как да разбере какво е сбъркал и стига до задънена улица.
+
+| | Какво вижда моделът | Какво може да направи |
+| --- | --- | --- |
+| Текст с обяснение | Какво е сбъркано и какво е позволено. | Да се поправи или да обясни на потребителя. |
+| Exception | `Error: Function failed.` | Само да се извини. |
+
+Затова правилото от Unit 1 важи с пълна сила: **грешката също е Observation, затова я върни като ясен текст**.
+
+Преди да продължиш, върни `PartyTools.cs` в първоначалния му вид: с подсказката `Allowed values` в описанието и с текст вместо exception на последния ред.
+
+## Какви други tools има
+
+Tools, които написа, се наричат **function tools**: твои C# методи. Agent Framework поддържа и други видове:
+
+| Вид tool | Какво е | Работи ли с Ollama |
+| --- | --- | --- |
+| Function tools | Твои C# методи. | Да |
+| Agent като tool | Друг Agent, извикан като функция. | Да |
+| MCP tools | Tools от MCP сървър (виж [Unit 1](/ai-agents/unit-1/tools/)). | Да |
+| Hosted tools | Code Interpreter, File Search и Web Search, които се изпълняват от доставчика на модела. | Не |
+
+Function tools и MCP tools се изпълняват в твоята програма, затова работят с всеки модел, който поддържа function calling. Hosted tools се изпълняват при доставчика на модела и зависят от него. Agent като tool е темата на урока за [Multi-Agent Systems](/ai-agents/unit-2/agent-framework/multi-agent-systems/).
+
+## Обобщение
+
+- Tool в Agent Framework е **същият C# метод с `[Description]`** от Unit 1. Даваш го на Agent-а веднъж, в параметъра `tools`.
+- Agent-ът сам върти цикъла: моделът иска tool, framework-ът го изпълнява и му връща резултата.
+- Моделът може да поиска **няколко tools в една стъпка** или нито един.
+- **Описанието е интерфейсът.** Изброй позволените стойности, за да избере моделът вярната от първия път.
+- Когато нещо се обърка, **върни ясен текст**. При exception моделът вижда само `Error: Function failed.`.
+
+Alfred вече може да действа. Има обаче един проблем: забравя всичко веднага щом отговори. В следващия урок ще му дадем памет.

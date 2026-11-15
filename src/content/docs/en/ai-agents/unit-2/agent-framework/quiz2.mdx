@@ -1,0 +1,142 @@
+---
+title: Quick Quiz 2
+description: A short, ungraded quiz on tools, sessions and middleware in Microsoft Agent Framework.
+---
+
+import Question from '../../../../../../components/Question.astro';
+
+Another quiz? Yes, but it is short. 😅 It covers the three things you equipped Alfred with in the last lessons: **tools, sessions and middleware**.
+
+### Q1: How do you give a tool to an Agent?
+
+<Question
+  choices={[
+    {
+      text: 'You describe it by hand in the instructions, as in the Dummy Agent Library.',
+      explain: 'That is how our JSON Agent in Unit 1 worked. Here the description is taken automatically from the method itself.',
+    },
+    {
+      text: 'You write a C# method with [Description], turn it into a tool with AIFunctionFactory.Create and pass it in the tools parameter.',
+      explain: 'The framework sends the name, the description and the parameters to the model, and runs the method itself when the model asks for it.',
+      correct: true,
+    },
+    {
+      text: 'You call the method yourself before RunAsync and add the result to the question.',
+      explain: 'Then you decide when it is called, not the model. That is no longer a tool.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What does the model receive when a tool throws an exception?
+
+<Question
+  choices={[
+    {
+      text: 'The program stops and the user sees the error.',
+      explain: 'The framework catches the error, so the Agent keeps working.',
+    },
+    {
+      text: 'The full text of the error together with the stack trace.',
+      explain: 'By default the details are not sent to the model. It only sees a generic message.',
+    },
+    {
+      text: 'An Observation with the text "Error: Function failed.", with no details.',
+      explain: 'That is why it is better for the tool to return clear text about what is wrong. Then the model can correct itself.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q3: Why is it useful to list the allowed values in a parameter description?
+
+<Question
+  choices={[
+    {
+      text: 'Because the description is everything the model knows about the tool. That way it picks a valid value on the first try.',
+      explain: 'You saw it with the wedding question: the model chose "formal" by itself, because it knew which values are allowed.',
+      correct: true,
+    },
+    {
+      text: 'Because the compiler checks the values against the description.',
+      explain: 'The compiler does not read the text in [Description]. It is meant only for the model.',
+    },
+    {
+      text: 'Because without them AIFunctionFactory.Create refuses to create the tool.',
+      explain: 'The tool is created without descriptions too, but the model uses it worse.',
+    },
+  ]}
+/>
+
+---
+
+### Q4: What does `AgentSession` do?
+
+<Question
+  choices={[
+    {
+      text: 'It keeps the conversation, so that the next run of the Agent sees the previous messages.',
+      explain: 'The session takes the place of the history list you maintained yourself in Unit 1.',
+      correct: true,
+    },
+    {
+      text: 'It makes the model faster by caching its answers.',
+      explain: 'The session does not speed the model up. On every run the whole conversation is sent to it again.',
+    },
+    {
+      text: 'It fine-tunes the model with what the user said.',
+      explain: 'The model does not change. It only receives the previous messages as part of the prompt.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: How does a conversation survive a restart of the program?
+
+<Question
+  choices={[
+    {
+      text: 'Automatically. Ollama remembers all conversations.',
+      explain: 'Ollama only runs the model and keeps no conversations between requests.',
+    },
+    {
+      text: 'You save the session as JSON with SerializeSessionAsync and restore it later with DeserializeSessionAsync.',
+      explain: 'The JSON contains the list of messages. You can write it to a file or to a database.',
+      correct: true,
+    },
+    {
+      text: 'There is no way. A session exists only while the program is running.',
+      explain: 'In memory, yes, but that is exactly why it can be serialized.',
+    },
+  ]}
+/>
+
+---
+
+### Q6: You want Alfred to ask for permission before calling a tool that spends money. What do you use?
+
+<Question
+  choices={[
+    {
+      text: 'Stricter instructions, such as "never order without asking".',
+      explain: 'Instructions are a request to the model, not a guarantee. The model may not follow them.',
+    },
+    {
+      text: 'Function calling middleware that checks the name of the tool and calls next only if the person approves.',
+      explain: 'Middleware is your code and always runs. If you do not call next, the tool is never executed.',
+      correct: true,
+    },
+    {
+      text: 'A new AgentSession for every order.',
+      explain: 'A session keeps the conversation. It does not control which tools are executed.',
+    },
+  ]}
+/>
+
+---
+
+Got it? Excellent! So far Alfred has worked alone. In the next lessons we will give him a **team**.

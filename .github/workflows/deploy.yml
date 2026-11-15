@@ -16,6 +16,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Anyone with write access can press "Run workflow". The job still
+    # runs only for this account.
+    if: github.actor == 'AnastasKosstow'
     runs-on: ubuntu-latest
 
     steps:

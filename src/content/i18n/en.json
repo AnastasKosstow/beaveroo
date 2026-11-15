@@ -28,7 +28,7 @@
   "quiz.incorrect": "Incorrect.",
   "quiz.allCorrect": "Congratulations, you got it right! 🥳",
   "quiz.someWrong": "Looks like at least one of your answers is wrong, try again!",
-  "embed.note": "Interactive content from an external source — requires an internet connection.",
+  "embed.note": "Interactive content from an external source - requires an internet connection.",
   "embed.open": "Open in a new tab",
   "progress.label": "Unit 1 progress",
   "progress.step1": "Understand what are Agents",

@@ -1,0 +1,48 @@
+---
+title: Заключение
+description: Поздравления за завършването на Unit 2.1 - вече можеш да изграждаш Agents и workflows с Microsoft Agent Framework.
+---
+
+Поздравления за завършването на модула за Microsoft Agent Framework 🥳
+
+Започна с Agent от един ред и стигна до екип от Agents и workflow с разклонение. Между тях Alfred подготви парти.
+
+## Какво научи
+
+- **`AIAgent`** събира модел, `instructions` и tools в един обект. Създаваш го с `AsAIAgent` върху всеки `IChatClient`.
+- **Tools** са същите C# методи с `[Description]` от Unit 1. Описанието е всичко, което моделът знае за тях, а ясният текст при грешка му помага да се поправи сам.
+- **`AgentSession`** пази разговора между изпълненията и може да се запише като JSON.
+- **Middleware** е твой код около всяко изпълнение и всяко извикване на tool. С него наблюдаваш Agent-а и спираш действия, които не са одобрени.
+- **Agent като tool** (`AsAIFunction`) ти позволява да изградиш екип: мениджър, който възлага задачи на специалисти.
+- **Workflows** свързват функции и Agents в граф, в който ти определяш реда. `AgentWorkflowBuilder` ти дава готови шаблони за няколко Agents.
+
+Преди да добавиш Agent, питай се **кой решава следващата стъпка**. Ако трябва да реши моделът, ти трябва Agent. Ако трябва да решиш ти, ти трябва Workflow. Ако стига една функция, не ти трябва нито едното.
+
+## Целият проект
+
+Ето файловете, които събра в `PartyPlanner` по време на модула:
+
+| Файл | Какво съдържа | От кой урок е |
+| --- | --- | --- |
+| `LocalModel.cs` | Връзката с локалния модел в Ollama. | [Първият ти Agent](/ai-agents/unit-2/agent-framework/first-agent/) |
+| `PartyTools.cs` | Tools за меню, кетъринг, поръчка и музика. | [Tools](/ai-agents/unit-2/agent-framework/tools/) и следващите |
+| `AgentLog.cs` | Отпечатва стъпките на един отговор. | [Tools](/ai-agents/unit-2/agent-framework/tools/) |
+| `AlfredMiddleware.cs` | Измерване на изпълнението и одобрение на поръчки. | [Middleware](/ai-agents/unit-2/agent-framework/middleware/) |
+| `TeamTrace.cs` | Показва кой Agent кой tool извиква. | [Multi-Agent Systems](/ai-agents/unit-2/agent-framework/multi-agent-systems/) |
+
+Ако искаш да пробваш нещо свое, смени tools.
+
+## Какво следва
+
+Нормално е някои неща все още да не са ти напълно ясни. Върни се към уроците, промени примерите и виж какво се случва.
+
+В следващия Unit ще приложиш наученото върху реален use case и ще изградиш цялостно приложение с Agents.
+
+Ако искаш да продължиш сам с Agent Framework, ето няколко теми, които не покрихме:
+
+- [MCP tools](https://learn.microsoft.com/agent-framework/agents/tools/) - включване на готови tools от MCP сървъри.
+- [Context providers](https://learn.microsoft.com/agent-framework/agents/conversations/context-providers) - дългосрочна памет, която Agent-ът носи между различни разговори.
+- [Observability](https://learn.microsoft.com/agent-framework/agents/observability) - проследяване на всяка стъпка с OpenTelemetry.
+- [Orchestrations](https://learn.microsoft.com/agent-framework/workflows/orchestrations/) - останалите шаблони за няколко Agents: concurrent, handoff, group chat и magentic.
+
+### Продължавай да учиш, бъди страхотен 🤗

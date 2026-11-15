@@ -1,0 +1,288 @@
+---
+title: Workflows
+description: Workflows в Microsoft Agent Framework - executors и edges, workflow с условно разклонение, който сортира отговорите на поканите, и двама Agents, които работят един след друг с AgentWorkflowBuilder.
+---
+
+В предишния урок Alfred сам реши кого да попита и в какъв ред. Това е удобно, когато задачата е отворена. Има обаче задачи, при които **не искаш** моделът да решава какво следва.
+
+Представи си отговорите на поканите за партито. Всеки отговор трябва да мине по един и същ път: прочитаме го, разбираме дали гостът ще дойде, и според това го записваме в списъка или му изпращаме картичка. Тук няма какво да се „решава“. Редът е известен предварително и искаме да се спазва всеки път.
+
+За такива задачи Agent Framework има **Workflows**.
+
+## Свобода срещу контрол
+
+Когато проектираш система с LLM, винаги избираш между две неща:
+
+- **Свобода**: моделът сам избира следващата стъпка. Така се справя с неочаквани ситуации, но не знаеш предварително какво ще направи.
+- **Контрол**: ти определяш стъпките. Поведението е предвидимо, но системата прави само това, което си предвидил.
+
+Agent и Workflow стоят в двата края:
+
+| | Agent | Workflow |
+| --- | --- | --- |
+| Кой решава следващата стъпка | Моделът | Ти, в кода |
+| Поведение | Гъвкаво | Предвидимо |
+| Подходящ за | Отворени задачи и разговори | Процеси с известни стъпки |
+
+Двете не се изключват. Една стъпка в Workflow може да използва Agent, когато е нужно разбиране на език, а останалите стъпки да са обикновен код.
+
+## Градивните елементи
+
+Един Workflow е **граф**: кутийки, свързани със стрелки. Framework-ът има име за всяко от тези неща:
+
+| Елемент | Какво е |
+| --- | --- |
+| **Executor** | Една стъпка. Получава съобщение, върши работа и връща резултат. Може да е обикновена функция или Agent. |
+| **Edge** | Връзка между две стъпки. Казва към кого отива резултатът и може да има условие. |
+| **Workflow** | Целият граф: стъпките, връзките и началната стъпка. |
+| **Event** | Съобщение за това какво се случва по време на изпълнението, например „стъпката приключи“. |
+
+Ако срещнеш LangGraph от оригиналния курс, идеята е същата: там стъпките се казват *nodes*, а връзките *edges*.
+
+## Първият ти Workflow
+
+Ще изградим workflow, който обработва отговорите на поканите. Той има три стъпки и едно разклонение:
+
+```text
+отговор ──▶ ReadReply
+                │
+                ├── ще дойде ──────▶ AddGuest
+                └── няма да дойде ─▶ SendRegrets
+```
+
+- **`ReadReply`** чете отговора и извлича името на госта и дали ще дойде. Отговорите са свободен текст, затова тук ни трябва модел.
+- **`AddGuest`** записва госта в списъка. Това е обикновен C# код.
+- **`SendRegrets`** изпраща картичка „ще ни липсваш“. Също обикновен C# код.
+
+### 1. Добави пакета
+
+Workflows са в отделен NuGet пакет. В папката `PartyPlanner` изпълни:
+
+```bash
+dotnet add package Microsoft.Agents.AI.Workflows
+```
+
+### 2. Напиши стъпките и графа
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+
+AIAgent reader = LocalModel.Create().AsAIAgent(
+    name: "Reader",
+    instructions:
+        "You read replies to a party invitation. " +
+        "Extract the name of the guest and whether they are coming.");
+
+Func<string, ValueTask<Rsvp>> readReply = async reply =>
+{
+    AgentResponse<Rsvp> response = await reader.RunAsync<Rsvp>(reply);
+    return response.Result;
+};
+
+Func<Rsvp, string> addGuest = rsvp => $"{rsvp.Guest} is on the guest list.";
+Func<Rsvp, string> sendRegrets = rsvp => $"A 'we will miss you' card goes to {rsvp.Guest}.";
+
+ExecutorBinding read = readReply.BindAsExecutor("ReadReply");
+ExecutorBinding welcome = addGuest.BindAsExecutor("AddGuest");
+ExecutorBinding regrets = sendRegrets.BindAsExecutor("SendRegrets");
+
+Workflow workflow = new WorkflowBuilder(read)
+    .AddEdge<Rsvp>(read, welcome, condition: rsvp => rsvp is { Attending: true })
+    .AddEdge<Rsvp>(read, regrets, condition: rsvp => rsvp is { Attending: false })
+    .WithOutputFrom(welcome, regrets)
+    .Build();
+
+string[] replies =
+[
+    "Dear Alfred, thank you for the invitation. I would be delighted to attend. Yours, Selina Kyle",
+    "Alfred, sadly I am out of town that weekend and cannot make it. Regards, Lucius Fox",
+];
+
+foreach (string reply in replies)
+{
+    Console.WriteLine($"Reply: {reply}");
+
+    await using Run run = await InProcessExecution.RunAsync(workflow, reply);
+
+    foreach (WorkflowEvent evt in run.NewEvents)
+    {
+        switch (evt)
+        {
+            case ExecutorCompletedEvent step:
+                Console.WriteLine($"  {step.ExecutorId} -> {step.Data}");
+                break;
+            case WorkflowOutputEvent output:
+                Console.WriteLine($"Result: {output.Data}");
+                break;
+        }
+    }
+
+    Console.WriteLine();
+}
+
+public record Rsvp(string Guest, bool Attending);
+```
+
+Кодът е по-дълъг от обичайното, затова ще го разгледаме на части.
+
+**Данните.** Последният ред описва какво минава между стъпките: `Rsvp` с името на госта и дали ще дойде. Във файл като `Program.cs`, който започва направо с код, типовете се декларират след всичко останало. Затова `Rsvp` стои най-долу.
+
+**Трите стъпки.** Всяка стъпка е обикновена функция:
+
+- `readReply` приема текста на отговора и връща `Rsvp`. Тя е единствената, която използва модел, чрез Agent-а `reader`.
+- `addGuest` и `sendRegrets` приемат `Rsvp` и връщат текст. В тях няма модел.
+
+Забележи извикването `RunAsync<Rsvp>`. Досега Agent-ът ни връщаше свободен текст. Сега искаме **обект от определен тип**. Framework-ът изпраща на модела описание на типа `Rsvp`, моделът отговаря с JSON в тази форма, а ти получаваш готов C# обект в `response.Result`. Това се нарича *structured output* и е точно това, което ни трябва, когато резултатът отива при код, а не при човек.
+
+**Executors.** `BindAsExecutor` превръща всяка функция в executor и му дава име. Името ще видим в изхода.
+
+**Графът.** `WorkflowBuilder` сглобява всичко:
+
+| Ред | Какво казва |
+| --- | --- |
+| `new WorkflowBuilder(read)` | Workflow-ът започва от `ReadReply`. |
+| `AddEdge<Rsvp>(read, welcome, condition: ...)` | Резултатът отива при `AddGuest`, но само ако `Attending` е `true`. |
+| `AddEdge<Rsvp>(read, regrets, condition: ...)` | Резултатът отива при `SendRegrets`, но само ако `Attending` е `false`. |
+| `WithOutputFrom(welcome, regrets)` | Резултатът на целия workflow идва от една от тези две стъпки. |
+
+Условието `rsvp is { Attending: true }` е вярно, когато обектът съществува и свойството му `Attending` е `true`.
+
+**Изпълнението.** `InProcessExecution.RunAsync` изпълнява workflow-а с един отговор като вход. Когато приключи, `run.NewEvents` съдържа всичко, което се е случило. От там отпечатваме два вида events: кога една стъпка е приключила и какъв е крайният резултат.
+
+### 3. Стартирай програмата
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+Reply: Dear Alfred, thank you for the invitation. I would be delighted to attend. Yours, Selina Kyle
+  ReadReply -> Rsvp { Guest = Selina Kyle, Attending = True }
+  AddGuest -> Selina Kyle is on the guest list.
+Result: Selina Kyle is on the guest list.
+
+Reply: Alfred, sadly I am out of town that weekend and cannot make it. Regards, Lucius Fox
+  ReadReply -> Rsvp { Guest = Lucius Fox, Attending = False }
+  SendRegrets -> A 'we will miss you' card goes to Lucius Fox.
+Result: A 'we will miss you' card goes to Lucius Fox.
+```
+
+Двата отговора минаха по различни пътища:
+
+1. `ReadReply` прочете първия отговор и върна `Rsvp` с `Attending = True`. Моделът разбра това от израза „delighted to attend“, въпреки че никъде не пише „yes“.
+2. Условието на първата връзка беше изпълнено, затова резултатът отиде при `AddGuest`.
+3. При втория отговор `Attending` беше `False`, затова резултатът отиде при `SendRegrets`.
+
+Обърни внимание колко бързо се изпълни. От трите стъпки само една извиква модела. Останалото е обикновен код, който работи мигновено и дава един и същ резултат всеки път. Това е правилото от началото на модула в действие: **използвай модела само там, където наистина ти трябва**.
+
+## Agents в Workflow
+
+В първия workflow стъпките бяха функции. Стъпка може да бъде и цял Agent. Най-честият случай е няколко Agents да работят **един след друг**, като всеки надгражда работата на предишния.
+
+Alfred има нужда от покана за партито. Вместо един Agent да пише и редактира, ще разделим работата: `Writer` пише чернова, а `Editor` я преработва.
+
+```text
+описание на събитието ──▶ Writer ──▶ Editor ──▶ готова покана
+```
+
+За такива често срещани схеми не се налага да свързваш графа на ръка. `AgentWorkflowBuilder` има готови шаблони. Този се казва **sequential**.
+
+### 4. Изгради екип за покани
+
+Ще ти трябва `AgentLog.cs` от урока за [Tools](/ai-agents/unit-2/agent-framework/tools/). Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+
+IChatClient model = LocalModel.Create();
+
+AIAgent writer = model.AsAIAgent(
+    name: "Writer",
+    instructions:
+        "You write party invitations. Write a short invitation of three sentences " +
+        "for the event the user describes.");
+
+AIAgent editor = model.AsAIAgent(
+    name: "Editor",
+    instructions:
+        "You are an editor. Rewrite the invitation you receive so that it is more formal " +
+        "and fits in two sentences. Reply with the final invitation only.");
+
+Workflow pipeline = AgentWorkflowBuilder.BuildSequential([writer, editor]);
+
+AIAgent team = pipeline.AsAIAgent(name: "InvitationTeam");
+
+AgentResponse response = await team.RunAsync(
+    "A villain masquerade at Wayne Manor, this Saturday at 8 PM.");
+
+AgentLog.Print(response);
+```
+
+Новите неща са два реда:
+
+- **`AgentWorkflowBuilder.BuildSequential`** подрежда Agents в редица и връща `Workflow`. Всеки Agent получава разговора дотук и добавя своя отговор към него.
+- **`pipeline.AsAIAgent`** превръща целия workflow в `AIAgent`. Така го изпълняваме с познатия `RunAsync` и отпечатваме отговора с `AgentLog.Print`, без да обработваме events.
+
+Изпълни `dotnet run`:
+
+```text wrap
+Writer: Join us this Saturday at 8 PM for an exclusive Villain Masquerade at the iconic Wayne Manor. Dress as your favorite supervillain and prepare to scheme in style under the manor's grand halls. We look forward to seeing you there for a night of dark elegance and mischief.
+Editor: You are cordially invited to an exclusive Villain Masquerade at Wayne Manor this Saturday at 8:00 PM. Please don your finest supervillain attire as we gather under the manor's grand halls for an evening of dark elegance and mischief.
+```
+
+`Writer` написа три изречения, а `Editor` ги преработи в две по-официални. Името пред всеки ред идва от `AuthorName`, който `AgentLog` отпечатва от самото начало.
+
+Сравни това с предишния урок. Там Alfred **сам реши** да попита готвача и DJ-я. Тук редът е записан в кода: винаги първо `Writer`, после `Editor`. Никой модел не може да го промени.
+
+:::tip[Workflow, който е Agent]
+Щом един workflow може да бъде `AIAgent`, с него можеш да правиш всичко, което знаеш за Agents: да му дадеш session, да го обвиеш с middleware или да го подадеш като tool на Alfred с `AsAIFunction()`. Така частите от този модул се комбинират свободно.
+:::
+
+## Готови orchestrations
+
+Sequential е само един от шаблоните за няколко Agents. Framework-ът ги нарича **orchestrations** и предлага пет:
+
+| Orchestration | Как работят Agents | Пример от партито |
+| --- | --- | --- |
+| Sequential | Един след друг, в определен ред. | `Writer` пише поканата, `Editor` я преработва. |
+| Concurrent | Едновременно, а отговорите им се събират. | Готвачът, DJ-ят и декораторът предлагат идеи по едно и също време. |
+| Handoff | Предават си разговора според ситуацията. | Alfred прехвърля гост с алергия към готвача. |
+| Group Chat | Обсъждат задачата в общ разговор. | Целият екип избира тема за партито. |
+| Magentic | Мениджър планира и разпределя задачите динамично. | Организация на цялото събитие от нулата. |
+
+Първите два се създават с `AgentWorkflowBuilder.BuildSequential` и `AgentWorkflowBuilder.BuildConcurrent`. За останалите има отделни builders. Примери за всеки ще намериш в [документацията](https://learn.microsoft.com/agent-framework/workflows/orchestrations/).
+
+## Agent като tool или Workflow?
+
+Вече знаеш два начина да накараш няколко Agents да работят заедно. Ето как да избереш:
+
+| | Agent като tool | Workflow |
+| --- | --- | --- |
+| Кой избира следващия | Мениджърът, тоест моделът. | Ти, чрез връзките в графа. |
+| Редът | Може да е различен всеки път. | Винаги един и същ. |
+| Избери го, когато | Не знаеш предварително кои специалисти ще потрябват. | Стъпките са известни и трябва да се спазват. |
+
+## Твой ред
+
+**Добави трети отговор.** Добави в `replies` отговор, който не е категоричен, например „I will try to come, but I am not sure yet.“ Виж какво ще реши моделът. После помисли: как би променил `Rsvp` и графа, за да има и трети път за „може би“?
+
+**Удължи редицата.** Добави трети Agent `Translator`, който превежда готовата покана на български, и го сложи в края на списъка в `BuildSequential`.
+
+## Обобщение
+
+- **Workflow** е граф от стъпки, в който **ти** определяш реда. Моделът работи само вътре в отделните стъпки.
+- **Executor** е стъпка, а **edge** е връзка между стъпки. Една връзка може да има **условие**, което създава разклонение.
+- Стъпка може да бъде **обикновена функция** или **Agent**. Използвай модел само там, където е нужно разбиране на език.
+- **`RunAsync<T>`** кара Agent-а да върне обект от определен тип вместо свободен текст.
+- **`AgentWorkflowBuilder`** предлага готови orchestrations. `BuildSequential` подрежда Agents един след друг.
+- Един workflow може да се превърне в Agent с **`AsAIAgent`**.
+
+Това беше последният урок с код. Остава финалният quiz.

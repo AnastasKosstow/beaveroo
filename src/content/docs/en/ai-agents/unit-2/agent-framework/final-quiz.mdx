@@ -1,0 +1,232 @@
+---
+title: Unit 2.1 Final Quiz
+description: The final quiz for Unit 2.1 - test your understanding of Agents, tools, sessions, middleware, multi-agent systems and workflows in Microsoft Agent Framework.
+---
+
+import Question from '../../../../../../components/Question.astro';
+
+Well done on getting this far! It's time to check whether the main ideas of Microsoft Agent Framework are clear to you.
+
+The quiz covers the whole module and is for self-assessment only. Take it as many times as you like.
+
+### Q1: What does an `AIAgent` consist of?
+
+<Question
+  choices={[
+    {
+      text: 'A model (IChatClient), instructions and tools, gathered in one object.',
+      explain: 'That is exactly why an Agent can be passed to a method, wrapped with middleware or given to another Agent as a tool.',
+      correct: true,
+    },
+    {
+      text: 'A list of messages that is sent to the model.',
+      explain: 'The list of messages is the conversation. It is kept by the AgentSession, not by the Agent itself.',
+    },
+    {
+      text: 'A graph of executors and edges.',
+      explain: 'That is a Workflow.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: Who runs a tool?
+
+<Question
+  choices={[
+    {
+      text: 'The model, inside Ollama.',
+      explain: 'The model can only write text. It says which tool it wants and with what arguments.',
+    },
+    {
+      text: 'The Agent: the framework calls the real C# method and returns the result to the model as an Observation.',
+      explain: 'This is the same Thought → Action → Observation cycle from Unit 1, but run by the framework instead of your own while loop.',
+      correct: true,
+    },
+    {
+      text: 'The user, by copying the result into the chat.',
+      explain: 'Everything happens automatically inside RunAsync.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: Alfred gets two questions in a row without a session. What does he know about the first when he answers the second?
+
+<Question
+  choices={[
+    {
+      text: 'Everything, because the Agent remembers the last few questions.',
+      explain: 'The Agent itself keeps no conversations. Without a session every run starts from a clean slate.',
+    },
+    {
+      text: 'Only the tools he used.',
+      explain: 'Tool calls are part of the conversation and are lost without a session too.',
+    },
+    {
+      text: 'Nothing. Without a session every call to RunAsync is a separate conversation.',
+      explain: 'For him to remember, you create an AgentSession and pass it to every call.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q4: What can a middleware do?
+
+<Question
+  choices={[
+    {
+      text: 'Only write to a log what is happening.',
+      explain: 'Observation is just one of the options.',
+    },
+    {
+      text: 'Observe, change or stop altogether a run of the Agent or a call to a tool.',
+      explain: 'Middleware decides whether to call the next one in the chain. If it does not, the action is not executed.',
+      correct: true,
+    },
+    {
+      text: 'Swap the model for a faster one.',
+      explain: 'The model is chosen when the IChatClient is created, not in middleware.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: What does `AsAIFunction()` do?
+
+<Question
+  choices={[
+    {
+      text: 'It turns an Agent into a tool that another Agent can call.',
+      explain: 'The name and description of the Agent become the name and description of the tool, and the input is a single text parameter with the task.',
+      correct: true,
+    },
+    {
+      text: 'It turns a C# method into a tool.',
+      explain: 'That is what AIFunctionFactory.Create does.',
+    },
+    {
+      text: 'It turns a Workflow into an Agent.',
+      explain: 'That is what AsAIAgent does on a Workflow.',
+    },
+  ]}
+/>
+
+---
+
+### Q6: Why split the work between several Agents instead of giving all the tools to one?
+
+<Question
+  choices={[
+    {
+      text: 'Because several Agents always answer faster than one.',
+      explain: 'It is usually the opposite: more Agents mean more calls to the model.',
+    },
+    {
+      text: 'Because an Agent cannot have more than two tools.',
+      explain: 'There is no such limit. The question is how well the model copes with many tools at once.',
+    },
+    {
+      text: 'Because each Agent has short instructions, few tools and its own context, so it gets confused less often.',
+      explain: 'The specialist sees only its own task, and the manager sees only the final answers of the specialists.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q7: What are an executor and an edge in a Workflow?
+
+<Question
+  choices={[
+    {
+      text: 'An executor is a step that processes a message. An edge is a connection that says which step the result goes to.',
+      explain: 'The step can be an ordinary function or an Agent, and an edge can also have a condition.',
+      correct: true,
+    },
+    {
+      text: 'The executor is the model, and the edge is its system prompt.',
+      explain: 'A Workflow can work without a single model.',
+    },
+    {
+      text: 'The executor is the user, and the edge is their question.',
+      explain: 'The question is the input of the Workflow, not part of the graph.',
+    },
+  ]}
+/>
+
+---
+
+### Q8: Who decides what the next step is?
+
+<Question
+  choices={[
+    {
+      text: 'With both an Agent and a Workflow, the model decides.',
+      explain: 'In a Workflow the model works only inside the individual steps.',
+    },
+    {
+      text: 'With an Agent the model decides. With a Workflow you decide, through the connections between the steps.',
+      explain: 'An Agent gives freedom, and a Workflow gives predictability.',
+      correct: true,
+    },
+    {
+      text: 'With both, the user decides with every question they ask.',
+      explain: 'The user sets the goal, not the individual steps.',
+    },
+  ]}
+/>
+
+---
+
+### Q9: In our Workflow for the invitation replies, why does only one step use a model?
+
+<Question
+  choices={[
+    {
+      text: 'Because a Workflow can contain at most one Agent.',
+      explain: 'There is no such limit. In the same lesson two Agents worked one after the other.',
+    },
+    {
+      text: 'Because the local model cannot process more than one message.',
+      explain: 'The model copes with many messages. We simply do not need it in the other steps.',
+    },
+    {
+      text: 'Because only reading free text requires language understanding. The rest is ordinary code, which is faster and always gives the same result.',
+      explain: 'This is the rule from the start of the module: if a step can be a function, let it be a function.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q10: What does `AgentWorkflowBuilder.BuildSequential` do?
+
+<Question
+  choices={[
+    {
+      text: 'It lines several Agents up in a row: each receives the conversation so far and adds its own answer.',
+      explain: 'That is how the Writer wrote the invitation and the Editor reworked it.',
+      correct: true,
+    },
+    {
+      text: 'It starts all the Agents at the same time and collects their answers.',
+      explain: 'That is the concurrent orchestration.',
+    },
+    {
+      text: 'It picks the most suitable Agent for the question.',
+      explain: 'That is closer to the handoff orchestration, or to a manager that uses Agents as tools.',
+    },
+  ]}
+/>
+
+---
+
+With that you have completed Unit 2.1! 🎉 All that is left is to sum up what you learned.

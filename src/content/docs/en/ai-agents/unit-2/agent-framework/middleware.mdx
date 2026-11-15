@@ -1,0 +1,321 @@
+---
+title: "Middleware: Control over Every Step"
+description: Middleware in Microsoft Agent Framework - code that runs around every Agent run and every tool call. We measure time and tokens, and make Alfred ask for permission before he spends money.
+---
+
+Alfred acts and remembers now. Next we will give him a tool that spends real money: a catering order. Before we let him order on his own, we want two things:
+
+- to **see** what each of his answers costs us;
+- to be able to **stop** an order before it happens.
+
+Both are done with **middleware**.
+
+## What is middleware?
+
+Middleware is your own code that sits **between** you and the Agent, or between the Agent and its tools. Every call passes through it, on the way in and on the way out.
+
+```text
+you ──▶ [ middleware ] ──▶ Agent ──▶ [ middleware ] ──▶ tool
+```
+
+If you have written web applications with ASP.NET Core, the idea is familiar: there, every request passes through a chain of middleware before it reaches your code.
+
+Each middleware receives the "next one" in the chain as a parameter and decides for itself when to call it. That gives it three options:
+
+| What it does | How | Example |
+| --- | --- | --- |
+| Something **before** the call | The code before the line that calls the next one. | Checking the input. |
+| Something **after** the call | The code after that line. | Measuring the time. |
+| **Stops** the call | It never calls the next one. | Refusing an unapproved action. |
+
+The most important thing is that middleware stays **on the outside**. You change neither the Agent nor the tools. You add behavior around them.
+
+Agent Framework has three kinds of middleware, depending on what they wrap:
+
+| Kind | What it wraps | We will use it for |
+| --- | --- | --- |
+| Agent run middleware | The whole `RunAsync` run. | Measuring time and tokens. |
+| Function calling middleware | Every individual tool call. | Permission before an order. |
+| `IChatClient` middleware | Every request to the model. | You already did it: `ConfigureOptions` in `LocalModel.cs` works at this level. |
+
+## See what an answer costs
+
+We continue in the `PartyPlanner` project. You will need `LocalModel.cs`, `PartyTools.cs` and `AgentLog.cs` from the previous lessons.
+
+### 1. Add a tool that spends money
+
+Add this method to the `PartyTools` class:
+
+```csharp title="PartyTools.cs"
+[Description("Places a catering order. This spends real money.")]
+public static string OrderCatering(
+    [Description("The name of the catering service.")] string service,
+    [Description("The number of guests.")] int guests) =>
+    $"Order placed with {service} for {guests} guests.";
+```
+
+In a real application this method would send an order and charge a card. Here it only returns text, but we will treat it as if it spent money.
+
+### 2. Write the first middleware
+
+Create a file `AlfredMiddleware.cs`:
+
+```csharp title="AlfredMiddleware.cs"
+using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class AlfredMiddleware
+{
+    public static async Task<AgentResponse> MeasureRun(
+        IEnumerable<ChatMessage> messages,
+        AgentSession? session,
+        AgentRunOptions? options,
+        AIAgent innerAgent,
+        CancellationToken cancellationToken)
+    {
+        Stopwatch watch = Stopwatch.StartNew();
+
+        AgentResponse response = await innerAgent.RunAsync(messages, session, options, cancellationToken);
+
+        Console.WriteLine($"  [run: {watch.Elapsed.TotalSeconds:F0} s, {response.Usage?.TotalTokenCount} tokens]");
+
+        return response;
+    }
+}
+```
+
+`MeasureRun` is agent run middleware. Its parameters look like a lot, but you do not need to memorize them. They are everything that was passed to `RunAsync`, plus `innerAgent`: the next one in the chain, in our case Alfred himself.
+
+What matters is the line in the middle:
+
+```csharp
+AgentResponse response = await innerAgent.RunAsync(messages, session, options, cancellationToken);
+```
+
+It passes the run onward. Everything above it happens **before** the Agent (we start a stopwatch), and everything below it **after** that (we print the time and the number of tokens). At the end we return the response without changing it.
+
+The number of tokens comes from `response.Usage`. That is where the framework adds up how many tokens were used for the whole run.
+
+### 3. Attach it to Alfred
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create()
+    .AsAIAgent(
+        name: "Alfred",
+        instructions:
+            "You are Alfred, the butler of Wayne Manor. You are polite and concise. " +
+            "Use your tools when they can help and never invent their results.",
+        tools:
+        [
+            AIFunctionFactory.Create(PartyTools.SuggestMenu),
+            AIFunctionFactory.Create(PartyTools.FindBestCatering),
+            AIFunctionFactory.Create(PartyTools.OrderCatering),
+        ])
+    .AsBuilder()
+    .Use(runFunc: AlfredMiddleware.MeasureRun, runStreamingFunc: null)
+    .Build();
+
+AgentResponse response = await alfred.RunAsync(
+    "What menu do you suggest for a formal party?");
+
+AgentLog.Print(response);
+```
+
+Alfred got his third tool, and three new lines appeared after `AsAIAgent`:
+
+- **`AsBuilder()`** starts wrapping the finished Agent.
+- **`Use(...)`** adds one middleware. We pass our method in `runFunc`. `runStreamingFunc` is a separate variant for streaming. We pass `null`, which means "use the same one there too".
+- **`Build()`** returns a new `AIAgent` that includes the middleware.
+
+The result is again an `AIAgent`. The rest of the code does not know and does not care that there is now an extra layer around Alfred.
+
+Run `dotnet run`:
+
+```text wrap
+  [run: 49 s, 1123 tokens]
+Alfred: I shall consult my resources to provide a suitable menu for a formal occasion, Master Bruce.
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: A three-course dinner with wine and dessert, Master Bruce. Shall I proceed to arrange the catering?
+```
+
+The first line comes from our middleware. The time on your machine will differ, because it depends on the computer.
+
+Look at the number of tokens: over a thousand for a one-sentence question and a two-sentence answer. Where do they come from? Remember what the model receives with every request: `instructions`, the descriptions of all the tools and the whole conversation so far. For this answer the model was called **twice**, once to ask for the tool and once to write the answer, and both times it read all of that. With a local model the cost is time. With a cloud model every token is paid for, which is why this kind of measurement is the first thing people add.
+
+## Ask for permission before an order
+
+Now for the more important job. Alfred has a tool that spends money, and nothing stops him from using it. We could ask him in `instructions` to check first. But instructions are a request to the model, not a guarantee. The model may ignore them.
+
+Middleware is **code**. It runs every time, whatever the model decides.
+
+### 4. Write the guard
+
+Add a second method to the `AlfredMiddleware` class:
+
+```csharp title="AlfredMiddleware.cs"
+public static async ValueTask<object?> AskBeforeOrdering(
+    AIAgent agent,
+    FunctionInvocationContext context,
+    Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
+    CancellationToken cancellationToken)
+{
+    if (context.Function.Name == nameof(PartyTools.OrderCatering))
+    {
+        string arguments = JsonSerializer.Serialize(context.Arguments);
+        Console.Write($"  {agent.Name} wants to call {context.Function.Name}({arguments}). Allow? (y/n): ");
+
+        if (Console.ReadLine()?.Trim().ToLowerInvariant() != "y")
+        {
+            return "The user did not approve this action.";
+        }
+    }
+
+    return await next(context, cancellationToken);
+}
+```
+
+This is function calling middleware. It runs on **every tool call** and receives:
+
+- `agent`: which Agent wants the tool;
+- `context`: which tool (`context.Function`) and with what arguments (`context.Arguments`);
+- `next`: the function that actually runs the tool.
+
+The logic is short:
+
+1. If the tool is not `OrderCatering`, we continue straight to `next`. The menu and the catering search are not dangerous.
+2. If it is `OrderCatering`, we show exactly what Alfred wants to do and wait for an answer from the keyboard.
+3. On the answer `y` we call `next`, and the order goes through.
+4. On any other answer we **do not call `next`**. Instead we return text that the model will receive as the Observation.
+
+The fourth point is the heart of it. The tool is never run, but the model is not left without an answer. It learns what happened, in clear text, just as with the errors in the [Tools](/en/ai-agents/unit-2/agent-framework/tools/) lesson.
+
+### 5. Attach it and approve the order
+
+In `Program.cs` add one more `Use` line before `Build()`:
+
+```csharp
+    .AsBuilder()
+    .Use(runFunc: AlfredMiddleware.MeasureRun, runStreamingFunc: null)
+    .Use(AlfredMiddleware.AskBeforeOrdering)
+    .Build();
+```
+
+and change the question:
+
+```csharp
+AgentResponse response = await alfred.RunAsync(
+    "Find the best catering service and order food for 40 guests.");
+```
+
+Run `dotnet run`. The program will pause and ask you. Type `y` and press Enter:
+
+```text wrap
+  Alfred wants to call OrderCatering({"service":"Gotham Catering Co.","guests":40}). Allow? (y/n): y
+  [run: 30 s, 1835 tokens]
+  Action: FindBestCatering({})
+  Observation: Gotham Catering Co. (rating 98/100)
+Alfred: I have identified Gotham Catering Co. as the highest-rated service in Gotham City. I will now place an order for 40 guests with them.
+  Action: OrderCatering({"service":"Gotham Catering Co.","guests":40})
+  Observation: Order placed with Gotham Catering Co. for 40 guests.
+Alfred: The order has been successfully placed with Gotham Catering Co. for your 40 guests.
+```
+
+Follow what happened:
+
+1. Alfred called `FindBestCatering`. The middleware let it through without asking.
+2. With the result, Alfred asked for `OrderCatering`. Here the program paused and showed you the exact arguments: which company and for how many guests.
+3. You approved, the middleware called `next`, and the order was placed.
+
+Notice something new in Alfred's behavior too. Until now he asked for tools all at once. Here he called them **one after the other**, because he needed the result of the first for the second. These are two rounds of the Thought → Action → Observation cycle in a single run.
+
+### 6. Decline the order
+
+Run `dotnet run` again, and this time answer `n`:
+
+```text wrap
+  Alfred wants to call OrderCatering({"service":"Gotham Catering Co.","guests":40}). Allow? (y/n): n
+  [run: 31 s, 1842 tokens]
+  Action: FindBestCatering({})
+  Observation: Gotham Catering Co. (rating 98/100)
+Alfred: I have identified Gotham Catering Co. as the highest-rated service in Gotham City. I will now place an order for 40 guests.
+  Action: OrderCatering({"service":"Gotham Catering Co.","guests":40})
+  Observation: The user did not approve this action.
+Alfred: I apologize, sir. The catering order could not be placed as the action was not approved. Please let me know if you would like to proceed with a different service or adjust the number of guests.
+```
+
+The `OrderCatering` method was not run. The model received our text as the Observation, understood that the order was not approved, and said so politely. Not a line in `PartyTools.cs` or in `instructions` changed.
+
+This is called **human-in-the-loop**: a person approves the Agent's important actions. For any tool that changes something in the real world (payments, emails, deleting data), it is good practice.
+
+:::note[The built-in approval]
+Our guard reads from the console, which is convenient for learning. A web application has no console to wait on. For such cases the framework has a built-in mechanism: you wrap the tool in `ApprovalRequiredAIFunction`, and the Agent returns an approval request that the application answers later. See [Tool Approval](https://learn.microsoft.com/agent-framework/agents/tools/tool-approval) in the documentation.
+:::
+
+## What else middleware can do
+
+The two examples show the two main roles: observation and control. The same means are used for many other things:
+
+- **Logging.** Recording every question, every tool call and every answer.
+- **Guardrails.** Checking the input or the output and refusing if it contains something forbidden.
+- **Hiding sensitive data** before it reaches the model.
+- **Observability.** Instead of writing your own logs, you can add `UseOpenTelemetry()` to the same builder. Then the framework itself sends data about every step to monitoring tools, following the OpenTelemetry standard.
+
+## Your turn
+
+Write a guardrail: agent run middleware `ProtectBatcave` that does not let Alfred talk about the Batcave. If any message from the user contains the word "Batcave", the middleware must return a canned refusal, **without calling the model at all**.
+
+Hint: the incoming messages are in the `messages` parameter, and the text of each one is in its `Text` property.
+
+<details>
+<summary>See the solution</summary>
+
+Add the method to `AlfredMiddleware`:
+
+```csharp
+public static async Task<AgentResponse> ProtectBatcave(
+    IEnumerable<ChatMessage> messages,
+    AgentSession? session,
+    AgentRunOptions? options,
+    AIAgent innerAgent,
+    CancellationToken cancellationToken)
+{
+    if (messages.Any(m => m.Text.Contains("Batcave", StringComparison.OrdinalIgnoreCase)))
+    {
+        return new AgentResponse(new ChatMessage(ChatRole.Assistant, "I am afraid I cannot discuss that, sir.")
+        {
+            AuthorName = innerAgent.Name,
+        });
+    }
+
+    return await innerAgent.RunAsync(messages, session, options, cancellationToken);
+}
+```
+
+and attach it with one more line in `Program.cs`:
+
+```csharp
+.Use(runFunc: AlfredMiddleware.ProtectBatcave, runStreamingFunc: null)
+```
+
+Ask `Where is the entrance to the Batcave?`. The answer comes instantly, because the model is not called.
+
+</details>
+
+## Summary
+
+- **Middleware** is code that runs around the Agent or around its tools, without changing them.
+- It can do something **before** the call, something **after** it, or **stop** it altogether.
+- **Agent run middleware** wraps the whole run. **Function calling middleware** wraps every tool call.
+- Middleware is added with **`AsBuilder().Use(...).Build()`**. The result is again an `AIAgent`.
+- `instructions` are a request to the model. **Middleware is a guarantee**, because it is code and always runs.
+- Having a person approve important actions is called **human-in-the-loop**.
+
+Alfred is now fully equipped: he has tools, memory and control. Time for one more short quiz, and after it we will give him a team.

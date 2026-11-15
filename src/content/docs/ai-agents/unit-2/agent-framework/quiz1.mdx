@@ -1,0 +1,142 @@
+---
+title: Quick Quiz 1
+description: Кратък quiz без оценка върху началото на Unit 2.1 - какво е Microsoft Agent Framework, връзката му с Microsoft.Extensions.AI, AsAIAgent, RunAsync и изборът между Agent и Workflow.
+---
+
+import Question from '../../../../../components/Question.astro';
+
+Кратък **quiz без оценка**, с който да провериш дали основите на Microsoft Agent Framework са си дошли на мястото. Отбележи отговора, който смяташ за верен, и натисни „Провери“.
+
+### В1: Какво е Microsoft Agent Framework?
+
+<Question
+  choices={[
+    {
+      text: 'Framework с отворен код за изграждане на AI Agents и multi-agent workflows, наследник на Semantic Kernel и AutoGen.',
+      explain: 'Той обединява простите абстракции на AutoGen с production възможностите на Semantic Kernel и добавя Workflows.',
+      correct: true,
+    },
+    {
+      text: 'Нов езиков модел на Microsoft, обучен специално за извикване на tools.',
+      explain: 'Framework-ът не е модел. Той работи с различни модели през интерфейса IChatClient.',
+    },
+    {
+      text: 'Програма като Ollama, която изпълнява модели на твоя компютър.',
+      explain: 'Моделът продължава да се изпълнява от Ollama. Framework-ът е библиотеката, с която пишеш Agent-а около него.',
+    },
+  ]}
+/>
+
+---
+
+### В2: Каква е връзката между Agent Framework и Microsoft.Extensions.AI?
+
+<Question
+  choices={[
+    {
+      text: 'Agent Framework заменя Microsoft.Extensions.AI, затова наученото в Unit 1 вече не важи.',
+      explain: 'Напротив. IChatClient, ChatMessage, AIFunctionFactory и атрибутът [Description] се използват и тук.',
+    },
+    {
+      text: 'Agent Framework е изграден върху Microsoft.Extensions.AI и работи с всеки IChatClient.',
+      explain: 'Затова същият OllamaApiClient от Unit 1 работи и тук, а смяната на доставчика на модела е промяна на един ред.',
+      correct: true,
+    },
+    {
+      text: 'Двете библиотеки нямат нищо общо и не могат да се използват в един проект.',
+      explain: 'Пакетът Microsoft.Agents.AI дори носи Microsoft.Extensions.AI със себе си.',
+    },
+  ]}
+/>
+
+---
+
+### В3: Какво прави `AsAIAgent`?
+
+<Question
+  choices={[
+    {
+      text: 'Изтегля модел от интернет и го стартира локално.',
+      explain: 'Моделът идва от IChatClient. AsAIAgent не изтегля и не стартира нищо.',
+    },
+    {
+      text: 'Превръща един IChatClient в AIAgent с име, instructions и tools, като цикълът за извикване на tools е включен.',
+      explain: 'В Unit 1 сглобяваше същото на части: ChatClientBuilder, UseFunctionInvocation, ChatOptions и system message.',
+      correct: true,
+    },
+    {
+      text: 'Записва разговора във файл, за да продължи по-късно.',
+      explain: 'Това е работа на AgentSession и ще я разгледаме в урока за Sessions.',
+    },
+  ]}
+/>
+
+---
+
+### В4: Къде отива system prompt-ът на един Agent?
+
+<Question
+  choices={[
+    {
+      text: 'В параметъра instructions, когато създаваш Agent-а.',
+      explain: 'Framework-ът го изпраща на модела като system message при всяко изпълнение.',
+      correct: true,
+    },
+    {
+      text: 'В първия въпрос, който подаваш на RunAsync.',
+      explain: 'Тогава щеше да е част от разговора на потребителя и трябваше да го повтаряш всеки път.',
+    },
+    {
+      text: 'В константата Model във файла LocalModel.cs.',
+      explain: 'Там стои само името на модела. LocalModel.cs описва връзката с модела, а не поведението на Agent-а.',
+    },
+  ]}
+/>
+
+---
+
+### В5: Каква е разликата между `RunAsync` и `RunStreamingAsync`?
+
+<Question
+  choices={[
+    {
+      text: 'RunAsync използва tools, а RunStreamingAsync не може.',
+      explain: 'И двата метода изпълняват един и същ Agent със същите възможности.',
+    },
+    {
+      text: 'RunStreamingAsync работи само с облачни модели.',
+      explain: 'Streaming работи и с локалния модел в Ollama, както видя в урока.',
+    },
+    {
+      text: 'RunAsync връща целия отговор наведнъж, а RunStreamingAsync го връща на части, докато моделът пише.',
+      explain: 'Streaming е удобен, когато човек чака пред екрана и иска да вижда текста веднага.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### В6: Кога е по-подходящ Workflow, а не един Agent?
+
+<Question
+  choices={[
+    {
+      text: 'Когато задачата е отворен разговор и не знаеш предварително какво ще поиска потребителят.',
+      explain: 'Това е типична работа за Agent: моделът сам преценява какво да направи.',
+    },
+    {
+      text: 'Когато процесът има ясно определени стъпки и искаш ти да контролираш реда им.',
+      explain: 'При Workflow стъпките и връзките са записани в кода. Моделът работи само вътре в отделните стъпки.',
+      correct: true,
+    },
+    {
+      text: 'Когато задачата може да се реши с една обикновена C# функция.',
+      explain: 'Тогава не ти трябва нито Agent, нито Workflow. Напиши функцията.',
+    },
+  ]}
+/>
+
+---
+
+Справи ли се? Чудесно! Alfred вече говори. Време е да го научим да **действа**, като му дадем tools.

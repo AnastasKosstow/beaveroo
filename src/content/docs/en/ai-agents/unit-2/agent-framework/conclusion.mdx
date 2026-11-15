@@ -1,0 +1,48 @@
+---
+title: Conclusion
+description: Congratulations on finishing Unit 2.1 - you can now build Agents and workflows with Microsoft Agent Framework.
+---
+
+Congratulations on finishing the Microsoft Agent Framework module 🥳
+
+You started with a one-line Agent and got to a team of Agents and a workflow with a branch. In between, Alfred prepared a party.
+
+## What you learned
+
+- An **`AIAgent`** gathers a model, `instructions` and tools in one object. You create it with `AsAIAgent` on top of any `IChatClient`.
+- **Tools** are the same C# methods with `[Description]` from Unit 1. The description is everything the model knows about them, and clear text on an error helps it correct itself.
+- An **`AgentSession`** keeps the conversation between runs and can be saved as JSON.
+- **Middleware** is your own code around every run and every tool call. With it you observe the Agent and stop actions that are not approved.
+- An **Agent as a tool** (`AsAIFunction`) lets you build a team: a manager who delegates tasks to specialists.
+- **Workflows** connect functions and Agents in a graph where you define the order. `AgentWorkflowBuilder` gives you ready-made patterns for several Agents.
+
+Before you add an Agent, ask **who decides the next step**. If the model should decide, you need an Agent. If you should decide, you need a Workflow. If a function is enough, you need neither.
+
+## The whole project
+
+Here are the files you collected in `PartyPlanner` over the course of the module:
+
+| File | What it contains | Which lesson it is from |
+| --- | --- | --- |
+| `LocalModel.cs` | The connection to the local model in Ollama. | [Your First Agent](/en/ai-agents/unit-2/agent-framework/first-agent/) |
+| `PartyTools.cs` | Tools for the menu, catering, ordering and music. | [Tools](/en/ai-agents/unit-2/agent-framework/tools/) and the ones after it |
+| `AgentLog.cs` | Prints the steps of a response. | [Tools](/en/ai-agents/unit-2/agent-framework/tools/) |
+| `AlfredMiddleware.cs` | Measuring a run and approving orders. | [Middleware](/en/ai-agents/unit-2/agent-framework/middleware/) |
+| `TeamTrace.cs` | Shows which Agent calls which tool. | [Multi-Agent Systems](/en/ai-agents/unit-2/agent-framework/multi-agent-systems/) |
+
+If you want to try something of your own, replace the tools.
+
+## What's next
+
+It is normal if some things are still not completely clear. Go back to the lessons, change the examples and see what happens.
+
+In the next Unit you will apply what you have learned to a real use case and build a complete application with Agents.
+
+If you want to keep going with Agent Framework on your own, here are a few topics we did not cover:
+
+- [MCP tools](https://learn.microsoft.com/agent-framework/agents/tools/) - plugging in ready-made tools from MCP servers.
+- [Context providers](https://learn.microsoft.com/agent-framework/agents/conversations/context-providers) - long-term memory that the Agent carries across different conversations.
+- [Observability](https://learn.microsoft.com/agent-framework/agents/observability) - tracing every step with OpenTelemetry.
+- [Orchestrations](https://learn.microsoft.com/agent-framework/workflows/orchestrations/) - the remaining patterns for several Agents: concurrent, handoff, group chat and magentic.
+
+### Keep Learning, stay awesome 🤗

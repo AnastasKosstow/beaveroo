@@ -1,0 +1,276 @@
+---
+title: "Sessions: паметта на Agent-а"
+description: Даваме памет на Alfred с AgentSession - защо Agent-ът забравя, как един session пази разговора, как го превръщаме в чат и как го записваме във файл, за да продължи след рестарт.
+---
+
+Alfred вече има tools, но има и един сериозен недостатък: забравя всичко веднага щом отговори. Ако му кажеш колко гости очакваш и после го попиташ за същото, той няма да знае.
+
+В този урок ще му дадеш памет с `AgentSession`. Накрая Alfred ще помни разговора дори след като спреш и стартираш програмата отново.
+
+## Защо Agent-ът забравя
+
+Причината ти е позната от [Unit 1](/ai-agents/unit-1/messages-and-special-tokens/): **моделът няма памет**. Всеки път той получава един prompt и го продължава. За да „помни“ разговора, трябва при всяка заявка да му изпратиш всички предишни messages.
+
+В Unit 1 правеше това на ръка. Поддържаше списък `history`, добавяше в него всеки въпрос и всеки отговор и го подаваше при всяка заявка. В Agent Framework тази работа върши **`AgentSession`**: обект, който пази разговора вместо теб.
+
+| | В Unit 1 | С Agent Framework |
+| --- | --- | --- |
+| Къде е разговорът | В твоя списък `history`. | В `AgentSession`. |
+| Кой добавя новите messages | Ти, с `history.Add` и `history.AddMessages`. | Framework-ът, автоматично. |
+| Как се подава | `GetResponseAsync(history, options)` | `RunAsync(въпрос, session)` |
+
+## Дай памет на Alfred
+
+Продължаваме в проекта `PartyPlanner`. Ще ти трябват `LocalModel.cs`, `PartyTools.cs` и `AgentLog.cs` от предишните уроци.
+
+### 1. Виж проблема
+
+Първо да видим самото забравяне. Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor. You are polite and concise. " +
+        "Use your tools when they can help and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(PartyTools.SuggestMenu),
+        AIFunctionFactory.Create(PartyTools.FindBestCatering),
+    ]);
+
+AgentLog.Print(await alfred.RunAsync("We expect 40 guests for the gala on Saturday."));
+AgentLog.Print(await alfred.RunAsync("How many guests do we expect?"));
+```
+
+Alfred е същият като в урока за Tools. Задаваме му два въпроса един след друг. Изпълни `dotnet run`:
+
+```text wrap
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+Alfred: I am afraid I do not have that information in my current records, sir. Could you please clarify the number of guests for the upcoming event?
+```
+
+Току-що му каза за 40-те гости и той „отбеляза“. При втория въпрос обаче вече не знае нищо. Всяко извикване на `RunAsync` е отделен разговор: моделът получава само `instructions` и текущия въпрос.
+
+### 2. Създай session
+
+Замени последните два реда на `Program.cs` със следното:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+AgentLog.Print(await alfred.RunAsync("We expect 40 guests for the gala on Saturday.", session));
+AgentLog.Print(await alfred.RunAsync("How many guests do we expect?", session));
+```
+
+Промените са две: `CreateSessionAsync` създава нов, празен session, а `RunAsync` го получава като втори аргумент. Изпълни `dotnet run`:
+
+```text wrap
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+Alfred: We are expecting forty guests, sir.
+```
+
+Този път Alfred знае отговора. Ето какво прави framework-ът при всяко извикване на `RunAsync` със session:
+
+1. Взима всички messages, които вече са в session-а.
+2. Изпраща ги на модела заедно с `instructions` и новия въпрос.
+3. Добавя новия въпрос и отговора в session-а.
+
+Това са точно стъпките, които в Unit 1 писа сам. Моделът все така не помни нищо. Просто всеки път получава целия разговор.
+
+### 3. Превърни го в разговор
+
+Един session има най-много смисъл в истински чат. Замени всичко под създаването на `alfred` със следното:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+Console.WriteLine("Alfred is ready.");
+
+Console.WriteLine("Ask a question (or press Enter to exit).");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    string? input = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
+
+    AgentLog.Print(await alfred.RunAsync(input, session));
+}
+```
+
+Цикълът чете въпроси от конзолата, докато не натиснеш Enter на празен ред. Сравни го с цикъла от [първия ти Agent](/ai-agents/unit-1/tutorial/): двата реда с `history` ги няма. Остана само `RunAsync(input, session)`.
+
+Изпълни `dotnet run` и задай три въпроса:
+
+```text wrap
+Alfred is ready.
+Ask a question (or press Enter to exit).
+
+You: We expect 40 guests for the gala on Saturday.
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+
+You: What menu do you suggest for a formal party?
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: A three-course dinner with wine and dessert, sir. Would you like me to arrange for the highest-rated catering service in Gotham City?
+
+You: How many guests did I say?
+Alfred: You mentioned expecting 40 guests, sir.
+```
+
+Третият въпрос идва след друг въпрос и след извикване на tool, но Alfred пак знае отговора. В session-а се пази целият разговор, включително извикванията на tools и техните резултати.
+
+## Запази разговора
+
+Session-ът живее в паметта на програмата. Когато тя спре, разговорът изчезва. За да го запазиш, трябва да го запишеш някъде. Agent Framework може да превърне един session в JSON и обратно:
+
+| Метод | Какво прави |
+| --- | --- |
+| `SerializeSessionAsync(session)` | Превръща session-а в JSON. |
+| `DeserializeSessionAsync(json)` | Създава session от записан JSON. |
+
+Къде ще пазиш този JSON, решаваш ти: във файл, в база данни или където ти е удобно. Ние ще използваме файл.
+
+### 4. Запиши session-а във файл
+
+Ще направим три промени в `Program.cs`.
+
+Най-горе добави още един `using`:
+
+```csharp
+using System.Text.Json;
+```
+
+Замени двата реда, които създават session-а и отпечатват `Alfred is ready.`, със следното:
+
+```csharp
+const string SessionFile = "session.json";
+
+AgentSession session;
+
+if (File.Exists(SessionFile))
+{
+    JsonElement saved = JsonSerializer.Deserialize<JsonElement>(await File.ReadAllTextAsync(SessionFile));
+    session = await alfred.DeserializeSessionAsync(saved);
+    Console.WriteLine("Alfred remembers your last conversation.");
+}
+else
+{
+    session = await alfred.CreateSessionAsync();
+    Console.WriteLine("Alfred is ready.");
+}
+```
+
+И добави в самия край на файла, след цикъла `while`:
+
+```csharp
+JsonElement state = await alfred.SerializeSessionAsync(session);
+await File.WriteAllTextAsync(SessionFile, state.GetRawText());
+```
+
+Сега програмата прави две нови неща:
+
+- **При стартиране** проверява дали има файл `session.json`. Ако има, възстановява session-а от него. Ако няма, създава нов.
+- **При изход** записва session-а във файла.
+
+Изпълни `dotnet run` и проведи същия разговор като в предишната стъпка. Излез с Enter на празен ред. В папката на проекта ще се появи файл `session.json`.
+
+После изпълни `dotnet run` още веднъж:
+
+```text wrap
+Alfred remembers your last conversation.
+Ask a question (or press Enter to exit).
+
+You: On which day is the gala, and what are we serving?
+Alfred: The gala is on Saturday, and we will be serving a three-course dinner with wine and dessert.
+```
+
+Това е нов процес, който започна от нулата. Въпреки това Alfred знае и деня, и менюто, защото разговорът беше прочетен от файла.
+
+### Какво има във файла
+
+Отвори `session.json`. Ето началото му, подредено и леко съкратено за по-лесно четене:
+
+```json
+{
+  "stateBag": {
+    "InMemoryChatHistoryProvider": {
+      "messages": [
+        {
+          "role": "user",
+          "contents": [
+            { "$type": "text", "text": "We expect 40 guests for the gala on Saturday." }
+          ]
+        },
+        {
+          "authorName": "Alfred",
+          "role": "assistant",
+          "contents": [
+            { "$type": "text", "text": "That is noted, sir. Shall I suggest a formal menu for the occasion?" }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+Няма нищо загадъчно. Session-ът е **списък от messages**, всеки с `role` и съдържание, точно както в Unit 1. По-надолу във файла ще намериш и извикването на `SuggestMenu` като съдържание от тип `functionCall`, а резултата му като `functionResult`.
+
+:::caution[Session-ът принадлежи на своя Agent]
+Възстановявай един session със същия Agent, който го е създал. Ако смениш модела или tools, записаният разговор може да съдържа неща, които новият Agent не разбира.
+:::
+
+За да започнеш разговора на чисто, изтрий файла `session.json`.
+
+## Един Agent, много разговори
+
+Session-ът е отделен от Agent-а. Това означава, че **един Agent може да води много разговори едновременно**, всеки в свой session. Така работи всяко чат приложение: Agent-ът е един, а всеки потребител има свой разговор.
+
+За да го видиш, замени всичко под създаването на `alfred` със следното:
+
+```csharp
+AgentSession bruce = await alfred.CreateSessionAsync();
+AgentSession selina = await alfred.CreateSessionAsync();
+
+await alfred.RunAsync("I am Bruce. I am allergic to peanuts.", bruce);
+await alfred.RunAsync("I am Selina. I do not eat meat.", selina);
+
+AgentLog.Print(await alfred.RunAsync("What should the kitchen know about me?", bruce));
+AgentLog.Print(await alfred.RunAsync("What should the kitchen know about me?", selina));
+```
+
+Двама гости разговарят със същия Alfred, всеки в свой session. Накрая и двамата задават един и същ въпрос. Изпълни `dotnet run`:
+
+```text wrap
+Alfred: My lord, please inform the kitchen staff of your peanut allergy immediately. They must ensure all dishes are prepared in a peanut-free environment to guarantee your safety. Would you like me to suggest a menu for an upcoming occasion?
+Alfred: The kitchen must be informed that you do not eat meat. Additionally, if we are hosting an event, they will need to know your preferred menu style (casual, formal, or superhero). Would you like me to suggest a menu for a specific occasion?
+```
+
+Въпросът е един и същ, а отговорите са различни. Двата разговора не се смесват: Alfred не казва на Selina нищо за алергията на Bruce.
+
+## Когато разговорът стане дълъг
+
+Session-ът расте с всеки въпрос, а при всяко извикване целият разговор се изпраща на модела. Това има две последствия:
+
+- Всеки следващ отговор е малко по-бавен, защото моделът чете все повече текст.
+- Много дълъг разговор може да надхвърли *context length* на модела, тоест максималния брой tokens, които той може да обработи (виж [Какво са LLMs?](/ai-agents/unit-1/what-are-llms/)).
+
+Решението е старите messages да се съкращават или обобщават. Agent Framework има готови стратегии за това, наречени *compaction*. За кратките разговори в този курс не ни трябват, но е добре да знаеш, че съществуват.
+
+## Обобщение
+
+- Моделът няма памет. **`AgentSession`** пази разговора и framework-ът го изпраща на модела при всяко извикване.
+- Session се създава с **`CreateSessionAsync`** и се подава като втори аргумент на `RunAsync`.
+- Без session всяко извикване на `RunAsync` е отделен разговор.
+- Session-ът е **списък от messages**. Със `SerializeSessionAsync` го превръщаш в JSON, а с `DeserializeSessionAsync` го възстановяваш.
+- **Един Agent може да води много разговори**, всеки в свой session.
+
+Alfred вече помни. Преди да му позволим да харчи пари за кетъринг обаче, искаме да виждаме какво прави и да можем да го спрем. За това служи middleware, темата на следващия урок.

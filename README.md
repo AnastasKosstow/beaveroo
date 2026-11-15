@@ -18,8 +18,6 @@ Beaveroo is a platform for AI courses. A course is a folder of lessons, a sideba
 - [Add a lesson](#add-a-lesson)
 - [Deploy](#deploy)
 
-[AI Agents](https://beaveroo.tech/ai-agents/unit-0/introduction/) is the first course on the platform. The home page is a grid, so the next course is another card next to it.
-
 The site is a static build. There is no database and no server-side app. Astro compiles the lessons to HTML, and a GitHub Action uploads that HTML to the host.
 
 ## Courses
@@ -33,7 +31,7 @@ An unofficial adaptation of the [Hugging Face Agents Course](https://huggingface
 | [WELCOME TO THE COURSE](https://beaveroo.tech/ai-agents/unit-0/introduction/) | What the course is, and what you need installed (.NET SDK). |
 | [INTRODUCTION TO AGENTS](https://beaveroo.tech/ai-agents/unit-1/introduction/) | Agents, LLMs, messages, chat templates, tools, and the thought, action, observation loop. Ends with a small agent written in C#. |
 | [FRAMEWORKS](https://beaveroo.tech/ai-agents/unit-2/introduction/) | When an agentic framework is worth using, and what it has to provide. |
-| &emsp;[ - Microsoft Agent Framework](https://beaveroo.tech/ai-agents/unit-2/introduction/) | Tools, memory, and multi-agent workflows in .NET, on top of `Microsoft.Extensions.AI`. |
+| &emsp;[ - Microsoft Agent Framework](https://beaveroo.tech/ai-agents/unit-2/agent-framework/introduction/) | Tools, memory, and multi-agent workflows in .NET, on top of `Microsoft.Extensions.AI`. |
 
 ## Stack
 

@@ -1,0 +1,303 @@
+---
+title: Tools
+description: We give Alfred tools in Microsoft Agent Framework - C# methods with [Description], several tools in one question, why the description matters so much, and what happens when a tool fails.
+---
+
+Alfred can talk now, but the party will not organize itself with words alone. To pick a menu and find a caterer, he needs **tools**.
+
+As you learned in [Unit 1](/en/ai-agents/unit-1/tools/), a tool is a function we give to the model. The model does not run it itself. It only says which tool it wants and with what arguments, and the Agent runs it and returns the result.
+
+In this lesson you will give Alfred two tools, see how he chooses between them, and understand why **the description of a tool matters more than its code**.
+
+## Tools in Agent Framework
+
+There is nothing new to learn here. A tool is the same C# method with the `[Description]` attribute, and `AIFunctionFactory.Create` turns it into a tool, exactly as in your [first Agent](/en/ai-agents/unit-1/tutorial/). The four things the model needs to know are taken from the method:
+
+| What the model needs to know | Where it comes from |
+| --- | --- |
+| Name | The name of the method. |
+| Description | The `[Description]` attribute on the method. |
+| Inputs | The parameters, their types and their `[Description]`. |
+| Output | The return type. |
+
+The only difference is where you pass the tools. In Unit 1 you put them into `ChatOptions` with every request. Here you give them to the Agent **once, when you create it**, in the `tools` parameter.
+
+## Give Alfred tools
+
+We continue in the `PartyPlanner` project from the [previous lesson](/en/ai-agents/unit-2/agent-framework/first-agent/). The `LocalModel.cs` file stays unchanged.
+
+### 1. Write the tools
+
+Create a file `PartyTools.cs`:
+
+```csharp title="PartyTools.cs"
+using System.ComponentModel;
+
+public static class PartyTools
+{
+    [Description("Suggests a menu for a given type of occasion.")]
+    public static string SuggestMenu(
+        [Description("The type of occasion. Allowed values: 'casual', 'formal', 'superhero'.")]
+        string occasion) => occasion.ToLowerInvariant() switch
+    {
+        "casual" => "Pizza, snacks and drinks.",
+        "formal" => "Three-course dinner with wine and dessert.",
+        "superhero" => "Buffet with high-energy and healthy food.",
+        _ => $"Unknown occasion '{occasion}'. Allowed values: 'casual', 'formal', 'superhero'.",
+    };
+
+    [Description("Returns the highest-rated catering service in Gotham City.")]
+    public static string FindBestCatering()
+    {
+        Dictionary<string, int> ratings = new()
+        {
+            ["Gotham Catering Co."] = 98,
+            ["Wayne Manor Catering"] = 96,
+            ["Gotham City Events"] = 94,
+        };
+
+        var best = ratings.MaxBy(rating => rating.Value);
+
+        return $"{best.Key} (rating {best.Value}/100)";
+    }
+}
+```
+
+The class has two tools:
+
+- **`SuggestMenu`** takes the type of event and returns a suitable menu. In a real application it would read from a database. Here the answers are written in the code, so we can focus on the Agent.
+- **`FindBestCatering`** has no parameters. It returns the catering company with the highest rating.
+
+Notice two things in `SuggestMenu`. The parameter description lists the allowed values. And the last line of the `switch` does not throw an error, it returns text that explains what is wrong. In a moment you will see why both matter.
+
+### 2. Show the Agent's steps
+
+The Agent runs the whole cycle inside `RunAsync`. To see what happened, we will print the steps, as we did in Unit 1. Create a file `AgentLog.cs`:
+
+```csharp title="AgentLog.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class AgentLog
+{
+    public static void Print(AgentResponse response)
+    {
+        foreach (ChatMessage message in response.Messages)
+        {
+            foreach (AIContent content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent text:
+                        Console.WriteLine($"{message.AuthorName}: {text.Text}");
+                        break;
+                    case FunctionCallContent call:
+                        string arguments = JsonSerializer.Serialize(call.Arguments);
+                        Console.WriteLine($"  Action: {call.Name}({arguments})");
+                        break;
+                    case FunctionResultContent result:
+                        Console.WriteLine($"  Observation: {result.Result}");
+                        break;
+                }
+            }
+        }
+    }
+}
+```
+
+`response.Messages` holds everything the Agent produced on the way to the answer, in the order it happened. The `Print` method walks through it and prints three kinds of content:
+
+| Content | Type | How we print it |
+| --- | --- | --- |
+| Text written by the model | `TextContent` | `Alfred: ...` |
+| A tool call | `FunctionCallContent` | `Action: ...` |
+| A tool result | `FunctionResultContent` | `Observation: ...` |
+
+The name in front of the text comes from `message.AuthorName`. The framework fills it in with the name you gave the Agent.
+
+### 3. Give the tools to the Agent
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor. You are polite and concise. " +
+        "Use your tools when they can help and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(PartyTools.SuggestMenu),
+        AIFunctionFactory.Create(PartyTools.FindBestCatering),
+    ]);
+
+AgentResponse response = await alfred.RunAsync(
+    "What menu do you suggest for a formal party?");
+
+AgentLog.Print(response);
+```
+
+There are three changes compared to the previous lesson:
+
+- The new **`tools`** parameter holds the two methods, turned into tools with `AIFunctionFactory.Create`.
+- In **`instructions`** we added a sentence that tells the model to use its tools and not to invent their results.
+- Instead of `Console.WriteLine(response.Text)` we call **`AgentLog.Print`**, so we can see the steps as well.
+
+### 4. Start the program
+
+```bash
+dotnet run
+```
+
+output:
+
+```text wrap
+Alfred: I shall consult my resources to ensure the menu befitting such an occasion is presented to you, Master Bruce.
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: A three-course dinner with wine and dessert, Master Bruce. It is a fitting arrangement for a formal gathering.
+```
+
+This is one full round of the cycle from Unit 1:
+
+1. **Thought.** The first line is a sentence the model wrote before asking for the tool. In Unit 1 you saw it as a `Thought` line. Here thinking is off, so the model sometimes says out loud what it is about to do.
+2. **Action.** The model asked for `SuggestMenu` with the argument `formal`. It extracted the value from the question by itself.
+3. **Observation.** The framework ran the real C# method and returned its result to the model.
+4. **Final answer.** The model read the result and passed it on to the user in its own words.
+
+You wrote neither a `while` nor any parsing. The whole cycle ran inside `RunAsync`.
+
+### 5. Ask a question for two tools
+
+Change the question in `Program.cs`:
+
+```csharp
+AgentResponse response = await alfred.RunAsync(
+    "We are planning a superhero party. What should we serve, and who should cater it?");
+```
+
+Run `dotnet run`:
+
+```text wrap
+Alfred: I shall immediately arrange for the appropriate menu and catering service for our superhero gathering.
+  Action: SuggestMenu({"occasion":"superhero"})
+  Action: FindBestCatering({})
+  Observation: Buffet with high-energy and healthy food.
+  Observation: Gotham Catering Co. (rating 98/100)
+Alfred: For our superhero gathering, I have arranged a buffet featuring high-energy and healthy food. The catering will be handled by Gotham Catering Co., which holds the highest rating in Gotham City.
+```
+
+The question has two parts, and the model asked for **two tools in one step**: the two `Action` lines come one after the other, before any `Observation`. The framework ran both methods and returned both results together. Nowhere in the code did you say which tool is for what. The model chose based on their descriptions.
+
+### 6. Ask a question without a tool
+
+Change the question once more:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Good evening, Alfred. Who are you?");
+```
+
+Run `dotnet run`:
+
+```text wrap
+Alfred: Good evening, sir. I am Alfred Pennyworth, your loyal butler. How may I assist you tonight?
+```
+
+There is neither an `Action` nor an `Observation`. This question needs no tool, and the model answers directly. As in Unit 1, **the model decides for itself when to use tools**.
+
+## The description is the interface
+
+Our `SuggestMenu` knows three kinds of events. What happens if you ask about a fourth? Change the question:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("What menu do you suggest for a wedding?");
+```
+
+Run `dotnet run`:
+
+```text wrap
+Alfred: I would be happy to assist with that inquiry, sir. However, our current culinary database only provides suggestions for casual, formal, or superhero occasions. A wedding is typically considered a formal event; therefore, I shall proceed with the suggestion for a formal occasion.
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: I have secured a suggestion for the wedding, sir. A three-course dinner with wine and dessert is recommended.
+```
+
+The model did not pass `wedding`. It knew that the tool accepts only three values, judged that a wedding is a formal event, and passed `formal`. How did it know? From the parameter description:
+
+```csharp
+[Description("The type of occasion. Allowed values: 'casual', 'formal', 'superhero'.")]
+```
+
+Remember the rule from Unit 1: **the description is everything the model knows about a tool**. It does not see the method body and has no way to guess which values work. So a good description says not only what the tool does, but also which values it accepts.
+
+## When a tool fails
+
+What happens if the model does pass a value the tool does not know? There are two ways to handle it, and the difference between them is big. To see it, first remove the hint from the parameter description in `PartyTools.cs`:
+
+```csharp
+[Description("The type of occasion.")]
+```
+
+The question in `Program.cs` stays the one about the wedding.
+
+**Option 1: the tool returns text with an explanation.** That is what our code does right now, with the last line of the `switch`. Run `dotnet run`:
+
+```text wrap
+  Action: SuggestMenu({"occasion":"wedding"})
+  Observation: Unknown occasion 'wedding'. Allowed values: 'casual', 'formal', 'superhero'.
+Alfred: I apologize, sir. The system does not have a specific suggestion for a wedding. However, given the formality of such an event, I would recommend selecting the 'formal' menu option.
+```
+
+Without the hint the model passed `wedding`. The tool answered with clear text: what was wrong and which values are allowed. The model read it as an Observation and gave the user a meaningful answer.
+
+**Option 2: the tool throws an exception.** Change the last line of the `switch` in `SuggestMenu`:
+
+```csharp
+_ => throw new ArgumentException($"Unknown occasion '{occasion}'."),
+```
+
+Run `dotnet run`:
+
+```text wrap
+  Action: SuggestMenu({"occasion":"wedding"})
+  Observation: Error: Function failed.
+Alfred: I apologize, but the function to suggest a menu for a wedding has encountered an error. I am unable to provide a specific menu at this time.
+```
+
+The program did not crash. The framework caught the error and returned it to the model as an Observation. That is good, but look at what the model received: only `Error: Function failed.`. The details of the error are not sent to the model, so that internal information does not leak by accident. As a result it has no way to understand what it got wrong, and it hits a dead end.
+
+| | What the model sees | What it can do |
+| --- | --- | --- |
+| Text with an explanation | What is wrong and what is allowed. | Correct itself or explain it to the user. |
+| Exception | `Error: Function failed.` | Only apologize. |
+
+So the rule from Unit 1 applies in full: **an error is an Observation too, so return it as clear text**.
+
+Before you move on, put `PartyTools.cs` back the way it was: with the `Allowed values` hint in the description and with text instead of an exception on the last line.
+
+## What other tools are there
+
+The tools you wrote are called **function tools**: your own C# methods. Agent Framework supports other kinds as well:
+
+| Kind of tool | What it is | Does it work with Ollama |
+| --- | --- | --- |
+| Function tools | Your own C# methods. | Yes |
+| Agent as a tool | Another Agent, called like a function. | Yes |
+| MCP tools | Tools from an MCP server (see [Unit 1](/en/ai-agents/unit-1/tools/)). | Yes |
+| Hosted tools | Code Interpreter, File Search and Web Search, which are run by the model provider. | No |
+
+Function tools and MCP tools run in your program, so they work with any model that supports function calling. Hosted tools run on the model provider's side and depend on it. An Agent as a tool is the topic of the [Multi-Agent Systems](/en/ai-agents/unit-2/agent-framework/multi-agent-systems/) lesson.
+
+## Summary
+
+- A tool in Agent Framework is **the same C# method with `[Description]`** from Unit 1. You give it to the Agent once, in the `tools` parameter.
+- The Agent runs the loop by itself: the model asks for a tool, the framework runs it and returns the result.
+- The model can ask for **several tools in one step**, or for none.
+- **The description is the interface.** List the allowed values so the model picks the right one the first time.
+- When something goes wrong, **return clear text**. With an exception the model only sees `Error: Function failed.`.
+
+Alfred can act now. There is one problem, though: he forgets everything the moment he answers. In the next lesson we will give him memory.

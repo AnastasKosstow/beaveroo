@@ -1,0 +1,233 @@
+---
+title: Multi-Agent Systems
+description: Изграждаме екип от Agents с Microsoft Agent Framework - мениджър, който възлага задачи на специалисти чрез AsAIFunction. Защо няколко малки Agents често са по-добри от един голям.
+---
+
+Досега Alfred вършеше всичко сам. За едно меню и една поръчка това е напълно достатъчно. Партито обаче расте: трябва да се помисли за храната, за музиката, а скоро и за поканите. Ако дадем всичко на един Agent, той ще има дълги инструкции, много tools и все повече поводи да се обърка.
+
+Хората решават този проблем с екип. Същото можем да направим и с Agents. В този урок ще изградиш **multi-agent система**: Alfred става мениджър, който възлага задачи на двама специалисти.
+
+## Защо повече от един Agent?
+
+Спомни си как моделът избира tool: чете описанията на всички tools и instructions и преценява. Колкото повече стават те, толкова по-трудна е преценката. Разделянето на работата между няколко Agents помага по три начина:
+
+- **Фокус.** Всеки специалист има кратки instructions и само своите tools. Така греши по-рядко.
+- **Отделен контекст.** Всеки Agent води свой разговор с модела. Стъпките на специалиста не пълнят контекста на мениджъра. Той получава само крайния отговор.
+- **Лесна промяна.** Можеш да подобриш или да замениш един специалист, без да пипаш останалите.
+
+Има и цена: повече Agents означават **повече извиквания на модела**, тоест по-бавен отговор. Затова multi-agent системата не е първото, към което да посегнеш. Използвай я, когато един Agent наистина започне да се затруднява.
+
+Ето екипа, който ще изградим:
+
+```text
+Alfred (мениджър)
+├── Chef (специалист по храната)
+│   ├── SuggestMenu
+│   └── FindBestCatering
+└── DJ (специалист по музиката)
+    └── SuggestPlaylist
+```
+
+Alfred няма нито един tool за партито. Той разполага само с двамата специалисти, а те имат tools.
+
+## Agent като tool
+
+Как един Agent „пита“ друг? В Agent Framework най-простият начин е да превърнеш специалиста в **tool** на мениджъра. Това прави един метод: `AsAIFunction()`.
+
+```csharp
+AIFunction chefTool = chef.AsAIFunction();
+```
+
+Полученият tool изглежда за мениджъра като всеки друг:
+
+| Част от tool-а | Откъде идва |
+| --- | --- |
+| Име | Параметърът `name` на специалиста, например `Chef`. |
+| Описание | Параметърът `description` на специалиста. |
+| Вход | Един текстов параметър `query`: задачата, написана с думи. |
+| Изход | Текстът на отговора на специалиста. |
+
+Мениджърът дори не знае, че зад tool-а стои друг Agent. Той вижда име, описание и текстов вход, точно както при `SuggestMenu`. Когато го извика, framework-ът изпълнява специалиста с подадената задача и връща отговора му като Observation.
+
+Затова тук се появява нов параметър: **`description`**. Важно е да го различаваш от `instructions`:
+
+| Параметър | Кой го чете | За какво служи |
+| --- | --- | --- |
+| `instructions` | Моделът на самия специалист. | Как да си върши работата. |
+| `description` | Моделът на мениджъра. | Кога да потърси този специалист. |
+
+## Изгради екипа на Alfred
+
+Продължаваме в проекта `PartyPlanner`. Ще ти трябват `LocalModel.cs` и `PartyTools.cs` от предишните уроци.
+
+### 1. Добави tool за музиката
+
+DJ-ят има нужда от свой tool. Добави този метод в класа `PartyTools`:
+
+```csharp title="PartyTools.cs"
+[Description("Suggests a playlist for a given party theme.")]
+public static string SuggestPlaylist(
+    [Description("The party theme. Allowed values: 'classic heroes', 'villain masquerade', 'futuristic gotham'.")]
+    string theme) => theme.ToLowerInvariant() switch
+{
+    "classic heroes" => "Orchestral film scores with triumphant brass.",
+    "villain masquerade" => "Dark tango, cabaret and mysterious waltzes.",
+    "futuristic gotham" => "Synthwave and neon electronic beats.",
+    _ => $"Unknown theme '{theme}'. Allowed values: 'classic heroes', 'villain masquerade', 'futuristic gotham'.",
+};
+```
+
+Той следва същите правила като `SuggestMenu`: позволените стойности са в описанието, а при непозната стойност връща ясен текст.
+
+### 2. Покажи кой кого извиква
+
+В система с няколко Agents най-интересното е кой на кого възлага работа. За да го видим, ще използваме function calling middleware от [предишния урок](/ai-agents/unit-2/agent-framework/middleware/). Създай файл `TeamTrace.cs`:
+
+```csharp title="TeamTrace.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class TeamTrace
+{
+    public static AIAgent WithTrace(this AIAgent agent) =>
+        agent.AsBuilder().Use(LogCall).Build();
+
+    private static async ValueTask<object?> LogCall(
+        AIAgent agent,
+        FunctionInvocationContext context,
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
+        CancellationToken cancellationToken)
+    {
+        string arguments = JsonSerializer.Serialize(context.Arguments);
+        Console.WriteLine($"  [{agent.Name}] calls {context.Function.Name}({arguments})");
+
+        return await next(context, cancellationToken);
+    }
+}
+```
+
+В класа има два метода:
+
+- **`LogCall`** е middleware, който отпечатва името на Agent-а и tool-а, който той извиква. После продължава с `next`, без да променя нищо.
+- **`WithTrace`** е кратък начин да добавим този middleware към Agent. Вместо да пишем `AsBuilder().Use(...).Build()` три пъти, ще пишем `.WithTrace()`.
+
+Този middleware има и още една полза. Изпълнението на екипа отнема време, а редовете му се появяват на живо, така че виждаш докъде е стигнала работата.
+
+### 3. Създай екипа
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+IChatClient model = LocalModel.Create();
+
+AIAgent chef = model
+    .AsAIAgent(
+        name: "Chef",
+        description: "Plans the food for an event: suggests a menu and finds a catering service.",
+        instructions:
+            "You are the chef of Wayne Manor. You plan the food for events. " +
+            "Use your tools and never invent their results. Answer in one or two sentences.",
+        tools:
+        [
+            AIFunctionFactory.Create(PartyTools.SuggestMenu),
+            AIFunctionFactory.Create(PartyTools.FindBestCatering),
+        ])
+    .WithTrace();
+
+AIAgent dj = model
+    .AsAIAgent(
+        name: "DJ",
+        description: "Plans the music for an event: suggests a playlist for the party theme.",
+        instructions:
+            "You are the DJ of Wayne Manor. You plan the music for events. " +
+            "Use your tools and never invent their results. Answer in one or two sentences.",
+        tools: [AIFunctionFactory.Create(PartyTools.SuggestPlaylist)])
+    .WithTrace();
+
+AIAgent alfred = model
+    .AsAIAgent(
+        name: "Alfred",
+        instructions:
+            "You are Alfred, the butler of Wayne Manor. You organise events with the help of your team. " +
+            "Ask the Chef about food and the DJ about music, then give the host one short summary.",
+        tools: [chef.AsAIFunction(), dj.AsAIFunction()])
+    .WithTrace();
+
+AgentResponse response = await alfred.RunAsync(
+    "We are hosting a formal villain masquerade. Plan the food and the music.");
+
+Console.WriteLine();
+Console.WriteLine($"Alfred: {response.Messages.Last().Text}");
+```
+
+Кодът създава трима Agents върху един и същ модел:
+
+1. **`chef`** отговаря за храната. Има двата tools от урока за Tools и `description`, което казва на мениджъра за какво да го търси.
+2. **`dj`** отговаря за музиката и има един tool.
+3. **`alfred`** е мениджърът. Той няма нито един tool за партито. Единствените му tools са двамата специалисти, превърнати в tools с `AsAIFunction()`.
+
+Тримата споделят един `IChatClient`, тоест един и същ модел. Различават се само по instructions и tools. „Специалист“ не означава друг модел, а друга роля.
+
+Последният ред отпечатва само последния message от отговора на Alfred, тоест неговото обобщение. Стъпките преди него ще видим от `TeamTrace`.
+
+### 4. Стартирай програмата
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+  [Alfred] calls Chef({"query":"formal villain masquerade menu"})
+  [Chef] calls SuggestMenu({"occasion":"formal"})
+  [Chef] calls FindBestCatering({})
+  [Alfred] calls DJ({"query":"formal villain masquerade playlist"})
+  [DJ] calls SuggestPlaylist({"theme":"villain masquerade"})
+
+Alfred: Master Bruce, the arrangements for our formal villain masquerade are complete. Gotham Catering Co. will provide an exquisite three-course dinner with wine and dessert, while the DJ has curated a playlist of dark tangos, cabaret tunes, and mysterious waltzes to set the perfect sinister tone.
+```
+
+Бъди търпелив: това изпълнение включва няколко извиквания на модела и при нас отне близо две минути. Редовете се появяват един по един, докато екипът работи.
+
+Проследи ги отгоре надолу:
+
+1. Alfred получи въпроса и се обърна към `Chef`. Сам формулира задачата за него: `formal villain masquerade menu`.
+2. `Chef` е отделен Agent със свой цикъл. Той поиска двата си tools, получи резултатите им и написа отговор.
+3. Този отговор се върна при Alfred като Observation.
+4. По същия начин Alfred се обърна към `DJ`. DJ-ят избра от задачата точната стойност `villain masquerade` и извика своя tool.
+5. С двата отговора Alfred написа едно обобщение за домакина.
+
+## Какво показва примерът
+
+- **Мениджърът не знае как се върши работата.** Alfred няма достъп до `SuggestMenu` и не знае, че съществува. Той знае само, че има `Chef`, който разбира от храна.
+- **Задачите се предават с думи.** Входът на специалиста е обикновен текст, който мениджърът пише сам. Затова е важно instructions на мениджъра да казват ясно кого за какво да пита.
+- **Всеки има свой контекст.** Извикванията на `SuggestMenu` и `FindBestCatering` останаха в разговора на `Chef`. При Alfred стигна само готовият отговор.
+- **Решава моделът.** Никъде в кода не пише „първо готвачът, после DJ-ят“. Alfred сам избра кого да попита и в какъв ред.
+
+Мениджърът сам избира пътя, затова не можеш да си сигурен какъв ще бъде. Когато редът трябва да е един и същ всеки път, ползвай Workflow. Това е следващият урок.
+
+## Твой ред
+
+**Попитай само за едното.** Смени въпроса на `What music fits a futuristic Gotham party?` и изпълни `dotnet run`. При нас в следата се появи един-единствен ред:
+
+```text wrap
+  [Alfred] calls DJ({"query":"futuristic Gotham party"})
+```
+
+Alfred се обърна само към DJ-я, защото въпросът е само за музика. Виж обаче какво липсва: ред `[DJ] calls SuggestPlaylist`. Този път DJ-ят отговори, без да извика своя tool, въпреки инструкцията да не си измисля резултати. Малките локални модели понякога правят това. Затова правилата, на които държиш, се осигуряват с код, например с middleware, а не само с instructions.
+
+**Добави трети специалист.** Напиши tool `SuggestDecoration`, който връща идея за украса според темата, и Agent `Decorator`, който го използва. Не забравяй три неща: `description` на новия Agent, `AsAIFunction()` в списъка с tools на Alfred и едно изречение в instructions на Alfred, че вече има и декоратор.
+
+## Обобщение
+
+- В **multi-agent система** работата е разделена между няколко Agents с различни роли.
+- **`AsAIFunction()`** превръща един Agent в tool. Името и `description` на Agent-а стават име и описание на tool-а, а входът е задача, написана с думи.
+- **`instructions`** казват на специалиста как да работи. **`description`** казва на мениджъра кога да го потърси.
+- Всеки Agent има **свой контекст**. Мениджърът вижда само крайните отговори на специалистите.
+- Повече Agents означават **повече извиквания на модела**. Използвай екип, когато един Agent не се справя.
+- Кой специалист ще бъде извикан **решава моделът**.

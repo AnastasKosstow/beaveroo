@@ -1,0 +1,142 @@
+---
+title: Quick Quiz 1
+description: A short, ungraded quiz on the start of Unit 2.1 - what Microsoft Agent Framework is, its relationship with Microsoft.Extensions.AI, AsAIAgent, RunAsync and the choice between an Agent and a Workflow.
+---
+
+import Question from '../../../../../../components/Question.astro';
+
+A short **ungraded quiz** to check whether the basics of Microsoft Agent Framework have fallen into place. Tick the answer you think is correct and press "Submit".
+
+### Q1: What is Microsoft Agent Framework?
+
+<Question
+  choices={[
+    {
+      text: 'An open-source framework for building AI Agents and multi-agent workflows, the successor to Semantic Kernel and AutoGen.',
+      explain: 'It combines the simple abstractions of AutoGen with the production features of Semantic Kernel and adds Workflows.',
+      correct: true,
+    },
+    {
+      text: 'A new Microsoft language model trained specifically for calling tools.',
+      explain: 'The framework is not a model. It works with different models through the IChatClient interface.',
+    },
+    {
+      text: 'A program like Ollama that runs models on your computer.',
+      explain: 'The model is still run by Ollama. The framework is the library you use to write the Agent around it.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What is the relationship between Agent Framework and Microsoft.Extensions.AI?
+
+<Question
+  choices={[
+    {
+      text: 'Agent Framework replaces Microsoft.Extensions.AI, so what you learned in Unit 1 no longer applies.',
+      explain: 'On the contrary. IChatClient, ChatMessage, AIFunctionFactory and the [Description] attribute are used here too.',
+    },
+    {
+      text: 'Agent Framework is built on top of Microsoft.Extensions.AI and works with any IChatClient.',
+      explain: 'That is why the same OllamaApiClient from Unit 1 works here, and switching the model provider is a one-line change.',
+      correct: true,
+    },
+    {
+      text: 'The two libraries have nothing in common and cannot be used in the same project.',
+      explain: 'The Microsoft.Agents.AI package even brings Microsoft.Extensions.AI along with it.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: What does `AsAIAgent` do?
+
+<Question
+  choices={[
+    {
+      text: 'It downloads a model from the internet and starts it locally.',
+      explain: 'The model comes from the IChatClient. AsAIAgent does not download or start anything.',
+    },
+    {
+      text: 'It turns an IChatClient into an AIAgent with a name, instructions and tools, with the tool-calling loop included.',
+      explain: 'In Unit 1 you assembled the same thing from parts: ChatClientBuilder, UseFunctionInvocation, ChatOptions and a system message.',
+      correct: true,
+    },
+    {
+      text: 'It saves the conversation to a file so it can continue later.',
+      explain: 'That is the job of AgentSession, and we will look at it in the Sessions lesson.',
+    },
+  ]}
+/>
+
+---
+
+### Q4: Where does an Agent's system prompt go?
+
+<Question
+  choices={[
+    {
+      text: 'Into the instructions parameter, when you create the Agent.',
+      explain: 'The framework sends it to the model as the system message on every run.',
+      correct: true,
+    },
+    {
+      text: 'Into the first question you pass to RunAsync.',
+      explain: 'Then it would be part of the user conversation and you would have to repeat it every time.',
+    },
+    {
+      text: 'Into the Model constant in the LocalModel.cs file.',
+      explain: 'Only the name of the model lives there. LocalModel.cs describes the connection to the model, not the behavior of the Agent.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: What is the difference between `RunAsync` and `RunStreamingAsync`?
+
+<Question
+  choices={[
+    {
+      text: 'RunAsync uses tools, while RunStreamingAsync cannot.',
+      explain: 'Both methods run the same Agent with the same capabilities.',
+    },
+    {
+      text: 'RunStreamingAsync only works with cloud models.',
+      explain: 'Streaming also works with the local model in Ollama, as you saw in the lesson.',
+    },
+    {
+      text: 'RunAsync returns the whole answer at once, while RunStreamingAsync returns it in pieces as the model writes.',
+      explain: 'Streaming is handy when a person is waiting in front of the screen and wants to see the text right away.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q6: When is a Workflow a better fit than a single Agent?
+
+<Question
+  choices={[
+    {
+      text: 'When the task is an open-ended conversation and you do not know in advance what the user will ask for.',
+      explain: 'That is a typical job for an Agent: the model decides for itself what to do.',
+    },
+    {
+      text: 'When the process has well-defined steps and you want to control their order yourself.',
+      explain: 'In a Workflow the steps and connections are written in code. The model works only inside the individual steps.',
+      correct: true,
+    },
+    {
+      text: 'When the task can be solved with one ordinary C# function.',
+      explain: 'Then you need neither an Agent nor a Workflow. Write the function.',
+    },
+  ]}
+/>
+
+---
+
+Got it? Great! Alfred can talk now. Time to teach him to **act**, by giving him tools.

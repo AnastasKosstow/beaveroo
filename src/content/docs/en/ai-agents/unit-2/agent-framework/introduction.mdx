@@ -1,0 +1,72 @@
+---
+title: Introduction to Microsoft Agent Framework
+description: Unit 2.1 introduces Microsoft Agent Framework - what you will build, what you need and the topics the module covers - Agents, tools, sessions, middleware, multi-agent systems and workflows.
+---
+
+Welcome to this module, where you'll learn how to build Agents with **Microsoft Agent Framework**: Microsoft's open-source framework for Agents and multi-agent systems.
+
+In Unit 1 you took the long road. First you wrote an Agent by hand in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/), and then you built it with [`Microsoft.Extensions.AI`](/en/ai-agents/unit-1/tutorial/). The library took over the Thought → Action → Observation cycle, but two things were left to you: you kept the conversation yourself in the `history` list, and you handled errors yourself. For one question and one tool that is enough. When the Agent has to remember, ask for permission before an important action, or work in a team with other Agents, you need something more.
+
+That is what Microsoft Agent Framework adds. It is built on top of `Microsoft.Extensions.AI`, so what you learned so far still applies.
+
+## Module Overview
+
+The module walks through the core concepts of the framework and shows them with code you run on your own computer. Its two big topics are:
+
+- **Agents**: a single Agent that thinks with an LLM, uses tools, remembers the conversation, and can be observed and controlled.
+- **Workflows**: several steps, functions or Agents, connected in a graph where you define the order of execution.
+
+In this unit Alfred from Unit 1 comes back. This time Microsoft Agent Framework runs him on the inside. The Wayne family 🦇 is away, and he has to organize a party at Wayne Manor: a theme, a menu, catering, music, invitations and a guest list. We will follow him through the lessons.
+
+## Contents
+
+### 1️⃣ Why Use Microsoft Agent Framework
+
+Agent Framework is one of many frameworks for Agents. The original course covers three for Python: smolagents, LlamaIndex and LangGraph. Here we will see where this one comes from and when it is worth using.
+
+### 2️⃣ Your First Agent
+
+You'll create the project we will use throughout the module and turn the local model into an Agent with a single line: `AsAIAgent`. We'll compare the code with the one from Unit 1 so you can see exactly what the framework takes over.
+
+### 3️⃣ Tools
+
+As you saw in Unit 1, tools are the functions an Agent acts through. We'll give Alfred tools for the menu and the catering, see how he chooses between them, and what happens when a tool fails.
+
+### 4️⃣ Sessions
+
+The model remembers nothing between requests. An `AgentSession` keeps the conversation for you. We'll turn Alfred into a chat, and then save the conversation to a file so it continues even after the program restarts.
+
+### 5️⃣ Middleware
+
+Middleware is code that runs around every step of the Agent. We'll use it to measure how much time and how many tokens an answer takes, and to make Alfred ask for permission before he spends money.
+
+### 6️⃣ Multi-Agent Systems
+
+A single Agent with many jobs gets confused easily. We'll split the work between specialists: a chef and a DJ, whom Alfred manages as his tools.
+
+### 7️⃣ Workflows
+
+Sometimes you don't want the Agent to decide what comes next. With Workflows you define the steps and the connections between them. We'll build a workflow that sorts the replies to the invitations, and a team of two Agents that write an invitation one after the other.
+
+There are two short quizzes between the lessons, and a final quiz for the whole module at the end.
+
+## What you need
+
+The same as in Unit 1, nothing new to install:
+
+- The [.NET SDK](https://dotnet.microsoft.com/download) from [Unit 0](/en/ai-agents/unit-0/introduction/).
+- [Ollama](https://ollama.com/download) and the `qwen3.5:9b` model you pulled in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/).
+
+Everything again runs on your computer, with no accounts or API keys.
+
+:::tip[One project for the whole module]
+In Unit 1 every lesson had its own small project. Here we will work in a single project, `PartyPlanner`, and build on it in every lesson. So take the lessons in order.
+:::
+
+## Resources
+
+- [Microsoft Agent Framework documentation](https://learn.microsoft.com/agent-framework/overview/) - the official documentation with examples in C#, Python and Go.
+- [microsoft/agent-framework on GitHub](https://github.com/microsoft/agent-framework) - the source code and many ready-made samples in the `dotnet/samples` folder.
+- [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai) - the library the framework is built on.
+
+Ready? Let's start with the question of why we need a framework at all. 🚀

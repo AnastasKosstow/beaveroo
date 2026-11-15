@@ -1,0 +1,288 @@
+---
+title: Workflows
+description: Workflows in Microsoft Agent Framework - executors and edges, a workflow with a conditional branch that sorts the replies to the invitations, and two Agents working one after the other with AgentWorkflowBuilder.
+---
+
+In the previous lesson Alfred decided for himself whom to ask and in what order. That is convenient when the task is open-ended. But there are tasks where you **do not want** the model to decide what comes next.
+
+Think of the replies to the party invitations. Every reply has to go down the same path: we read it, work out whether the guest is coming, and depending on that we either put them on the list or send them a card. There is nothing to "decide" here. The order is known in advance, and we want it followed every time.
+
+For tasks like this, Agent Framework has **Workflows**.
+
+## Freedom versus control
+
+When you design a system with an LLM, you always choose between two things:
+
+- **Freedom**: the model picks the next step by itself. That lets it handle unexpected situations, but you do not know in advance what it will do.
+- **Control**: you define the steps. The behavior is predictable, but the system only does what you planned for.
+
+An Agent and a Workflow sit at the two ends:
+
+| | Agent | Workflow |
+| --- | --- | --- |
+| Who decides the next step | The model | You, in code |
+| Behavior | Flexible | Predictable |
+| A good fit for | Open-ended tasks and conversations | Processes with known steps |
+
+The two are not mutually exclusive. One step in a Workflow can use an Agent when language understanding is needed, while the other steps are ordinary code.
+
+## The building blocks
+
+A Workflow is a **graph**: boxes connected with arrows. The framework has a name for each of these things:
+
+| Element | What it is |
+| --- | --- |
+| **Executor** | One step. It receives a message, does some work and returns a result. It can be an ordinary function or an Agent. |
+| **Edge** | A connection between two steps. It says who the result goes to, and it can have a condition. |
+| **Workflow** | The whole graph: the steps, the connections and the starting step. |
+| **Event** | A message about what is happening during the run, for example "the step finished". |
+
+If you meet LangGraph from the original course, the idea is the same: there the steps are called *nodes* and the connections *edges*.
+
+## Your first Workflow
+
+We will build a workflow that processes the replies to the invitations. It has three steps and one branch:
+
+```text
+reply ──▶ ReadReply
+              │
+              ├── coming ──────▶ AddGuest
+              └── not coming ──▶ SendRegrets
+```
+
+- **`ReadReply`** reads the reply and extracts the guest's name and whether they are coming. The replies are free text, so here we need a model.
+- **`AddGuest`** puts the guest on the list. This is ordinary C# code.
+- **`SendRegrets`** sends a "we will miss you" card. Also ordinary C# code.
+
+### 1. Add the package
+
+Workflows live in a separate NuGet package. In the `PartyPlanner` folder run:
+
+```bash
+dotnet add package Microsoft.Agents.AI.Workflows
+```
+
+### 2. Write the steps and the graph
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+
+AIAgent reader = LocalModel.Create().AsAIAgent(
+    name: "Reader",
+    instructions:
+        "You read replies to a party invitation. " +
+        "Extract the name of the guest and whether they are coming.");
+
+Func<string, ValueTask<Rsvp>> readReply = async reply =>
+{
+    AgentResponse<Rsvp> response = await reader.RunAsync<Rsvp>(reply);
+    return response.Result;
+};
+
+Func<Rsvp, string> addGuest = rsvp => $"{rsvp.Guest} is on the guest list.";
+Func<Rsvp, string> sendRegrets = rsvp => $"A 'we will miss you' card goes to {rsvp.Guest}.";
+
+ExecutorBinding read = readReply.BindAsExecutor("ReadReply");
+ExecutorBinding welcome = addGuest.BindAsExecutor("AddGuest");
+ExecutorBinding regrets = sendRegrets.BindAsExecutor("SendRegrets");
+
+Workflow workflow = new WorkflowBuilder(read)
+    .AddEdge<Rsvp>(read, welcome, condition: rsvp => rsvp is { Attending: true })
+    .AddEdge<Rsvp>(read, regrets, condition: rsvp => rsvp is { Attending: false })
+    .WithOutputFrom(welcome, regrets)
+    .Build();
+
+string[] replies =
+[
+    "Dear Alfred, thank you for the invitation. I would be delighted to attend. Yours, Selina Kyle",
+    "Alfred, sadly I am out of town that weekend and cannot make it. Regards, Lucius Fox",
+];
+
+foreach (string reply in replies)
+{
+    Console.WriteLine($"Reply: {reply}");
+
+    await using Run run = await InProcessExecution.RunAsync(workflow, reply);
+
+    foreach (WorkflowEvent evt in run.NewEvents)
+    {
+        switch (evt)
+        {
+            case ExecutorCompletedEvent step:
+                Console.WriteLine($"  {step.ExecutorId} -> {step.Data}");
+                break;
+            case WorkflowOutputEvent output:
+                Console.WriteLine($"Result: {output.Data}");
+                break;
+        }
+    }
+
+    Console.WriteLine();
+}
+
+public record Rsvp(string Guest, bool Attending);
+```
+
+The code is longer than usual, so we will go through it in parts.
+
+**The data.** The last line describes what travels between the steps: an `Rsvp` with the guest's name and whether they are coming. In a file like `Program.cs`, which starts straight with code, types are declared after everything else. That is why `Rsvp` sits at the very bottom.
+
+**The three steps.** Each step is an ordinary function:
+
+- `readReply` takes the text of the reply and returns an `Rsvp`. It is the only one that uses a model, through the `reader` Agent.
+- `addGuest` and `sendRegrets` take an `Rsvp` and return text. There is no model in them.
+
+Notice the `RunAsync<Rsvp>` call. Until now the Agent returned free text to us. Now we want **an object of a specific type**. The framework sends the model a description of the `Rsvp` type, the model answers with JSON in that shape, and you get a ready C# object in `response.Result`. This is called *structured output*, and it is exactly what we need when the result goes to code rather than to a person.
+
+**Executors.** `BindAsExecutor` turns each function into an executor and gives it a name. We will see the name in the output.
+
+**The graph.** `WorkflowBuilder` puts everything together:
+
+| Line | What it says |
+| --- | --- |
+| `new WorkflowBuilder(read)` | The workflow starts at `ReadReply`. |
+| `AddEdge<Rsvp>(read, welcome, condition: ...)` | The result goes to `AddGuest`, but only if `Attending` is `true`. |
+| `AddEdge<Rsvp>(read, regrets, condition: ...)` | The result goes to `SendRegrets`, but only if `Attending` is `false`. |
+| `WithOutputFrom(welcome, regrets)` | The result of the whole workflow comes from one of these two steps. |
+
+The condition `rsvp is { Attending: true }` is true when the object exists and its `Attending` property is `true`.
+
+**The run.** `InProcessExecution.RunAsync` runs the workflow with one reply as its input. When it finishes, `run.NewEvents` holds everything that happened. From there we print two kinds of events: when a step finished, and what the final result is.
+
+### 3. Start the program
+
+```bash
+dotnet run
+```
+
+output:
+
+```text wrap
+Reply: Dear Alfred, thank you for the invitation. I would be delighted to attend. Yours, Selina Kyle
+  ReadReply -> Rsvp { Guest = Selina Kyle, Attending = True }
+  AddGuest -> Selina Kyle is on the guest list.
+Result: Selina Kyle is on the guest list.
+
+Reply: Alfred, sadly I am out of town that weekend and cannot make it. Regards, Lucius Fox
+  ReadReply -> Rsvp { Guest = Lucius Fox, Attending = False }
+  SendRegrets -> A 'we will miss you' card goes to Lucius Fox.
+Result: A 'we will miss you' card goes to Lucius Fox.
+```
+
+The two replies took different paths:
+
+1. `ReadReply` read the first reply and returned an `Rsvp` with `Attending = True`. The model understood that from the phrase "delighted to attend", even though "yes" is written nowhere.
+2. The condition of the first edge was met, so the result went to `AddGuest`.
+3. For the second reply `Attending` was `False`, so the result went to `SendRegrets`.
+
+Notice how fast it ran. Of the three steps, only one calls the model. The rest is ordinary code that runs instantly and gives the same result every time. This is the rule from the start of the module in action: **use the model only where you really need it**.
+
+## Agents in a Workflow
+
+In the first workflow the steps were functions. A step can also be a whole Agent. The most common case is several Agents working **one after the other**, each building on the work of the previous one.
+
+Alfred needs an invitation for the party. Instead of one Agent both writing and editing, we will split the work: a `Writer` writes a draft, and an `Editor` reworks it.
+
+```text
+description of the event ──▶ Writer ──▶ Editor ──▶ finished invitation
+```
+
+For common shapes like this you do not have to wire the graph by hand. `AgentWorkflowBuilder` has ready-made patterns. This one is called **sequential**.
+
+### 4. Build an invitation team
+
+You will need `AgentLog.cs` from the [Tools](/en/ai-agents/unit-2/agent-framework/tools/) lesson. Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+
+IChatClient model = LocalModel.Create();
+
+AIAgent writer = model.AsAIAgent(
+    name: "Writer",
+    instructions:
+        "You write party invitations. Write a short invitation of three sentences " +
+        "for the event the user describes.");
+
+AIAgent editor = model.AsAIAgent(
+    name: "Editor",
+    instructions:
+        "You are an editor. Rewrite the invitation you receive so that it is more formal " +
+        "and fits in two sentences. Reply with the final invitation only.");
+
+Workflow pipeline = AgentWorkflowBuilder.BuildSequential([writer, editor]);
+
+AIAgent team = pipeline.AsAIAgent(name: "InvitationTeam");
+
+AgentResponse response = await team.RunAsync(
+    "A villain masquerade at Wayne Manor, this Saturday at 8 PM.");
+
+AgentLog.Print(response);
+```
+
+The new things are two lines:
+
+- **`AgentWorkflowBuilder.BuildSequential`** lines the Agents up in a row and returns a `Workflow`. Each Agent receives the conversation so far and adds its own answer to it.
+- **`pipeline.AsAIAgent`** turns the whole workflow into an `AIAgent`. That way we run it with the familiar `RunAsync` and print the response with `AgentLog.Print`, without handling events.
+
+Run `dotnet run`:
+
+```text wrap
+Writer: Join us this Saturday at 8 PM for an exclusive Villain Masquerade at the iconic Wayne Manor. Dress as your favorite supervillain and prepare to scheme in style under the manor's grand halls. We look forward to seeing you there for a night of dark elegance and mischief.
+Editor: You are cordially invited to an exclusive Villain Masquerade at Wayne Manor this Saturday at 8:00 PM. Please don your finest supervillain attire as we gather under the manor's grand halls for an evening of dark elegance and mischief.
+```
+
+The `Writer` wrote three sentences, and the `Editor` reworked them into two more formal ones. The name in front of each line comes from `AuthorName`, which `AgentLog` has been printing all along.
+
+Compare this with the previous lesson. There Alfred **decided for himself** to ask the chef and the DJ. Here the order is written in code: always the `Writer` first, then the `Editor`. No model can change it.
+
+:::tip[A workflow that is an Agent]
+Since a workflow can be an `AIAgent`, you can do with it everything you know about Agents: give it a session, wrap it with middleware, or hand it to Alfred as a tool with `AsAIFunction()`. That is how the pieces of this module combine freely.
+:::
+
+## Ready-made orchestrations
+
+Sequential is only one of the patterns for several Agents. The framework calls them **orchestrations** and offers five:
+
+| Orchestration | How the Agents work | Example from the party |
+| --- | --- | --- |
+| Sequential | One after the other, in a defined order. | The `Writer` writes the invitation, the `Editor` reworks it. |
+| Concurrent | At the same time, and their answers are collected. | The chef, the DJ and the decorator suggest ideas in parallel. |
+| Handoff | They hand the conversation to each other depending on the situation. | Alfred passes a guest with an allergy on to the chef. |
+| Group Chat | They discuss the task in a shared conversation. | The whole team picks a theme for the party. |
+| Magentic | A manager plans and distributes the tasks dynamically. | Organizing the whole event from scratch. |
+
+The first two are created with `AgentWorkflowBuilder.BuildSequential` and `AgentWorkflowBuilder.BuildConcurrent`. The others have builders of their own. You will find examples of each in the [documentation](https://learn.microsoft.com/agent-framework/workflows/orchestrations/).
+
+## An Agent as a tool, or a Workflow?
+
+You now know two ways to make several Agents work together. Here is how to choose:
+
+| | Agent as a tool | Workflow |
+| --- | --- | --- |
+| Who picks the next one | The manager, that is, the model. | You, through the edges of the graph. |
+| The order | Can be different every time. | Always the same. |
+| Choose it when | You do not know in advance which specialists will be needed. | The steps are known and must be followed. |
+
+## Your turn
+
+**Add a third reply.** Add a reply to `replies` that is not clear-cut, for example "I will try to come, but I am not sure yet." See what the model decides. Then think: how would you change `Rsvp` and the graph so there is a third path for "maybe"?
+
+**Lengthen the row.** Add a third Agent, `Translator`, that translates the finished invitation into Bulgarian, and put it at the end of the list in `BuildSequential`.
+
+## Summary
+
+- A **Workflow** is a graph of steps where **you** define the order. The model works only inside the individual steps.
+- An **executor** is a step, and an **edge** is a connection between steps. An edge can have a **condition**, which creates a branch.
+- A step can be an **ordinary function** or an **Agent**. Use a model only where language understanding is needed.
+- **`RunAsync<T>`** makes the Agent return an object of a specific type instead of free text.
+- **`AgentWorkflowBuilder`** offers ready-made orchestrations. `BuildSequential` lines Agents up one after the other.
+- A workflow can be turned into an Agent with **`AsAIAgent`**.
+
+That was the last lesson with code. Only the final quiz is left.

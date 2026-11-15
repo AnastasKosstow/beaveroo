@@ -1,0 +1,276 @@
+---
+title: "Sessions: the Agent's Memory"
+description: We give Alfred memory with AgentSession - why the Agent forgets, how a session keeps the conversation, how we turn it into a chat, and how we save it to a file so it continues after a restart.
+---
+
+Alfred has tools now, but he also has a serious flaw: he forgets everything the moment he answers. If you tell him how many guests you expect and then ask him about it, he will not know.
+
+In this lesson you will give him memory with `AgentSession`. By the end, Alfred will remember the conversation even after you stop the program and start it again.
+
+## Why the Agent forgets
+
+The reason is familiar from [Unit 1](/en/ai-agents/unit-1/messages-and-special-tokens/): **the model has no memory**. Every time, it receives one prompt and continues it. For it to "remember" the conversation, you have to send it all the previous messages with every request.
+
+In Unit 1 you did that by hand. You kept a `history` list, appended every question and every answer to it, and passed it with every request. In Agent Framework that job is done by **`AgentSession`**: an object that keeps the conversation for you.
+
+| | In Unit 1 | With Agent Framework |
+| --- | --- | --- |
+| Where the conversation lives | In your `history` list. | In an `AgentSession`. |
+| Who appends the new messages | You, with `history.Add` and `history.AddMessages`. | The framework, automatically. |
+| How it is passed | `GetResponseAsync(history, options)` | `RunAsync(question, session)` |
+
+## Give Alfred memory
+
+We continue in the `PartyPlanner` project. You will need `LocalModel.cs`, `PartyTools.cs` and `AgentLog.cs` from the previous lessons.
+
+### 1. See the problem
+
+First let's see the forgetting itself. Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor. You are polite and concise. " +
+        "Use your tools when they can help and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(PartyTools.SuggestMenu),
+        AIFunctionFactory.Create(PartyTools.FindBestCatering),
+    ]);
+
+AgentLog.Print(await alfred.RunAsync("We expect 40 guests for the gala on Saturday."));
+AgentLog.Print(await alfred.RunAsync("How many guests do we expect?"));
+```
+
+Alfred is the same as in the Tools lesson. We ask him two questions, one after the other. Run `dotnet run`:
+
+```text wrap
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+Alfred: I am afraid I do not have that information in my current records, sir. Could you please clarify the number of guests for the upcoming event?
+```
+
+You just told him about the 40 guests, and he "noted" it. On the second question, though, he no longer knows anything. Every call to `RunAsync` is a separate conversation: the model receives only `instructions` and the current question.
+
+### 2. Create a session
+
+Replace the last two lines of `Program.cs` with the following:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+AgentLog.Print(await alfred.RunAsync("We expect 40 guests for the gala on Saturday.", session));
+AgentLog.Print(await alfred.RunAsync("How many guests do we expect?", session));
+```
+
+There are two changes: `CreateSessionAsync` creates a new, empty session, and `RunAsync` receives it as a second argument. Run `dotnet run`:
+
+```text wrap
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+Alfred: We are expecting forty guests, sir.
+```
+
+This time Alfred knows the answer. Here is what the framework does on every call to `RunAsync` with a session:
+
+1. It takes all the messages that are already in the session.
+2. It sends them to the model together with `instructions` and the new question.
+3. It appends the new question and the answer to the session.
+
+Those are exactly the steps you wrote yourself in Unit 1. The model still remembers nothing. It simply receives the whole conversation every time.
+
+### 3. Turn it into a conversation
+
+A session makes the most sense in a real chat. Replace everything below the creation of `alfred` with the following:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+Console.WriteLine("Alfred is ready.");
+
+Console.WriteLine("Ask a question (or press Enter to exit).");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    string? input = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
+
+    AgentLog.Print(await alfred.RunAsync(input, session));
+}
+```
+
+The loop reads questions from the console until you press Enter on an empty line. Compare it with the loop from your [first Agent](/en/ai-agents/unit-1/tutorial/): the two lines with `history` are gone. Only `RunAsync(input, session)` is left.
+
+Run `dotnet run` and ask three questions:
+
+```text wrap
+Alfred is ready.
+Ask a question (or press Enter to exit).
+
+You: We expect 40 guests for the gala on Saturday.
+Alfred: That is noted, sir. Shall I suggest a formal menu for the occasion?
+
+You: What menu do you suggest for a formal party?
+  Action: SuggestMenu({"occasion":"formal"})
+  Observation: Three-course dinner with wine and dessert.
+Alfred: A three-course dinner with wine and dessert, sir. Would you like me to arrange for the highest-rated catering service in Gotham City?
+
+You: How many guests did I say?
+Alfred: You mentioned expecting 40 guests, sir.
+```
+
+The third question comes after another question and after a tool call, but Alfred still knows the answer. The session keeps the whole conversation, including the tool calls and their results.
+
+## Save the conversation
+
+The session lives in the program's memory. When the program stops, the conversation disappears. To keep it, you have to write it somewhere. Agent Framework can turn a session into JSON and back:
+
+| Method | What it does |
+| --- | --- |
+| `SerializeSessionAsync(session)` | Turns the session into JSON. |
+| `DeserializeSessionAsync(json)` | Creates a session from saved JSON. |
+
+Where you keep that JSON is up to you: in a file, in a database, or wherever is convenient. We will use a file.
+
+### 4. Save the session to a file
+
+We will make three changes to `Program.cs`.
+
+At the very top add one more `using`:
+
+```csharp
+using System.Text.Json;
+```
+
+Replace the two lines that create the session and print `Alfred is ready.` with the following:
+
+```csharp
+const string SessionFile = "session.json";
+
+AgentSession session;
+
+if (File.Exists(SessionFile))
+{
+    JsonElement saved = JsonSerializer.Deserialize<JsonElement>(await File.ReadAllTextAsync(SessionFile));
+    session = await alfred.DeserializeSessionAsync(saved);
+    Console.WriteLine("Alfred remembers your last conversation.");
+}
+else
+{
+    session = await alfred.CreateSessionAsync();
+    Console.WriteLine("Alfred is ready.");
+}
+```
+
+And add this at the very end of the file, after the `while` loop:
+
+```csharp
+JsonElement state = await alfred.SerializeSessionAsync(session);
+await File.WriteAllTextAsync(SessionFile, state.GetRawText());
+```
+
+Now the program does two new things:
+
+- **On startup** it checks whether a `session.json` file exists. If it does, it restores the session from it. If not, it creates a new one.
+- **On exit** it writes the session to the file.
+
+Run `dotnet run` and have the same conversation as in the previous step. Exit with Enter on an empty line. A `session.json` file will appear in the project folder.
+
+Then run `dotnet run` once more:
+
+```text wrap
+Alfred remembers your last conversation.
+Ask a question (or press Enter to exit).
+
+You: On which day is the gala, and what are we serving?
+Alfred: The gala is on Saturday, and we will be serving a three-course dinner with wine and dessert.
+```
+
+This is a new process that started from scratch. Even so, Alfred knows both the day and the menu, because the conversation was read from the file.
+
+### What is in the file
+
+Open `session.json`. Here is its beginning, formatted and slightly shortened for easier reading:
+
+```json
+{
+  "stateBag": {
+    "InMemoryChatHistoryProvider": {
+      "messages": [
+        {
+          "role": "user",
+          "contents": [
+            { "$type": "text", "text": "We expect 40 guests for the gala on Saturday." }
+          ]
+        },
+        {
+          "authorName": "Alfred",
+          "role": "assistant",
+          "contents": [
+            { "$type": "text", "text": "That is noted, sir. Shall I suggest a formal menu for the occasion?" }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+There is nothing mysterious about it. A session is **a list of messages**, each with a `role` and content, exactly as in Unit 1. Further down in the file you will also find the call to `SuggestMenu` as content of type `functionCall`, and its result as `functionResult`.
+
+:::caution[A session belongs to its Agent]
+Restore a session with the same Agent that created it. If you change the model or the tools, the saved conversation may contain things the new Agent does not understand.
+:::
+
+To start the conversation from a clean slate, delete the `session.json` file.
+
+## One Agent, many conversations
+
+The session is separate from the Agent. That means **one Agent can hold many conversations at the same time**, each in its own session. That is how every chat application works: there is one Agent, and every user has their own conversation.
+
+To see it, replace everything below the creation of `alfred` with the following:
+
+```csharp
+AgentSession bruce = await alfred.CreateSessionAsync();
+AgentSession selina = await alfred.CreateSessionAsync();
+
+await alfred.RunAsync("I am Bruce. I am allergic to peanuts.", bruce);
+await alfred.RunAsync("I am Selina. I do not eat meat.", selina);
+
+AgentLog.Print(await alfred.RunAsync("What should the kitchen know about me?", bruce));
+AgentLog.Print(await alfred.RunAsync("What should the kitchen know about me?", selina));
+```
+
+Two guests talk to the same Alfred, each in their own session. At the end both ask the very same question. Run `dotnet run`:
+
+```text wrap
+Alfred: My lord, please inform the kitchen staff of your peanut allergy immediately. They must ensure all dishes are prepared in a peanut-free environment to guarantee your safety. Would you like me to suggest a menu for an upcoming occasion?
+Alfred: The kitchen must be informed that you do not eat meat. Additionally, if we are hosting an event, they will need to know your preferred menu style (casual, formal, or superhero). Would you like me to suggest a menu for a specific occasion?
+```
+
+The question is the same, and the answers are different. The two conversations do not mix: Alfred tells Selina nothing about Bruce's allergy.
+
+## When the conversation gets long
+
+A session grows with every question, and on every call the whole conversation is sent to the model. That has two consequences:
+
+- Every next answer is a little slower, because the model reads more and more text.
+- A very long conversation can exceed the model's *context length*, the maximum number of tokens it can process (see [What are LLMs?](/en/ai-agents/unit-1/what-are-llms/)).
+
+The solution is to shorten or summarize the old messages. Agent Framework has ready-made strategies for that, called *compaction*. We do not need them for the short conversations in this course, but it is good to know they exist.
+
+## Summary
+
+- The model has no memory. An **`AgentSession`** keeps the conversation, and the framework sends it to the model on every call.
+- A session is created with **`CreateSessionAsync`** and passed as the second argument to `RunAsync`.
+- Without a session, every call to `RunAsync` is a separate conversation.
+- A session is **a list of messages**. `SerializeSessionAsync` turns it into JSON, and `DeserializeSessionAsync` restores it.
+- **One Agent can hold many conversations**, each in its own session.
+
+Alfred remembers now. Before we let him spend money on catering, though, we want to see what he does and be able to stop him. That is what middleware is for, the topic of the next lesson.
