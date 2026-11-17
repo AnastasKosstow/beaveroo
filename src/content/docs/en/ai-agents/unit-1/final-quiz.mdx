@@ -42,11 +42,6 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
-      text: 'The Brain is the AI model that thinks and plans. The Body is the tools through which the Agent acts.',
-      explain: 'The model handles reasoning and planning, and what the Agent can do depends on the tools it is equipped with.',
-      correct: true,
-    },
-    {
       text: 'The Brain is the database and the Body is the user interface.',
       explain: 'The Brain is the AI model (usually an LLM), and the Body is its tools.',
     },
@@ -54,6 +49,11 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
       text: 'The Brain and the Body are two copies of the same LLM.',
       explain: 'The Body is not a model but the set of tools.',
     },
+    {
+      text: 'The Brain is the AI model that thinks and plans. The Body is the tools through which the Agent acts.',
+      explain: 'The model handles reasoning and planning, and what the Agent can do depends on the tools it is equipped with.',
+      correct: true,
+    }
   ]}
 />
 
@@ -64,13 +64,13 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
+      text: 'To search the internet for answers in real time.',
+      explain: 'An LLM has no internet access on its own. That is what tools are for.',
+    },
+    {
       text: 'To predict the next token given a sequence of previous tokens.',
       explain: 'LLMs generate text token by token until they reach the EOS token.',
       correct: true,
-    },
-    {
-      text: 'To search the internet for answers in real time.',
-      explain: 'An LLM has no internet access on its own. That is what tools are for.',
     },
     {
       text: 'To execute code it has written itself.',
@@ -108,11 +108,6 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
-      text: 'It converts the list of messages (system, user, assistant) into a single text prompt with special tokens that the specific model understands.',
-      explain: 'The model does not remember the conversation. It reads the whole prompt from scratch every time.',
-      correct: true,
-    },
-    {
       text: 'It translates the user\'s messages into English.',
       explain: 'The chat template does not change the content, it only formats it.',
     },
@@ -120,6 +115,11 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
       text: 'It stores the conversation on the server between requests.',
       explain: 'The chat template is a formatting function, not storage.',
     },
+    {
+      text: 'It converts the list of messages (system, user, assistant) into a single text prompt with special tokens that the specific model understands.',
+      explain: 'The model does not remember the conversation. It reads the whole prompt from scratch every time.',
+      correct: true,
+    }
   ]}
 />
 
@@ -130,13 +130,13 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
+      text: 'Only the method name. The model will figure out the rest.',
+      explain: 'Without a description and argument types the model often calls the tool incorrectly.',
+    },
+    {
       text: 'A name, a text description of what it does, the arguments with their types, and the output type.',
       explain: 'These are exactly the things extracted automatically through reflection. In .NET, AIFunctionFactory does it with the help of the [Description] attribute.',
       correct: true,
-    },
-    {
-      text: 'Only the method name. The model will figure out the rest.',
-      explain: 'Without a description and argument types the model often calls the tool incorrectly.',
     },
     {
       text: 'The full source code of the method, including all dependencies.',
@@ -174,11 +174,6 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
-      text: 'To keep the model from making up the result of the tool. That way we run the method ourselves and add the real result.',
-      explain: 'This is the stop and parse approach: we stop, parse the action, execute it and return the real Observation.',
-      correct: true,
-    },
-    {
       text: 'To save tokens and speed up the answer.',
       explain: 'That is only a side effect. The main reason is to avoid invented Observations.',
     },
@@ -186,6 +181,11 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
       text: 'Because Ollama does not allow longer answers.',
       explain: 'The limit was ours, through the stop parameter.',
     },
+    {
+      text: 'To keep the model from making up the result of the tool. That way we run the method ourselves and add the real result.',
+      explain: 'This is the stop and parse approach: we stop, parse the action, execute it and return the real Observation.',
+      correct: true,
+    }
   ]}
 />
 
@@ -196,13 +196,13 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
+      text: 'A JSON Agent only works with cloud models and a Code Agent only with local ones.',
+      explain: 'The type of Agent does not depend on where the model runs.',
+    },
+    {
       text: 'A JSON Agent describes the action as a JSON object that our code parses. A Code Agent generates a block of code that the environment executes.',
       explain: 'Code Agents are more expressive, but executing generated code requires an isolated environment.',
       correct: true,
-    },
-    {
-      text: 'A JSON Agent only works with cloud models and a Code Agent only with local ones.',
-      explain: 'The type of Agent does not depend on where the model runs.',
     },
     {
       text: 'There is no difference. They are two names for the same thing.',
@@ -218,11 +218,6 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
 <Question
   choices={[
     {
-      text: 'It automates the Thought → Action → Observation cycle: when the model asks for a tool, the library runs it, adds the result and passes the conversation back to the model.',
-      explain: 'This is the same logic we wrote by hand in the Dummy Agent Library.',
-      correct: true,
-    },
-    {
       text: 'It makes the model write C# code, which is then compiled and executed.',
       explain: 'Function invocation works with structured tool calls, not with generated code.',
     },
@@ -230,6 +225,11 @@ The quiz covers the whole of Unit 1 and is for self-assessment only. Take it as 
       text: 'It replaces the system prompt with an auto-generated one.',
       explain: 'The system prompt stays ours. The library only manages the tool calls.',
     },
+    {
+      text: 'It automates the Thought → Action → Observation cycle: when the model asks for a tool, the library runs it, adds the result and passes the conversation back to the model.',
+      explain: 'This is the same logic we wrote by hand in the Dummy Agent Library.',
+      correct: true,
+    }
   ]}
 />
 

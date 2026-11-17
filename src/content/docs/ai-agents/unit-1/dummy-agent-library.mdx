@@ -33,6 +33,15 @@ ollama pull qwen3.5:9b
 Ако моделът ти е тежък, избери по-малък модел с поддръжка на tools от [библиотеката на Ollama](https://ollama.com/search?c=tools) и използвай неговото име вместо `qwen3.5:9b`: в командата `ollama pull` и в константата `Model` в кода. Отговорите му може да се различават от показаните тук.
 :::
 
+```bash
+ollama pull qwen3.5:9b  # Download the model from the Ollama registry
+ollama run qwen3.5:9b   # Run the model and start an interactive chat session
+ollama stop qwen3.5:9b  # Stop the running model and unload it from memory
+
+ollama ls               # List all locally downloaded models
+ollama ps               # List currently running models
+```
+
 ### 2. Създай проекта
 
 ```bash
@@ -127,6 +136,10 @@ The capital of France is Paris.
 
 Току-що получи отговор от модел, който работи на твоя компютър. Първото пускане може да отнеме повече време, защото Ollama зарежда модела в паметта. Във всички примери по-долу точните думи при теб може да са малко различни, но стъпките ще са същите.
 
+:::caution[⚠️ Важно]
+В зависимост от мощността на компютъра, на който се изпълнява локалният модел, генерирането на отговор може да отнеме от няколко секунди до няколко минути.
+:::
+
 ## От модел към Agent
 
 ### 5. Добави system prompt
@@ -169,7 +182,7 @@ string output = await Ollama.ChatAsync(messages);
 Console.WriteLine(output);
 ```
 
-Разговорът вече има два messages: system prompt-а и въпроса на потребителя. Изпълни `dotnet run`:
+Разговорът вече има две съобщения (messages): system prompt-а и въпроса на потребителя. Изпълни `dotnet run`:
 
 ```text wrap
 Thought: The user is asking for the current weather in London. I need to use the GetWeather tool with the location set to "London".

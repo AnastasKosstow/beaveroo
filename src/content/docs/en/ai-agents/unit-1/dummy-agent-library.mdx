@@ -33,6 +33,15 @@ If either command returns an error that it cannot connect to Ollama, start the O
 If the model is too heavy, pick a smaller model with tool support from the [Ollama library](https://ollama.com/search?c=tools) and use its name instead of `qwen3.5:9b`: in the `ollama pull` command and in the `Model` constant in the code. Its answers may differ from the ones shown here.
 :::
 
+```bash
+ollama pull qwen3.5:9b  # Download the model from the Ollama registry
+ollama run qwen3.5:9b   # Run the model and start an interactive chat session
+ollama stop qwen3.5:9b  # Stop the running model and unload it from memory
+
+ollama ls               # List all locally downloaded models
+ollama ps               # List currently running models
+```
+
 ### 2. Create the project
 
 ```bash
@@ -126,6 +135,10 @@ The capital of France is Paris.
 ```
 
 You just got an answer from a model that runs on your computer. The first run may take longer because Ollama loads the model into memory. In all the examples below the exact words on your machine may differ a little, but the steps will be the same.
+
+:::caution[⚠️ Важно]
+Depending on the power of the computer on which the local model is running, generating a response can take anywhere from a few seconds to a few minutes.
+:::
 
 ## From model to Agent
 
