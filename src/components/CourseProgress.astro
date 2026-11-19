@@ -1,0 +1,66 @@
+---
+import type { Course } from '../courses';
+import { fill } from '../scripts/fill';
+
+interface Props {
+	course: Course;
+}
+
+const { course } = Astro.props;
+const t = Astro.locals.t;
+const { planned = 0, lessons = [] } = course.progress ?? {};
+---
+
+<div class="hf-course__progress" data-course-progress data-planned={planned} data-lessons={JSON.stringify(lessons)}>
+	<div class="hf-course__numbers">
+		<span>{t('track.course')}</span>
+		<strong data-course-percent>0%</strong>
+	</div>
+	<div class="hf-meter" role="progressbar" aria-label={t('track.course')} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+		<span class="hf-meter__fill"></span>
+	</div>
+	<p class="hf-course__lessons" data-course-lessons data-template={t('track.lessons')}>
+		{fill(t('track.lessons'), { done: 0, total: planned })}
+	</p>
+</div>
+
+<script>
+	import { courseState, lessonOfPath, lessonState, onProgress, setMeter } from '../scripts/progress';
+	import { fill } from '../scripts/fill';
+
+	const widget = document.querySelector<HTMLElement>('[data-course-progress]');
+
+	if (widget) {
+		const lessons: string[] = JSON.parse(widget.dataset.lessons ?? '[]');
+		const planned = Number(widget.dataset.planned);
+		const percent = widget.querySelector('[data-course-percent]');
+		const count = widget.querySelector<HTMLElement>('[data-course-lessons]');
+
+		// Every tracked lesson in the sidebar shows its own percentage next to its name.
+		const badges = [...document.querySelectorAll<HTMLAnchorElement>('.sidebar-content a[href]')]
+			.map((link) => ({ link, lesson: lessonOfPath(link.pathname) }))
+			.filter(({ lesson }) => lessons.includes(lesson))
+			.map(({ link, lesson }) => {
+				const badge = document.createElement('span');
+				badge.className = 'hf-nav-percent';
+				link.append(badge);
+				return { badge, lesson };
+			});
+
+		const render = () => {
+			const course = courseState(lessons, planned);
+			setMeter(widget.querySelector('.hf-meter'), course.percent);
+			if (percent) percent.textContent = `${course.percent}%`;
+			if (count) count.textContent = fill(count.dataset.template ?? '', { done: course.completed, total: planned });
+
+			for (const { badge, lesson } of badges) {
+				const state = lessonState(lesson);
+				badge.textContent = `${state.percent}%`;
+				badge.classList.toggle('is-complete', state.percent === 100);
+			}
+		};
+
+		render();
+		onProgress(render);
+	}
+</script>

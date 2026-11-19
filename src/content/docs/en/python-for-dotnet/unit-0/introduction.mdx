@@ -1,0 +1,200 @@
+---
+title: Python for .NET Developers
+description: A Python course for experienced C# and .NET developers - every topic starts from C# code you already know and shows what the same idea looks like in Python.
+tableOfContents: false
+hero:
+  title: 'You think in C#.<br /><em>Now write Python.</em>'
+  tagline: 'This course skips the question of what a variable or a loop is. Every topic starts from C# code you already write, and shows what the same idea looks like in Python and where the two languages part ways.'
+  actions:
+    - text: Start with lesson 01
+      link: /en/python-for-dotnet/unit-1/types-and-data/
+    - text: Learning path
+      link: '#learning-path'
+      variant: minimal
+courseHero:
+  eyebrow: For experienced C# and .NET developers
+  stats:
+    - value: '9'
+      label: lessons
+    - value: '~7 h'
+      label: in total
+    - value: '35-55 min'
+      label: per lesson
+  code:
+    file: unread.py
+    note: 'The same program, line by line. <code>[]</code> takes the place of <code>new List&lt;string&gt;()</code>, <code>not</code> takes the place of <code>!</code>, and indentation replaces <code>{ }</code>.'
+    panes:
+      - label: 'C#'
+        hint: how you write it today
+        lang: csharp
+        code: |
+          // Titles of the unread mail
+          var unread = new List<string>();
+
+          foreach (var mail in inbox)
+          {
+              if (!mail.IsRead)
+              {
+                  unread.Add(mail.Title);
+              }
+          }
+      - label: Python
+        hint: how it looks here
+        lang: python
+        code: |
+          # Titles of the unread mail
+          unread = []
+
+          for mail in inbox:
+              if not mail.is_read:
+                  unread.append(mail.title)
+---
+
+import Columns from '../../../../../components/Columns.astro';
+import CoursePath from '../../../../../components/CoursePath.astro';
+
+## Learning path
+
+The course has nine lessons. Each one takes an area you already know from C# and shows what it looks like in Python. You can take them in order or go straight to the topic you need.
+
+<CoursePath
+  lessons={[
+    {
+      title: 'Types and data',
+      text: 'Names instead of typed variables, the built-in collections, None and type hints.',
+      minutes: 35,
+      slug: 'python-for-dotnet/unit-1/types-and-data',
+    },
+    {
+      title: 'Classes and protocols',
+      text: 'class, a dataclass in place of a record, and duck typing in place of interfaces.',
+      minutes: 55,
+    },
+    {
+      title: 'From LINQ to comprehensions',
+      text: 'Where, Select and ToList, folded into a single expression.',
+      minutes: 50,
+    },
+    {
+      title: 'Iterators and generators',
+      text: 'You already know yield return. Here it is just yield.',
+      minutes: 40,
+    },
+    {
+      title: 'Async and concurrency',
+      text: 'async and await look the same, but behind them is one event loop, not a thread pool.',
+      minutes: 55,
+    },
+    {
+      title: 'Exceptions and resources',
+      text: 'try/except, your own errors, and with in place of using.',
+      minutes: 35,
+    },
+    {
+      title: 'Typing and tooling',
+      text: 'Pyright and Ruff bring back the checks the compiler no longer does for you.',
+      minutes: 45,
+    },
+    {
+      title: 'Testing with pytest',
+      text: 'Tests are plain functions, and fixtures replace setup code.',
+      minutes: 50,
+    },
+    {
+      title: 'Packages and environments',
+      text: 'venv, pip and pyproject.toml in place of NuGet and .csproj.',
+      minutes: 40,
+    },
+  ]}
+/>
+
+<Columns>
+<div>
+
+## How a lesson works
+
+Every topic in a lesson goes through the same steps:
+
+1. **C# next to Python.** The topic starts with C# code you already write, and the same code in Python beside it.
+2. **Only the differences.** The explanation is short: what carries over directly, and where the habit from C# will mislead you.
+3. **A self-check question.** One question per topic. Every correct answer raises the lesson's percentage.
+
+At the end of the lesson **three small tasks** are waiting. You solve them on your own computer, or in the panel under each one.
+
+The percentages you see in the menu and in the learning path are kept in your browser only. There are no accounts, and nothing is sent to a server.
+
+</div>
+<div>
+
+## What you need
+
+- **Experience with C# and .NET.** The course does not explain what a variable, a loop or a class is.
+- **[Python 3.12](https://www.python.org/downloads/) or newer.**
+- **An editor.** [VS Code](https://code.visualstudio.com/) with the Python extension does an excellent job.
+
+</div>
+</Columns>
+
+---
+
+## Install Python and run a file
+
+Python lives on your machine, the same way the .NET SDK does. There is no account, and the course does not run code for you. There is no project and no `Main`: one file is a whole program.
+
+### Install Python
+
+1. Open [python.org/downloads](https://www.python.org/downloads/) and download **Python 3.15 or newer**.
+2. On Windows, on the first screen of the installer, check **Add python.exe to PATH** and click Install Now. Without that checkbox the terminal cannot find `python`, just as it cannot find `dotnet` when the SDK is not on PATH.
+3. Close any open terminal and open a new one, so it picks up the updated PATH.
+
+Check:
+
+```bash
+python --version
+```
+
+You should see `Python 3.15` or a higher version. On macOS and Linux the command is usually `python3`. On Windows, if `python` opens the Microsoft Store, use `py --version`. That is the Python launcher: it picks the installed version.
+
+### Open a folder in VS Code
+
+1. Install [VS Code](https://code.visualstudio.com/) if you do not have it yet.
+2. Open Extensions with `Ctrl+Shift+X` (on macOS, `Cmd+Shift+X`) and install the [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) extension from Microsoft. It gives you highlighting, interpreter selection and a run button.
+3. **File → Open Folder** and choose an empty folder, for example `python-start`. There is no `.sln` and no `.csproj`. The folder is the whole project.
+
+Create a file `hello.py` in it:
+
+```python title="hello.py"
+print("Hello from Python")
+```
+
+### Select the interpreter
+
+When you open a `.py` file, VS Code asks which Python to use. If it does not ask, open the command palette with `Ctrl+Shift+P` (on macOS, `Cmd+Shift+P`), type **Python: Select Interpreter** and choose the 3.15 version you just installed.
+
+The bar at the bottom should show something like `3.15.x`. That is the SDK choice. VS Code does not know it in advance, and without it there is nothing to run the file with.
+
+### Run the file
+
+The VS Code terminal opens in the folder you opened, so it finds `hello.py`. Two ways:
+
+- the **Run Python File** button at the top right of the editor
+- a command in the terminal (**Terminal → New Terminal**):
+
+```bash
+python hello.py
+```
+
+On macOS and Linux the command is `python3 hello.py`.
+
+If you see `Hello from Python`, the file ran. There is no compilation: the interpreter reads the file and runs it immediately. `print` is `Console.WriteLine`.
+
+For a quick try without a file, type just `python`. An interactive console opens, and every line runs immediately, the same way it does in C# Interactive. You leave it with `exit()`.
+
+You are ready for the [first lesson](/en/python-for-dotnet/unit-1/types-and-data/).
+
+### If it does not start
+
+- **`python` is not recognized.** Open a new terminal. If the command is still missing, run the installer again, choose Modify and check Add python.exe to PATH. On Windows, `py hello.py` often works even without that.
+- **`python` opens the Microsoft Store.** Search for **App execution aliases** in Start and turn off **python.exe** and **python3.exe**.
+- **VS Code says there is no interpreter, or it runs an old version.** Python: Select Interpreter, and choose 3.15 or newer.
+- **There is no Run button.** The Python extension is not installed.

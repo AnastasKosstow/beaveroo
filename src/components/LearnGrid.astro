@@ -24,4 +24,21 @@ const t = Astro.locals.t;
 			<p class="hf-learn-card__text">{t('landing.courseDescription')}</p>
 		</div>
 	</a>
+
+	<a class="hf-learn-card hf-learn-card--code" href={`${base}/python-for-dotnet/unit-0/introduction/`}>
+		<div class="hf-learn-card__art" aria-hidden="true">
+			<p class="hf-learn-card__line">
+				<span class="hf-learn-card__lang">C#</span>
+				<code>Console.WriteLine($"Hi, &#123;name&#125;!");</code>
+			</p>
+			<p class="hf-learn-card__line is-accent">
+				<span class="hf-learn-card__lang">Py</span>
+				<code>print(f"Hi, &#123;name&#125;!")</code>
+			</p>
+		</div>
+		<div class="hf-learn-card__body">
+			<h2 class="hf-learn-card__title">{t('python.title')}</h2>
+			<p class="hf-learn-card__text">{t('python.description')}</p>
+		</div>
+	</a>
 </div>

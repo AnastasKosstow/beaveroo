@@ -1,0 +1,984 @@
+---
+title: Types and data
+description: The first lesson of Python for .NET Developers - names instead of typed variables, numbers and text, list, tuple, dict and set, None, truthiness, shared references and type hints, compared with C#.
+---
+
+import Compare from '../../../../../components/Compare.astro';
+import LessonProgress from '../../../../../components/LessonProgress.astro';
+import Question from '../../../../../components/Question.astro';
+import Try from '../../../../../components/Try.astro';
+
+<LessonProgress number={1} of={9} minutes={35} topics={7} />
+
+In C# the first thing you write about a value is its type. In Python you write no type at all, and the program still runs. In this lesson you will see why, and go through the data you will meet in every lesson after it: numbers, text, collections and `None`.
+
+There are seven topics. Each one starts with C# code and the same code in Python, and ends with one question. Correct answers move the percentage in the bar above.
+
+:::tip[How to run the examples]
+Save the code in a file, for example `main.py`, and run it with `python main.py`. For quick experiments type just `python` in the terminal: it opens an interactive console where every line runs immediately, much like C# Interactive. If you don't have Python yet, see the [introduction](/en/python-for-dotnet/unit-0/introduction/). The tasks at the end of the lesson have a panel where you run and check them in the browser.
+:::
+
+## How to read Python code
+
+Before the types you need only one thing: to be able to read the examples. Here is the same program in both languages:
+
+<Compare>
+
+```csharp title="C#"
+static int TicketFor(int age)
+{
+    if (age < 7)
+    {
+        return 0;
+    }
+    else if (age < 18)
+    {
+        return 8;
+    }
+
+    return 14;
+}
+
+int[] family = [5, 12, 40];
+
+foreach (var age in family)
+{
+    Console.WriteLine(TicketFor(age));
+}
+```
+
+```python title="Python"
+def ticket_for(age):
+    if age < 7:
+        return 0
+    elif age < 18:
+        return 8
+
+    return 14
+
+
+family = [5, 12, 40]
+
+for age in family:
+    print(ticket_for(age))
+```
+
+</Compare>
+
+You can count the differences on your fingers:
+
+- **A block is indentation.** A colon opens a block, and four spaces of indentation mark it out. There is no `{ }` and no `;`.
+- **`def` declares a function.** It needs no class. Functions and code sit directly in the file, as with top-level statements.
+- **Names are written in `snake_case`:** `ticket_for`, `is_active`, `user_name`. `PascalCase` is left for classes only.
+- **`elif` is `else if`**, and `for x in xs` is `foreach`.
+- **Words instead of symbols:** `and`, `or` and `not` in place of `&&`, `||` and `!`, and `True`, `False` and `None` in place of `true`, `false` and `null`.
+- **`print()` is `Console.WriteLine()`**, and comments start with `#`.
+
+That is enough to keep going. The rest of the syntax will arrive together with the topics.
+
+## Names, not typed variables
+
+<Compare>
+
+```csharp title="C#"
+int count = 3;
+count = "three";   // error CS0029
+
+var name = "Ana";  // string, forever
+```
+
+```python title="Python"
+count = 3
+count = "three"    # works
+
+name = "Ana"
+```
+
+</Compare>
+
+In C# the type belongs to the **variable**. Once you declare it as `int`, it stays an `int`, and the compiler makes sure of it. In Python the type belongs to the **value**. A variable is only a name attached to an object, and at any time you can attach it to another object, even one of a different type.
+
+That is why there is no keyword for declaring: the first assignment creates the name. For the type, you ask the object itself:
+
+```python
+count = 3
+print(type(count))   # <class 'int'>
+
+count = "three"
+print(type(count))   # <class 'str'>
+```
+
+The closest thing in C# is `dynamic`: the checks happen while the program runs, not before. That does not make Python careless about types. It does not convert values silently:
+
+```python
+total = "10" + 5
+# TypeError: can only concatenate str (not "int") to str
+```
+
+In C# the same expression compiles and gives `"105"`. Python refuses to guess whether you want a number or text. In the terms you will meet in the documentation: Python is *dynamically typed*, but *strongly typed*.
+
+Being able to change the type of a name does not mean you should. Code where `count` is a number one moment and text the next is hard to read. There is no `const` either: constants are written in capitals, `MAX_RETRIES = 3`, and that is only a convention between programmers.
+
+**Check yourself.** What happens when Python runs this code?
+
+```python
+price = "20"
+total = price + 5
+```
+
+<Question
+  id="names"
+  choices={[
+    {
+      text: 'total becomes 25.',
+      explain: 'Python does not turn the text into a number for you. For that you need int(price) + 5.',
+    },
+    {
+      text: 'total becomes "205", as in C#.',
+      explain: 'That is how C# works, where the number is turned into text. Python does not do it.',
+    },
+    {
+      text: 'The program stops with a TypeError.',
+      explain: 'Python is strongly typed: a str and an int cannot be added. You have to write int(price) + 5 or price + str(5) explicitly.',
+      correct: true,
+    },
+  ]}
+/>
+
+## Numbers, text and bool
+
+<Compare>
+
+```csharp title="C#"
+int quantity = 3;
+long views = 9_000_000_000;
+double rating = 4.5;
+decimal price = 19.99m;
+bool inStock = true;
+string title = "Keyboard";
+```
+
+```python title="Python"
+quantity = 3
+views = 9_000_000_000
+rating = 4.5
+price = Decimal("19.99")
+in_stock = True
+title = "Keyboard"
+```
+
+</Compare>
+
+There are fewer basic types than in C#, and most of them will look familiar:
+
+| C# | Python | What is different |
+| --- | --- | --- |
+| `int`, `long`, `BigInteger` | `int` | One type for all whole numbers. It grows as far as it needs to, and there is no overflow. |
+| `double`, `float` | `float` | Always 64-bit, so it matches `double`. |
+| `decimal` | `Decimal` | It comes from the standard library with `from decimal import Decimal` and is created from text. |
+| `bool` | `bool` | The values are `True` and `False`, with a capital letter. |
+| `string`, `char` | `str` | There is no type for a single character: `"a"` is a `str` of length 1. Strings are immutable, as in C#. |
+
+Three things will surprise you on the very first day.
+
+**Division.** `/` always returns a `float`. Integer division has its own operator, `//`:
+
+```python
+print(7 / 2)     # 3.5
+print(7 // 2)    # 3
+print(2 ** 10)   # 1024, ** is the power operator
+```
+
+In C# `7 / 2` is `3`. Carry that habit over and you will get `3.5` where you expect an index.
+
+**Conversion is explicit.** `int("42")`, `float("3.5")` and `str(42)` do the job of `int.Parse`, `double.Parse` and `ToString()`. For invalid text, `int("abc")` raises a `ValueError`. There is no `TryParse`: `try`/`except` is used instead, the topic of lesson 6.
+
+**f-strings.** The letter `f` in front of a string does what `$` does in C#. The format after the colon is slightly different:
+
+```python
+name = "Ana"
+balance = 1234.5
+
+print(f"{name} has {balance:,.2f} EUR")   # Ana has 1,234.50 EUR
+```
+
+:::caution[Money and float]
+`0.1 + 0.2` gives `0.30000000000000004`, exactly as with `double` in C#. For money use `Decimal`, and create it from text: `Decimal("0.1")`, not `Decimal(0.1)`.
+:::
+
+**Check yourself.** What does `print(7 / 2, 7 // 2)` print?
+
+<Question
+  id="scalars"
+  choices={[
+    {
+      text: '3 3',
+      explain: 'That is C#, where dividing two integers is integer division. In Python / always returns a float.',
+    },
+    {
+      text: '3.5 3',
+      explain: '/ always returns a float, and // rounds down to a whole number.',
+      correct: true,
+    },
+    {
+      text: '3.5 3.5',
+      explain: '// is a separate operator for integer division and returns 3.',
+    },
+  ]}
+/>
+
+## The four built-in collections
+
+<Compare>
+
+```csharp title="C#"
+List<string> days = ["Mon", "Tue"];
+(int Row, int Col) cell = (2, 7);
+Dictionary<string, int> stock = new()
+{
+    ["tea"] = 12,
+};
+HashSet<string> seen = ["tea", "milk"];
+```
+
+```python title="Python"
+days = ["Mon", "Tue"]
+cell = (2, 7)
+stock = {"tea": 12}
+seen = {"tea", "milk"}
+```
+
+</Compare>
+
+Four collections are part of the language itself. Each has its own literal and needs no `using`:
+
+| Python | Literal | In C# | When you pick it |
+| --- | --- | --- | --- |
+| `list` | `[1, 2]` | `List<T>` | The order matters and the contents change. |
+| `tuple` | `(1, 2)` | `ValueTuple` | A small record that does not change, such as coordinates. |
+| `dict` | `{"a": 1}` | `Dictionary<K, V>` | You look things up by key. It keeps the order you add in. |
+| `set` | `{1, 2}` | `HashSet<T>` | You need unique values. There is no order. |
+
+The operations you will write every day:
+
+| You want to... | C# | Python |
+| --- | --- | --- |
+| get the count | `days.Count` | `len(days)` |
+| get the last item | `days[^1]` | `days[-1]` |
+| get part of the list | `days[1..3]` | `days[1:3]` |
+| check whether an item is there | `days.Contains("Mon")` | `"Mon" in days` |
+| add an item | `days.Add("Wed")` | `days.append("Wed")` |
+| read a key that may be missing | `stock.GetValueOrDefault("milk")` | `stock.get("milk", 0)` |
+| unpack a tuple | `var (row, col) = cell;` | `row, col = cell` |
+
+A few details everyone trips over once:
+
+- **`len()` is a function, not a property.** It works on anything that has a length: `list`, `tuple`, `dict`, `set` and `str`.
+- **`stock["milk"]` for a missing key raises a `KeyError`**, like `KeyNotFoundException`. `stock.get("milk")` returns `None`.
+- **The empty set is `set()`.** `{}` is already taken: it is an empty `dict`.
+- **A tuple with one item needs a comma:** `(42,)`. Without it, `(42)` is just the number 42 in parentheses.
+
+**Check yourself.** What does `box = {}` create?
+
+<Question
+  id="collections"
+  choices={[
+    {
+      text: 'An empty dict.',
+      explain: 'Empty curly braces are a dict. With values inside, the shape tells the type: {1, 2} is a set, and {"a": 1} is a dict.',
+      correct: true,
+    },
+    {
+      text: 'An empty set.',
+      explain: 'A reasonable guess, but the empty set is created with set().',
+    },
+    {
+      text: 'An empty tuple.',
+      explain: 'The empty tuple is written with parentheses: ().',
+    },
+  ]}
+/>
+
+## None in place of null
+
+<Compare>
+
+```csharp title="C#"
+string Greeting(string? nickname)
+{
+    if (nickname is null)
+    {
+        return "Hello, stranger";
+    }
+
+    return $"Hello, {nickname}";
+}
+```
+
+```python title="Python"
+def greeting(nickname):
+    if nickname is None:
+        return "Hello, stranger"
+
+    return f"Hello, {nickname}"
+```
+
+</Compare>
+
+`None` is the only value in Python that means "there is nothing". It is an object, and exactly one of it exists in the whole program. That is why the check is done with `is`, which asks whether two names point to the same object: `nickname is None` and `nickname is not None`.
+
+A function that returns nothing also returns `None`. There is no `void`.
+
+Forget the check, and the error arrives while the program is running, just like a `NullReferenceException`:
+
+```python
+order = None
+print(order.total)
+# AttributeError: 'NoneType' object has no attribute 'total'
+```
+
+The two operators you will miss are `?.` and `??`. Python has neither, and an ordinary condition is written in their place:
+
+| C# | Python |
+| --- | --- |
+| `order is null` | `order is None` |
+| `order is not null` | `order is not None` |
+| `nickname ?? "stranger"` | `nickname if nickname is not None else "stranger"` |
+| `order?.Total` | `order.total if order is not None else None` |
+
+The expression `A if condition else B` is Python's ternary operator. It is `condition ? A : B`, only with the condition in the middle.
+
+:::caution[or is not ??]
+You will often see `nickname or "stranger"` as a shorthand for `??`. But it replaces not only `None`, it replaces every "empty" value: `0`, `""` and an empty `list`. If zero is a valid value, `or` will lose it. The next topic explains why.
+:::
+
+**Check yourself.** What does this code print?
+
+```python
+timeout = 0
+effective = timeout or 30
+print(effective)
+```
+
+<Question
+  id="none"
+  choices={[
+    {
+      text: '0',
+      explain: 'That is how ?? works in C#: zero is not null, so it stays. But or looks at whether the value is "empty".',
+    },
+    {
+      text: '30',
+      explain: 'Zero is an "empty" value, so or returns the right-hand side. If 0 is a valid timeout, write 30 if timeout is None else timeout.',
+      correct: true,
+    },
+    {
+      text: 'None',
+      explain: 'or always returns one of its two operands. Here that is 30.',
+    },
+  ]}
+/>
+
+## Equality and truthiness
+
+There are two ideas here that look different in C#.
+
+### `==` compares contents
+
+<Compare>
+
+```csharp title="C#"
+List<int> a = [1, 2];
+List<int> b = [1, 2];
+
+Console.WriteLine(a == b);
+// False: two different objects
+
+Console.WriteLine(a.SequenceEqual(b));
+// True: the same contents
+```
+
+```python title="Python"
+a = [1, 2]
+b = [1, 2]
+
+print(a is b)
+# False: two different objects
+
+print(a == b)
+# True: the same contents
+```
+
+</Compare>
+
+In Python `==` compares the **contents**, and `is` checks whether the two names point to **the same object**. For `list`, `tuple`, `dict` and `set` that means two collections with the same contents are equal, like two `record` values in C#.
+
+The rule is short: compare with `==`, and keep `is` for `None`.
+
+### Any value can be a condition
+
+<Compare>
+
+```csharp title="C#"
+if (cart.Count > 0)
+{
+    Checkout(cart);
+}
+
+if (!string.IsNullOrEmpty(note))
+{
+    Attach(note);
+}
+```
+
+```python title="Python"
+if cart:
+    checkout(cart)
+
+if note:
+    attach(note)
+```
+
+</Compare>
+
+`if` in Python accepts any value, not just a `bool`. A few values count as false and are called **falsy**:
+
+- `False` and `None`;
+- zero: `0` and `0.0`;
+- empty text: `""`;
+- empty collections: `[]`, `()`, `{}` and `set()`.
+
+Everything else is **truthy**. So `if cart:` means "if the cart is not empty", and `if note:` covers both `None` and an empty string at once. This is the usual way to write it, and you will see it everywhere.
+
+The price is that `if count:` cannot tell `0` from `None`. When zero is a valid value, ask explicitly: `if count is not None:`.
+
+`and` and `or` follow the same rule and return one of their two operands, not a `bool`. That is why `timeout or 30` from the previous topic returned `30`: zero is falsy.
+
+**Check yourself.** Which statement is true after these two lines?
+
+```python
+first = {"id": 7}
+second = {"id": 7}
+```
+
+<Question
+  id="equality"
+  choices={[
+    {
+      text: 'Both comparisons, first == second and first is second, return True.',
+      explain: 'is is true only when the two names point to the same object. Two were created here.',
+    },
+    {
+      text: 'Both comparisons return False.',
+      explain: 'That is what == would give for two Dictionary objects in C#. In Python == compares the contents.',
+    },
+    {
+      text: 'first == second is True, and first is second is False.',
+      explain: 'The two dicts have the same contents, but they are two separate objects.',
+      correct: true,
+    },
+  ]}
+/>
+
+## Assignment does not copy
+
+<Compare>
+
+```csharp title="C#"
+List<string> team = ["Ana", "Boris"];
+List<string> backup = team;
+
+backup.Add("Vera");
+
+Console.WriteLine(team.Count);  // 3
+```
+
+```python title="Python"
+team = ["Ana", "Boris"]
+backup = team
+
+backup.append("Vera")
+
+print(len(team))  # 3
+```
+
+</Compare>
+
+No surprise here: a `list` behaves like a reference type. `backup = team` does not create a second list, it gives the same one a second name.
+
+The difference is that in Python **everything** works this way. There is no `struct` and there are no value types that get copied on assignment. With numbers, strings and tuples you do not notice, because they are **immutable**: you cannot change `5` or `"abc"`, you can only attach the name to another value. `list`, `dict`, `set` and the objects of your own classes are **mutable**, and with them the sharing shows.
+
+When you need a copy, you ask for it explicitly:
+
+```python
+import copy
+
+week = [["gym"], ["work", "cinema"]]
+
+same = week                  # the same object
+shallow = week.copy()        # a new outer list, the same inner lists
+deep = copy.deepcopy(week)   # everything is new
+```
+
+`.copy()` copies only the first level. The inner lists stay shared until you ask for `deepcopy`.
+
+The same goes for function arguments. A function receives the object itself, not a copy of it, so a change made in place is visible outside too. There is no `ref` and no `out`: when you need several results, you return a tuple.
+
+### The default value trap
+
+```python
+def log(message, history=[]):
+    history.append(message)
+    return history
+
+print(log("start"))   # ['start']
+print(log("stop"))    # ['start', 'stop']
+```
+
+The second call returns both items. The default value is created **once**, when the function is defined, not on every call. So all the calls without a second argument share one and the same `list`. In C# this cannot happen, because default values are constants.
+
+The fix is to make the default `None` and create the list inside the function:
+
+```python
+def log(message, history=None):
+    if history is None:
+        history = []
+    history.append(message)
+    return history
+```
+
+This is the best-known trap in Python. The rule is simple: **never a mutable default value**.
+
+**Check yourself.** What does this code print?
+
+```python
+grid = [[0, 0], [0, 0]]
+clone = grid.copy()
+clone[0][0] = 9
+print(grid[0][0])
+```
+
+<Question
+  id="mutability"
+  choices={[
+    {
+      text: '0',
+      explain: 'That is what copy.deepcopy(grid) would give. The copy() method copies only the outer list.',
+    },
+    {
+      text: '9',
+      explain: 'clone is a new list, but its items are the same inner lists. The change made through clone[0] is visible through grid[0] as well.',
+      correct: true,
+    },
+    {
+      text: 'An error, because a copy cannot be changed.',
+      explain: 'The copy is an ordinary list and changes like any other.',
+    },
+  ]}
+/>
+
+## Type hints: types when you want them
+
+<Compare>
+
+```csharp title="C#"
+double Total(
+    List<double> prices,
+    double? discount = null)
+{
+    var sum = prices.Sum();
+    return sum - (discount ?? 0);
+}
+```
+
+```python title="Python"
+def total(
+    prices: list[float],
+    discount: float | None = None,
+) -> float:
+    subtotal = sum(prices)
+    if discount is None:
+        return subtotal
+    return subtotal - discount
+```
+
+</Compare>
+
+**Type hints** are the way to write types down in Python code. Parameters and variables are annotated with `name: type`, and the result of a function with `-> type`.
+
+The big difference from C# is that Python **does not check them**. While the program runs, the annotations are simply ignored:
+
+```python
+def double(value: int) -> int:
+    return value * 2
+
+print(double("ab"))   # abab
+```
+
+There is no error. `"ab" * 2` is a valid operation on text, and Python runs it. The mistake is found by a **type checker**: a separate tool that reads the annotations without running the code. The most widely used are [Pyright](https://microsoft.github.io/pyright/), which in VS Code works behind the Pylance extension, and [mypy](https://mypy-lang.org/). The type checker does the job of the C# compiler, but you decide whether to run it.
+
+Most types translate directly:
+
+| C# | Python |
+| --- | --- |
+| `int`, `double`, `bool`, `string` | `int`, `float`, `bool`, `str` |
+| `string?` | `str \| None` |
+| `List<int>` | `list[int]` |
+| `Dictionary<string, int>` | `dict[str, int]` |
+| `HashSet<string>` | `set[str]` |
+| `(int, string)` | `tuple[int, str]` |
+| `void` | `None` |
+
+Two practical rules:
+
+- **Annotate the parameters and the result of every function.** The type checker infers local variables by itself, like `var` in C#.
+- **Check the data that comes from outside.** JSON, a file or user input does not become correct just because you annotated it. While the program runs, nobody is watching the types.
+
+**Check yourself.** What happens when you run this code?
+
+```python
+def area(width: int, height: int) -> int:
+    return width * height
+
+print(area("ab", 3))
+```
+
+<Question
+  id="hints"
+  choices={[
+    {
+      text: 'It prints ababab.',
+      explain: 'The annotations are ignored, and "ab" * 3 is a valid operation on text. A type checker such as Pyright would catch the mistake before you run the code.',
+      correct: true,
+    },
+    {
+      text: 'Python stops with a TypeError, because "ab" is not an int.',
+      explain: 'Type hints are not checked while the program runs.',
+    },
+    {
+      text: 'The code cannot start until the types match.',
+      explain: 'Python has no compilation step that checks the types. A separate tool does that, if you run it.',
+    },
+  ]}
+/>
+
+## Your turn
+
+Three tasks. Each one gathers something from the lesson into a single function. Write it in the panel under the task, in place of `# TODO`, and press **Run**. The code runs in your browser, and the check calls the function with the sample and with other data too. The solution is hidden under the panel.
+
+### Page views
+
+You have a log of page views. Every line is `page:count`, but some lines are broken:
+
+```python title="views.py"
+lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+```
+
+Write a function `count_views(lines: list[str]) -> dict[str, int]` that:
+
+1. splits every line into a page and a count with `line.split(":")`;
+2. skips the lines where the count is missing or is not a number;
+3. adds up the views of every page in one `dict`.
+
+Then print every page with its count and its share of all the views. The expected output is:
+
+```text
+home: 200 (82%)
+docs: 45 (18%)
+```
+
+A few hints:
+
+- `"45".isdigit()` is `True`, while `"n/a".isdigit()` and `"".isdigit()` are `False`.
+- `views.get(page, 0)` gives the count so far, and `int(raw)` turns the text into a number.
+- The `:.0%` format in an f-string turns `0.82` into `82%`.
+
+<Try
+  file="views.py"
+  starter={`
+|lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+|
+|def count_views(lines: list[str]) -> dict[str, int]:
+|    views: dict[str, int] = {}
+|
+|    # TODO
+|
+|    return views
+|
+|
+|views = count_views(lines)
+|# TODO
+`}
+  check={`
+|_eq(
+|    count_views(["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]),
+|    {"home": 200, "docs": 45},
+|    "The sample from the task.",
+|)
+|_eq(
+|    count_views(["a:1", "b:2", "a:4", "c:", "b:no"]),
+|    {"a": 5, "b": 2},
+|    "A second sample.",
+|)
+|_eq(count_views(["x:0", "x:10"]), {"x": 10}, "Zero is a valid count.")
+|_eq(count_views([]), {}, "An empty list.")
+|_out(
+|    """home: 200 (82%)
+|docs: 45 (18%)""",
+|    "The printed text.",
+|)
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="views.py"
+def count_views(lines: list[str]) -> dict[str, int]:
+    views: dict[str, int] = {}
+
+    for line in lines:
+        page, raw = line.split(":")
+        if not raw.isdigit():
+            continue
+        views[page] = views.get(page, 0) + int(raw)
+
+    return views
+
+
+lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+
+views = count_views(lines)
+total = sum(views.values())
+
+for page, count in views.items():
+    print(f"{page}: {count} ({count / total:.0%})")
+```
+
+These lines hold almost the whole lesson: unpacking into two names, a `dict` with `get` and a fallback value, explicit conversion with `int()`, division that returns a `float`, type hints and an f-string.
+
+</details>
+
+---
+
+### Settings
+
+You have default settings and settings that come from outside. `None` means "leave this alone". `0` and `False` are real values and have to be stored.
+
+```python title="settings.py"
+defaults = {"timeout": 30, "retries": 3, "verbose": False}
+overrides = {"timeout": None, "retries": 0, "verbose": True}
+```
+
+Write a function `apply_overrides(defaults, overrides) -> dict` that:
+
+1. starts from a copy of `defaults`, so the original stays unchanged;
+2. for every key in `overrides`, stores the value when it is not `None`;
+3. returns the new `dict`.
+
+The values are numbers and `bool`, so the hints say `int | bool`, and a missing value is `None`. Then print the result and the original. The expected output is:
+
+```text
+{'timeout': 30, 'retries': 0, 'verbose': True}
+{'timeout': 30, 'retries': 3, 'verbose': False}
+```
+
+A few hints:
+
+- `value is None` leaves the current value. `if value` drops `0` and `False`.
+- `defaults.copy()` is a new `dict`. `merged = defaults` is a second name for the same one.
+- `print(result)` uses single quotes. That is what the expected output looks like.
+
+<Try
+  file="settings.py"
+  starter={`
+|defaults = {"timeout": 30, "retries": 3, "verbose": False}
+|overrides = {"timeout": None, "retries": 0, "verbose": True}
+|
+|def apply_overrides(
+|    defaults: dict[str, int | bool],
+|    overrides: dict[str, int | bool | None],
+|) -> dict[str, int | bool]:
+|    # TODO
+|
+|    return {}
+|
+|
+|result = apply_overrides(defaults, overrides)
+|# TODO
+`}
+  check={`
+|defaults = {"timeout": 30, "retries": 3, "verbose": False}
+|overrides = {"timeout": None, "retries": 0, "verbose": True}
+|result = apply_overrides(defaults, overrides)
+|_eq(result, {"timeout": 30, "retries": 0, "verbose": True}, "The merged settings.")
+|_eq(defaults, {"timeout": 30, "retries": 3, "verbose": False}, "The original must stay unchanged.")
+|
+|second = {"limit": 10, "verbose": True}
+|second_result = apply_overrides(second, {"limit": None, "verbose": False, "name": None, "slots": 4})
+|_eq(second_result, {"limit": 10, "verbose": False, "slots": 4}, "A second sample.")
+|_eq(second, {"limit": 10, "verbose": True}, "The original of the second sample must stay the same.")
+|_out(
+|    """{'timeout': 30, 'retries': 0, 'verbose': True}
+|{'timeout': 30, 'retries': 3, 'verbose': False}""",
+|    "The printed text.",
+|)
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="settings.py"
+def apply_overrides(
+    defaults: dict[str, int | bool],
+    overrides: dict[str, int | bool | None],
+) -> dict[str, int | bool]:
+    merged = defaults.copy()
+
+    for key, value in overrides.items():
+        if value is None:
+            continue
+        merged[key] = value
+
+    return merged
+
+
+defaults = {"timeout": 30, "retries": 3, "verbose": False}
+overrides = {"timeout": None, "retries": 0, "verbose": True}
+
+result = apply_overrides(defaults, overrides)
+print(result)
+print(defaults)
+```
+
+Two habits from C# mislead you here: `None` is not every empty value, and `defaults.copy()` is a new `dict`, not a second name for the old one.
+
+</details>
+
+---
+
+### Totals
+
+Every row is an item, a price as text, and a quantity. Some prices are broken.
+
+```python title="totals.py"
+rows = [
+    ("pen", "1.50", 2),
+    ("mug", "n/a", 1),
+    ("pen", "1.50", 3),
+    ("book", "", 1),
+    ("mug", "4.00", 2),
+]
+```
+
+Write a function `item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]` that:
+
+1. skips the row when the price is not a number;
+2. adds the price times the quantity to that item's total;
+3. returns a `dict` of the items and their totals.
+
+Then print every item with its total to two digits after the decimal point. The expected output is:
+
+```text
+pen: 7.50
+mug: 8.00
+```
+
+A few hints:
+
+- `"1.50".replace(".", "", 1).isdigit()` is `True`. `"n/a".replace(".", "", 1).isdigit()` and `"".replace(".", "", 1).isdigit()` are `False`.
+- `float(price)` turns the text into a number, and `totals.get(name, 0)` gives the total so far.
+- The `:.2f` format in an f-string turns `7.5` into `7.50`.
+
+<Try
+  file="totals.py"
+  starter={`
+|rows = [
+|    ("pen", "1.50", 2),
+|    ("mug", "n/a", 1),
+|    ("pen", "1.50", 3),
+|    ("book", "", 1),
+|    ("mug", "4.00", 2),
+|]
+|
+|def item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]:
+|    totals: dict[str, float] = {}
+|
+|    # TODO
+|
+|    return totals
+|
+|
+|totals = item_totals(rows)
+|# TODO
+`}
+  check={`
+|_eq(
+|    item_totals([
+|        ("pen", "1.50", 2),
+|        ("mug", "n/a", 1),
+|        ("pen", "1.50", 3),
+|        ("book", "", 1),
+|        ("mug", "4.00", 2),
+|    ]),
+|    {"pen": 7.5, "mug": 8.0},
+|    "The sample from the task.",
+|)
+|_eq(
+|    item_totals([("a", "2", 2), ("a", "x", 5), ("b", "0.5", 4), ("c", "1.2.3", 1)]),
+|    {"a": 4.0, "b": 2.0},
+|    "A second sample.",
+|)
+|_out(
+|    """pen: 7.50
+|mug: 8.00""",
+|    "The printed text.",
+|)
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="totals.py"
+def item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]:
+    totals: dict[str, float] = {}
+
+    for name, price, qty in rows:
+        if not price.replace(".", "", 1).isdigit():
+            continue
+        totals[name] = totals.get(name, 0) + float(price) * qty
+
+    return totals
+
+
+rows = [
+    ("pen", "1.50", 2),
+    ("mug", "n/a", 1),
+    ("pen", "1.50", 3),
+    ("book", "", 1),
+    ("mug", "4.00", 2),
+]
+
+for name, total in item_totals(rows).items():
+    print(f"{name}: {total:.2f}")
+```
+
+The same steps as the page views: skip the bad row, accumulate in a `dict` with `get`, convert the text with `float`, and format it when you print.
+
+</details>
+
+## Summary
+
+- The type belongs to the **value**, not to the name. Python is dynamically typed, but strongly typed.
+- `int` has no overflow, `/` always returns a `float`, and conversion between types is explicit.
+- **`list`, `tuple`, `dict` and `set`** are part of the language. They have their own literals and shared operations: `len()`, `in`, indexes and slices.
+- **`None`** is `null`. You check for it with `is None`, and there is no `?.` or `??`.
+- `==` compares contents, and `is` compares identity. Empty values are **falsy**, which is why `if items:` is normal code.
+- **Assignment never copies.** You ask for a copy explicitly, and a default value must not be mutable.
+- **Type hints** describe the types, but a type checker checks them, not Python.
+
+The next lesson is about classes: `class`, a dataclass in place of a `record`, and why you rarely need an interface in Python. It is being prepared right now.
+
+<LessonProgress summary />
