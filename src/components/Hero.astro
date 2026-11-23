@@ -1,0 +1,78 @@
+---
+import { Code } from 'astro:components';
+
+// The same two themes as the code blocks in the lessons (see `expressiveCode.themes` in astro.config.mjs).
+const themes = { dark: 'night-owl', light: 'one-light' } as const;
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero ?? {};
+const { eyebrow, stats = [], code } = data.courseHero ?? {};
+---
+
+<div class="hf-hero">
+	<div class="hf-hero__grid">
+		<div class="hf-hero__copy">
+			{
+				eyebrow && (
+					<p class="hf-hero__eyebrow">
+						<span class="hf-hero__dot" aria-hidden="true" />
+						{eyebrow}
+					</p>
+				)
+			}
+			<h1 id="_top" class="hf-hero__title" data-page-title set:html={title} />
+			{tagline && <p class="hf-hero__tagline" set:html={tagline} />}
+			{
+				actions.length > 0 && (
+					<div class="hf-hero__actions">
+						{actions.map(({ text, link, variant }) => (
+							<a class:list={['hf-button', { 'hf-button--ghost': variant !== 'primary' }]} href={link}>
+								{text}
+								{variant === 'primary' && <span aria-hidden="true">→</span>}
+							</a>
+						))}
+					</div>
+				)
+			}
+			{
+				stats.length > 0 && (
+					<ul class="hf-hero__stats">
+						{stats.map(({ value, label }) => (
+							<li>
+								<strong>{value}</strong>
+								<span>{label}</span>
+							</li>
+						))}
+					</ul>
+				)
+			}
+		</div>
+
+		{
+			code && (
+				<figure class="hf-window">
+					<div class="hf-window__bar" aria-hidden="true">
+						<span class="hf-window__dots">
+							<i />
+							<i />
+							<i />
+						</span>
+						<span class="hf-window__file">{code.file}</span>
+					</div>
+					<div class="hf-window__panes">
+						{code.panes.map((pane) => (
+							<div class="hf-window__pane">
+								<p class="hf-window__label">
+									<b>{pane.label}</b>
+									{pane.hint && <span>{pane.hint}</span>}
+								</p>
+								<Code code={pane.code.trimEnd()} lang={pane.lang} themes={themes} defaultColor={false} />
+							</div>
+						))}
+					</div>
+					{code.note && <figcaption class="hf-window__note" set:html={code.note} />}
+				</figure>
+			)
+		}
+	</div>
+</div>

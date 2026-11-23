@@ -1,0 +1,911 @@
+---
+title: From LINQ to comprehensions
+description: The third lesson of Python for .NET Developers - list, dict and set comprehensions in place of Where, Select and ToList, generator expressions and deferred execution, sum, any, max, sorted and grouping, compared with LINQ.
+---
+
+import Compare from '../../../../../components/Compare.astro';
+import LessonProgress from '../../../../../components/LessonProgress.astro';
+import Question from '../../../../../components/Question.astro';
+import Try from '../../../../../components/Try.astro';
+
+<LessonProgress number={3} of={9} minutes={50} topics={6} />
+
+In C#, work with collections goes through LINQ: `Where`, `Select`, `OrderBy`, `ToList`. Python has no LINQ and no extension methods. Their place is taken by **comprehensions**, which are part of the language's syntax, and a few built-in functions such as `sum`, `any` and `sorted`.
+
+Almost every LINQ query has a direct translation. There are six topics. Each one starts with C# code and the same code in Python, and ends with one question. Three tasks are waiting at the end.
+
+The examples all work on the same data. Save it in a file if you want to try each of them:
+
+```python title="orders.py"
+from dataclasses import dataclass
+
+@dataclass
+class Order:
+    id: int
+    customer: str
+    total: float
+    paid: bool
+
+
+orders = [
+    Order(1, "Ana", 120.0, True),
+    Order(2, "Boris", 35.5, False),
+    Order(3, "Ana", 80.0, True),
+    Order(4, "Vera", 210.0, True),
+]
+```
+
+## List comprehension: `Where` and `Select` in one expression
+
+<Compare>
+
+```csharp title="C#"
+var names = orders
+    .Where(o => o.Paid)
+    .Select(o => o.Customer)
+    .ToList();
+// ["Ana", "Ana", "Vera"]
+```
+
+```python title="Python"
+names = [
+    o.customer
+    for o in orders
+    if o.paid
+]
+# ['Ana', 'Ana', 'Vera']
+```
+
+</Compare>
+
+A list comprehension has three parts, and they always come in this order:
+
+1. **What you take** from each item: `o.customer`. This is `Select`.
+2. **Where from**: `for o in orders`.
+3. **Which items**: `if o.paid`. This is `Where`, and it can be left out.
+
+The square brackets around it say that the result is a new `list`. They are your `ToList()`.
+
+The order is confusing at first, because the result comes before the source. Read it from the `for`: for every order, if it is paid, take the customer. A short comprehension goes on one line:
+
+```python
+names = [o.customer for o in orders if o.paid]
+```
+
+It is this loop, written as an expression:
+
+```python
+names = []
+for o in orders:
+    if o.paid:
+        names.append(o.customer)
+```
+
+The two parts can also stand alone. `[o.total for o in orders]` is only a `Select`, and `[o for o in orders if o.total > 100]` is only a `Where`. The first part is required even when it is the item itself.
+
+Unlike a LINQ query, a list comprehension runs at once and to the end. The deferred version is the fourth topic.
+
+### `if` in two places
+
+An `if` at the end filters. When every item should give a result, but a different one depending on a condition, you put the conditional expression from the first lesson in the first part:
+
+```python
+labels = ["paid" if o.paid else "open" for o in orders]
+# ['paid', 'open', 'paid', 'paid']
+```
+
+In C# this is `Select(o => o.Paid ? "paid" : "open")`. The two forms are easy to mix up. An `if` with an `else` goes before the `for` and chooses a value. An `if` without an `else` goes after the `for` and removes items.
+
+You will also meet the functions `map()` and `filter()`, which do the same with a function you pass in. They work, but a comprehension is the usual way to write it. It is for building a new collection. When you want an action for every item, `print` for example, write a plain `for`.
+
+**Check yourself.** What does this code print?
+
+```python
+nums = [1, 2, 3, 4]
+print([n if n % 2 == 0 else 0 for n in nums])
+```
+
+<Question
+  id="list-comprehension"
+  choices={[
+    {
+      text: '[2, 4]',
+      explain: 'That is what you would get with the if after the for: [n for n in nums if n % 2 == 0]. Here the if is before the for and removes nothing.',
+    },
+    {
+      text: '[0, 2, 0, 4]',
+      explain: 'An if with an else chooses a value for every item: the even ones stay, and the odd ones become 0.',
+      correct: true,
+    },
+    {
+      text: 'A syntax error.',
+      explain: 'This is valid. The error is the other way round: an else on an if that comes after the for.',
+    },
+  ]}
+/>
+
+## dict and set comprehensions
+
+<Compare>
+
+```csharp title="C#"
+var totals = orders.ToDictionary(
+    o => o.Id,
+    o => o.Total);
+
+var customers = orders
+    .Select(o => o.Customer)
+    .ToHashSet();
+```
+
+```python title="Python"
+totals = {
+    o.id: o.total
+    for o in orders
+}
+
+customers = {
+    o.customer
+    for o in orders
+}
+```
+
+</Compare>
+
+The shape decides the type, as with the literals from the first lesson. Curly braces with `key: value` give a `dict`, and curly braces with a single value give a `set`:
+
+```python
+print(totals)      # {1: 120.0, 2: 35.5, 3: 80.0, 4: 210.0}
+print(customers)   # {'Ana', 'Boris', 'Vera'}, in some order
+```
+
+A set comprehension is also your `Distinct()`: Ana has two orders, but appears once in the result. The order inside a `set` is not guaranteed. When you need an ordered list with no repeats, write `sorted(customers)`.
+
+**A repeated key is not an error.** `ToDictionary` throws an `ArgumentException` on a second identical key. A dict comprehension silently keeps the last value:
+
+```python
+by_customer = {o.customer: o.total for o in orders}
+# {'Ana': 80.0, 'Boris': 35.5, 'Vera': 210.0}
+```
+
+Ana's order for 120 disappeared without any message. When keys can repeat you need grouping, and that is in the last topic.
+
+An existing `dict` is walked with `.items()`, which gives the key and value pairs:
+
+```python
+stock = {"tea": 12, "milk": 0, "jam": 3}
+
+available = {name: count for name, count in stock.items() if count > 0}
+# {'tea': 12, 'jam': 3}
+```
+
+There is no comprehension for a tuple. The same thing written in parentheses is something else, and it is the fourth topic.
+
+**Check yourself.** What does this code print?
+
+```python
+pairs = [("a", 1), ("b", 2), ("a", 3)]
+lookup = {key: value for key, value in pairs}
+print(lookup)
+```
+
+<Question
+  id="dict-set"
+  choices={[
+    {
+      text: "{'a': 1, 'b': 2}",
+      explain: 'The last value for the key wins, not the first.',
+    },
+    {
+      text: "{'a': 3, 'b': 2}",
+      explain: 'The second "a" overwrites the value of the first. The key keeps its place from the first time it was added, so it stays in front.',
+      correct: true,
+    },
+    {
+      text: 'An error about a duplicate key.',
+      explain: 'That is how ToDictionary works in C#. A dict in Python overwrites the value.',
+    },
+  ]}
+/>
+
+## Several sources: `SelectMany`, `Zip` and indexes
+
+<Compare>
+
+```csharp title="C#"
+List<List<string>> baskets = [
+    ["tea", "milk"],
+    ["bread"],
+];
+
+var items = baskets
+    .SelectMany(b => b)
+    .ToList();
+// ["tea", "milk", "bread"]
+```
+
+```python title="Python"
+baskets = [
+    ["tea", "milk"],
+    ["bread"],
+]
+
+items = [
+    item
+    for basket in baskets
+    for item in basket
+]
+# ['tea', 'milk', 'bread']
+```
+
+</Compare>
+
+A comprehension can have more than one `for`. They are written in the order the nested loops would be in: the outer one comes first.
+
+```python
+items = []
+for basket in baskets:
+    for item in basket:
+        items.append(item)
+```
+
+Swap them and `basket` is used before it has a value, and Python stops with a `NameError`. Two `for`s are still readable. With three, or with two and conditions, a plain loop is clearer.
+
+The source can also be more than a single collection. Two built-in functions cover the cases LINQ has separate methods for:
+
+```python
+names = ["Ana", "Boris", "Vera"]
+scores = [91, 78, 85]
+
+results = [f"{name}: {score}" for name, score in zip(names, scores)]
+# ['Ana: 91', 'Boris: 78', 'Vera: 85']
+
+ranked = [f"{place}. {name}" for place, name in enumerate(names, start=1)]
+# ['1. Ana', '2. Boris', '3. Vera']
+```
+
+- **`zip(a, b)`** walks the two collections at the same time and gives pairs, like `Zip`. It stops at the shorter one.
+- **`enumerate(items)`** gives pairs of an index and an item. It is `Select((item, index) => ...)`, except that the index comes first. Counting starts at 0 unless you pass `start`.
+
+Both work in a plain `for` too. The classic `for (int i = 0; i < n; i++)` is `for i in range(n)` in Python. But when you need the index only to get to the item, `enumerate` is the shorter way.
+
+**Check yourself.** What does this code print?
+
+```python
+rows = [[1, 2], [3], [4, 5]]
+print([n for row in rows for n in row if n % 2 == 1])
+```
+
+<Question
+  id="sources"
+  choices={[
+    {
+      text: '[1, 3, 5]',
+      explain: 'The two for parts go through all the numbers in order, and the if keeps the odd ones. The result is one flat list.',
+      correct: true,
+    },
+    {
+      text: '[[1], [3], [5]]',
+      explain: 'The first part is n, not a list. That is why the result is flat.',
+    },
+    {
+      text: '[1, 2, 3, 4, 5]',
+      explain: 'That is the result without the condition at the end.',
+    },
+  ]}
+/>
+
+## Generator expressions: deferred execution
+
+<Compare>
+
+```csharp title="C#"
+var totals = orders
+    .Where(o => o.Paid)
+    .Select(o => o.Total);
+// nothing has run yet
+
+var revenue = totals.Sum();  // 410
+```
+
+```python title="Python"
+totals = (
+    o.total
+    for o in orders
+    if o.paid
+)
+# nothing has run yet
+
+revenue = sum(totals)  # 410.0
+```
+
+</Compare>
+
+The same thing written in parentheses is a **generator expression**. It does not build a list. It returns an object that works out the items one at a time, when someone asks for them: a LINQ query without `ToList()`.
+
+Most often you will pass it straight to a function that consumes the items. Then the second pair of parentheses goes away:
+
+```python
+revenue = sum(o.total for o in orders if o.paid)
+```
+
+No intermediate list is built, and that matters with a million rows or a large file.
+
+Here is also the difference that people coming from LINQ trip over. A query in C# is an `IEnumerable`, and it runs again every time you walk it. A generator is used up after the first time:
+
+```python
+totals = (o.total for o in orders if o.paid)
+
+print(sum(totals))   # 410.0
+print(sum(totals))   # 0
+```
+
+The second line gives no error, just zero. A generator is closer to an `IEnumerator`: it only moves forward and does not go back to the start. For the same reason it has no length and no indexes, and `len(totals)` raises a `TypeError`.
+
+Choosing between the two kinds of brackets is simple:
+
+- **`[...]`** when you need the result more than once, or you need `len()` and indexes.
+- **`(...)`** when the result goes straight into `sum`, `max`, `sorted`, `join` or a single `for`.
+
+How you write your own generators with `yield` is the subject of the next lesson.
+
+**Check yourself.** What does this code print?
+
+```python
+squares = (n * n for n in [1, 2, 3])
+
+print(list(squares))
+print(list(squares))
+```
+
+<Question
+  id="generators"
+  choices={[
+    {
+      text: '[1, 4, 9] and then [1, 4, 9] again',
+      explain: 'That is how an IEnumerable behaves in C#, which runs the query again. A generator is walked only once.',
+    },
+    {
+      text: '[1, 4, 9] and then []',
+      explain: 'The first list() uses up the generator. Nothing is left for the second one, and that is not an error.',
+      correct: true,
+    },
+    {
+      text: '[1, 4, 9] and then an error',
+      explain: 'A generator that is used up does not raise an error. It gives no more items.',
+    },
+  ]}
+/>
+
+## Aggregates: `sum`, `any`, `max` and the `key` parameter
+
+<Compare>
+
+```csharp title="C#"
+var revenue = orders
+    .Sum(o => o.Total);
+
+var hasDebt = orders
+    .Any(o => !o.Paid);
+
+var biggest = orders
+    .MaxBy(o => o.Total);
+```
+
+```python title="Python"
+revenue = sum(
+    o.total for o in orders
+)
+
+has_debt = any(
+    not o.paid for o in orders
+)
+
+biggest = max(
+    orders, key=lambda o: o.total
+)
+```
+
+</Compare>
+
+In LINQ every aggregate is a method that takes a lambda. In Python the aggregates are plain functions that take something to walk over. The projection and the filter go into the generator expression you pass them, so there is one pattern: `function(expression for x in xs if condition)`.
+
+`max`, `min` and `sorted` also have a `key` parameter. It is a function that is called for every item, and its result is what gets compared. `lambda o: o.total` is `o => o.Total`: one expression, no `return`. When the logic does not fit in one expression, you write an ordinary function with `def` and pass its name without parentheses: `key=order_weight`.
+
+Watch what `max` returns. `max(orders, key=lambda o: o.total)` returns the **order**, like `MaxBy`. `max(o.total for o in orders)` returns the **number**, like `Max`.
+
+Here is the translation of the methods you will need most often:
+
+| LINQ | Python |
+| --- | --- |
+| `xs.Count()` | `len(xs)` |
+| `xs.Count(x => x.Paid)` | `sum(1 for x in xs if x.paid)` |
+| `xs.Sum(x => x.Total)` | `sum(x.total for x in xs)` |
+| `xs.Average(x => x.Total)` | `mean(x.total for x in xs)` |
+| `xs.Min()`, `xs.Max()` | `min(xs)`, `max(xs)` |
+| `xs.MinBy(x => x.Total)` | `min(xs, key=lambda x: x.total)` |
+| `xs.Any(x => x.Paid)` | `any(x.paid for x in xs)` |
+| `xs.All(x => x.Paid)` | `all(x.paid for x in xs)` |
+| `xs.Any()` | `if xs:` |
+| `xs.Contains(value)` | `value in xs` |
+| `xs.First(x => x.Paid)` | `next(x for x in xs if x.paid)` |
+| `xs.FirstOrDefault(x => x.Paid)` | `next((x for x in xs if x.paid), None)` |
+| `xs.Take(3)`, `xs.Skip(3)` | `xs[:3]`, `xs[3:]` |
+| `xs.Concat(ys)` | `xs + ys` |
+| `xs.Distinct()` | `set(xs)`, or `list(dict.fromkeys(xs))` to keep the order |
+| `string.Join(", ", xs)` | `", ".join(xs)` |
+
+A few notes on the table:
+
+- **`mean`** comes from the standard library: `from statistics import mean`.
+- **`next(...)`** takes the first item of a generator. The second argument is the value to use when there is none. Without it an empty result raises `StopIteration`, the way `First()` throws an `InvalidOperationException`.
+- **`max` and `min` of an empty collection** raise a `ValueError`. `max(xs, default=0)` returns a value instead.
+- **`join`** is a method of the separator, not of the list, and it accepts only strings. For numbers: `", ".join(str(n) for n in numbers)`.
+- **`if xs:`, `len(xs)` and `xs[:3]`** work for a `list`. A generator has no length and no indexes, so turn it into one with `list(...)` first.
+
+**Check yourself.** What does this expression return for the data from the start of the lesson?
+
+```python
+max(orders, key=lambda o: o.total).customer
+```
+
+<Question
+  id="aggregates"
+  choices={[
+    {
+      text: "'Vera'",
+      explain: "max with a key returns the order with the largest total itself, Vera's for 210. customer is read from it.",
+      correct: true,
+    },
+    {
+      text: '210.0',
+      explain: 'max(o.total for o in orders) returns the number. With a key the result is the item, not its key.',
+    },
+    {
+      text: 'An error, because the number 210.0 has no customer.',
+      explain: 'max with a key does not return a number. It returns the item of orders for which the key is largest.',
+    },
+  ]}
+/>
+
+## Sorting and grouping
+
+<Compare>
+
+```csharp title="C#"
+var ranked = orders
+    .OrderByDescending(o => o.Total)
+    .ToList();
+```
+
+```python title="Python"
+ranked = sorted(
+    orders,
+    key=lambda o: o.total,
+    reverse=True,
+)
+```
+
+</Compare>
+
+`sorted` takes anything it can walk over and returns a new, sorted `list`. The original stays untouched. The order is set with the same `key` as for `max`, and `reverse=True` turns it around.
+
+Lists also have a `sort()` method. It sorts in place, like `List<T>.Sort()`, and returns `None`. A familiar mistake comes from that: `orders = orders.sort()` leaves the value `None` in `orders`.
+
+For `ThenBy` the key becomes a tuple. Tuples are compared item by item, so the first field leads and the second one decides ties:
+
+```python
+ranked = sorted(orders, key=lambda o: (o.customer, -o.total))
+# Ana 120.0, Ana 80.0, Boris 35.5, Vera 210.0
+```
+
+The minus in front of the number reverses the direction for that field only: the customers are in alphabetical order, and each one's orders go from the largest to the smallest. Text has no minus. Then you sort twice, by the secondary key first, because `sorted` keeps the order of equal items.
+
+### Grouping
+
+There is no ready-made `GroupBy`. Groups are collected in a `dict` where the key is what you group by and the value is a list. `defaultdict` from the `collections` module saves you from checking whether the key is already there:
+
+```python
+from collections import defaultdict
+
+groups = defaultdict(list)
+
+for o in orders:
+    groups[o.customer].append(o)
+
+spent = {
+    customer: sum(o.total for o in group)
+    for customer, group in groups.items()
+}
+# {'Ana': 200.0, 'Boris': 35.5, 'Vera': 210.0}
+```
+
+`defaultdict(list)` is a `dict` that creates the value by itself for a missing key, by calling the function you gave it. `list()` returns an empty list, so `append` works the very first time. With `defaultdict(float)` a missing key starts at `0.0`, which is enough for sums.
+
+For plain counting there is a shorter way:
+
+```python
+from collections import Counter
+
+counts = Counter(o.customer for o in orders)
+
+print(counts["Ana"])           # 2
+print(counts.most_common(1))   # [('Ana', 2)]
+```
+
+:::caution[itertools.groupby is not GroupBy]
+The standard library has a function called `itertools.groupby`, but it groups only **adjacent** items. If the data is not sorted by the same key, you get several groups for one value. For the `GroupBy` from LINQ, use a `dict`.
+:::
+
+**Check yourself.** What does this code print?
+
+```python
+scores = [30, 10, 20]
+result = scores.sort()
+
+print(result)
+```
+
+<Question
+  id="sorting"
+  choices={[
+    {
+      text: '[10, 20, 30]',
+      explain: 'It is scores itself that got sorted. The sort() method does not return the list. sorted(scores) gives a new sorted list.',
+    },
+    {
+      text: 'None',
+      explain: 'sort() sorts the list in place and returns None. The result is in scores, not in result.',
+      correct: true,
+    },
+    {
+      text: '[30, 10, 20]',
+      explain: 'sort() changes the list, so scores is now [10, 20, 30]. But result gets what the method returns.',
+    },
+  ]}
+/>
+
+## Your turn
+
+Three tasks. Each one takes a few lines if you use comprehensions and the functions from the lesson. Write the code in the panel under the task, in place of `# TODO`, and press **Run**. The check calls the function with the sample and with other data too. The solution is hidden under the panel.
+
+### Clean emails
+
+A sign-up form brings in emails typed by hand: with spaces, with capital letters, and several times over.
+
+```python title="emails.py"
+raw = [
+    "  Ana@Mail.com ",
+    "boris@mail.com",
+    "",
+    "VERA@mail.com",
+    "ana@mail.com",
+    "   ",
+]
+```
+
+Write a function `clean_emails(raw: list[str]) -> list[str]` that:
+
+1. removes the spaces at both ends of every line and makes the letters lowercase;
+2. skips the lines where nothing is left;
+3. removes the repeats;
+4. returns the emails as a `list` in alphabetical order.
+
+Then print them on one line, separated by a comma and a space. The expected output is:
+
+```text
+ana@mail.com, boris@mail.com, vera@mail.com
+```
+
+A few hints:
+
+- `" Ana ".strip()` is `"Ana"`, and `"Ana".lower()` is `"ana"`. A line of spaces only becomes an empty string after `strip()`, and an empty string is falsy.
+- A set comprehension removes the repeats, but has no order. `sorted()` accepts a `set` and returns a sorted `list`.
+- `", ".join(emails)` glues the list into one string.
+
+<Try
+  file="emails.py"
+  starter={`
+|raw = [
+|    "  Ana@Mail.com ",
+|    "boris@mail.com",
+|    "",
+|    "VERA@mail.com",
+|    "ana@mail.com",
+|    "   ",
+|]
+|
+|def clean_emails(raw: list[str]) -> list[str]:
+|    # TODO
+|    return []
+|
+|
+|emails = clean_emails(raw)
+|# TODO
+`}
+  check={`
+|_eq(
+|    clean_emails(["  Ana@Mail.com ", "boris@mail.com", "", "VERA@mail.com", "ana@mail.com", "   "]),
+|    ["ana@mail.com", "boris@mail.com", "vera@mail.com"],
+|    "The sample from the task.",
+|)
+|_eq(
+|    clean_emails(["b@x.io", " A@x.io", "a@x.io ", " ", "C@x.io"]),
+|    ["a@x.io", "b@x.io", "c@x.io"],
+|    "A second sample.",
+|)
+|_eq(clean_emails([]), [], "An empty list.")
+|_out("ana@mail.com, boris@mail.com, vera@mail.com", "The printed text.")
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="emails.py"
+def clean_emails(raw: list[str]) -> list[str]:
+    cleaned = {line.strip().lower() for line in raw if line.strip()}
+    return sorted(cleaned)
+
+
+raw = [
+    "  Ana@Mail.com ",
+    "boris@mail.com",
+    "",
+    "VERA@mail.com",
+    "ana@mail.com",
+    "   ",
+]
+
+emails = clean_emails(raw)
+print(", ".join(emails))
+```
+
+One set comprehension did the work of `Select`, `Where` and `Distinct`. `sorted` is `OrderBy` and `ToList` in one.
+
+</details>
+
+---
+
+### Average grades
+
+You have the grades of a few students. Some of them have none yet.
+
+```python title="grades.py"
+grades = {
+    "Ana": [6, 5, 6],
+    "Boris": [4, 3],
+    "Vera": [],
+    "Dimo": [5, 6],
+}
+```
+
+Write a function `averages(grades: dict[str, list[int]]) -> dict[str, float]` that:
+
+1. returns a new `dict` with the average grade of every student;
+2. skips the students with no grades.
+
+Then find the student with the highest average and print them with the grade to two digits after the decimal point. The expected output is:
+
+```text
+Ana: 5.67
+```
+
+A few hints:
+
+- The average is `sum(marks) / len(marks)`. An empty list is falsy, so `if marks` skips it and protects you from dividing by zero.
+- `grades.items()` gives the pairs of a name and its grades. You can unpack them right in the `for`.
+- `max(result.items(), key=...)` returns the whole pair. The grade is its second item, `pair[1]`.
+
+<Try
+  file="grades.py"
+  starter={`
+|grades = {
+|    "Ana": [6, 5, 6],
+|    "Boris": [4, 3],
+|    "Vera": [],
+|    "Dimo": [5, 6],
+|}
+|
+|def averages(grades: dict[str, list[int]]) -> dict[str, float]:
+|    # TODO
+|    return {}
+|
+|
+|result = averages(grades)
+|# TODO
+`}
+  check={`
+|def rounded(result):
+|    _eq(isinstance(result, dict), True, "averages must return a dict.")
+|    return {name: round(value, 2) for name, value in result.items()}
+|
+|_eq(
+|    rounded(averages({"Ana": [6, 5, 6], "Boris": [4, 3], "Vera": [], "Dimo": [5, 6]})),
+|    {"Ana": 5.67, "Boris": 3.5, "Dimo": 5.5},
+|    "The sample from the task.",
+|)
+|_eq(
+|    rounded(averages({"x": [10], "y": [], "z": [1, 2]})),
+|    {"x": 10.0, "z": 1.5},
+|    "A second sample.",
+|)
+|_eq(averages({}), {}, "An empty dict.")
+|
+|source = {"a": [2, 4]}
+|averages(source)
+|_eq(source, {"a": [2, 4]}, "The dict you were given must stay unchanged.")
+|_out("Ana: 5.67", "The printed text.")
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="grades.py"
+def averages(grades: dict[str, list[int]]) -> dict[str, float]:
+    return {
+        name: sum(marks) / len(marks)
+        for name, marks in grades.items()
+        if marks
+    }
+
+
+grades = {
+    "Ana": [6, 5, 6],
+    "Boris": [4, 3],
+    "Vera": [],
+    "Dimo": [5, 6],
+}
+
+result = averages(grades)
+name, average = max(result.items(), key=lambda pair: pair[1])
+
+print(f"{name}: {average:.2f}")
+```
+
+The dict comprehension calculates and filters in one go. `max` with a `key` returns the whole pair, which is why it is unpacked into two names.
+
+</details>
+
+---
+
+### Sales by city
+
+Every row is a city and the amount of one sale.
+
+```python title="sales.py"
+sales = [
+    ("Sofia", 120.0),
+    ("Plovdiv", 80.0),
+    ("Sofia", 45.5),
+    ("Varna", 150.0),
+    ("Plovdiv", 30.0),
+    ("Burgas", 60.0),
+]
+```
+
+Write a function `top_cities(sales, count)` that:
+
+1. adds up the sales of every city;
+2. orders the cities from the largest turnover to the smallest;
+3. returns the first `count` as a `list` of `(city, turnover)` pairs.
+
+Then print the two strongest cities, each on its own line. The expected output is:
+
+```text
+Sofia: 165.50
+Varna: 150.00
+```
+
+A few hints:
+
+- `defaultdict(float)` starts every new city at `0.0`, so `totals[city] += amount` works the very first time.
+- `totals.items()` gives the pairs of a city and its turnover. `sorted` with `key=lambda pair: pair[1]` and `reverse=True` orders them by turnover.
+- The first `count` items of a `list` are `ranked[:count]`.
+
+<Try
+  file="sales.py"
+  starter={`
+|sales = [
+|    ("Sofia", 120.0),
+|    ("Plovdiv", 80.0),
+|    ("Sofia", 45.5),
+|    ("Varna", 150.0),
+|    ("Plovdiv", 30.0),
+|    ("Burgas", 60.0),
+|]
+|
+|def top_cities(
+|    sales: list[tuple[str, float]],
+|    count: int,
+|) -> list[tuple[str, float]]:
+|    # TODO
+|    return []
+|
+|
+|best = top_cities(sales, 2)
+|# TODO
+`}
+  check={`
+|def pairs(result):
+|    _eq(isinstance(result, list), True, "top_cities must return a list.")
+|    return [(city, round(total, 2)) for city, total in result]
+|
+|sample = [
+|    ("Sofia", 120.0),
+|    ("Plovdiv", 80.0),
+|    ("Sofia", 45.5),
+|    ("Varna", 150.0),
+|    ("Plovdiv", 30.0),
+|    ("Burgas", 60.0),
+|]
+|_eq(pairs(top_cities(sample, 2)), [("Sofia", 165.5), ("Varna", 150.0)], "The sample from the task.")
+|_eq(
+|    pairs(top_cities(sample, 10)),
+|    [("Sofia", 165.5), ("Varna", 150.0), ("Plovdiv", 110.0), ("Burgas", 60.0)],
+|    "count is larger than the number of cities.",
+|)
+|_eq(
+|    pairs(top_cities([("A", 1.0), ("B", 5.0), ("A", 2.5), ("C", 3.0)], 3)),
+|    [("B", 5.0), ("A", 3.5), ("C", 3.0)],
+|    "A second sample.",
+|)
+|_eq(top_cities([], 3), [], "An empty list.")
+|_out(
+|    """Sofia: 165.50
+|Varna: 150.00""",
+|    "The printed text.",
+|)
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="sales.py"
+from collections import defaultdict
+
+
+def top_cities(
+    sales: list[tuple[str, float]],
+    count: int,
+) -> list[tuple[str, float]]:
+    totals: defaultdict[str, float] = defaultdict(float)
+
+    for city, amount in sales:
+        totals[city] += amount
+
+    ranked = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+    return ranked[:count]
+
+
+sales = [
+    ("Sofia", 120.0),
+    ("Plovdiv", 80.0),
+    ("Sofia", 45.5),
+    ("Varna", 150.0),
+    ("Plovdiv", 30.0),
+    ("Burgas", 60.0),
+]
+
+for city, total in top_cities(sales, 2):
+    print(f"{city}: {total:.2f}")
+```
+
+This is `GroupBy`, `OrderByDescending` and `Take` from LINQ. The grouping is a loop with a `dict`, and the sorting and the cut are one expression each.
+
+</details>
+
+## Summary
+
+- `[expression for x in xs if condition]` is `Select`, `Where` and `ToList` in one. An `if` with an `else` before the `for` chooses a value, and an `if` after the `for` filters.
+- Curly braces give a `dict` or a `set`. With a repeated key the last value stays, with no error.
+- Several `for` parts in one comprehension are `SelectMany`. `zip` and `enumerate` give pairs and indexes.
+- Parentheses give a **generator expression**: deferred execution, but for one pass only.
+- `sum`, `any`, `all`, `min` and `max` take a generator expression, and `key` says what to compare by.
+- `sorted()` returns a new list, while `sort()` sorts in place and returns `None`. Grouping is done with a `dict`, a `defaultdict` or a `Counter`.
+
+The next lesson is about iterators and generators: what stands behind `for`, and how `yield return` from C# becomes `yield`. It is being prepared right now.
+
+<LessonProgress summary />

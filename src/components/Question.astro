@@ -7,15 +7,21 @@ interface Choice {
 
 interface Props {
 	choices: Choice[];
+	/**
+	 * Makes the question a progress checkpoint: answering it correctly raises the lesson's percentage.
+	 * Must be unique within the lesson and the same in every language. Needs `<LessonProgress />` on the page.
+	 */
+	id?: string;
 }
 
-const { choices } = Astro.props;
+const { choices, id } = Astro.props;
 const t = Astro.locals.t;
 ---
 
 <div
 	class="hf-question not-content"
 	data-hf-question
+	data-checkpoint={id}
 	data-label-correct={t('quiz.correct')}
 	data-label-incorrect={t('quiz.incorrect')}
 	data-label-all-correct={t('quiz.allCorrect')}
@@ -37,6 +43,16 @@ const t = Astro.locals.t;
 	<div class="hf-question__actions">
 		<button type="button" class="hf-question__submit" disabled>{t('quiz.check')}</button>
 		<span class="hf-question__status" role="status" aria-live="polite"></span>
+		{
+			id && (
+				<span class="hf-question__solved">
+					<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M5 12.5 10 17.5 19 7" />
+					</svg>
+					{t('quiz.solved')}
+				</span>
+			)
+		}
 	</div>
 </div>
 
@@ -91,5 +107,21 @@ const t = Astro.locals.t;
 			status.className = `hf-question__status ${allCorrect ? 'is-correct' : 'is-incorrect'}`;
 			status.textContent = allCorrect ? (labels.labelAllCorrect ?? '') : (labels.labelSomeWrong ?? '');
 		}
+
+		if (allCorrect && labels.checkpoint) {
+			question.dispatchEvent(new CustomEvent('hf:checkpoint', { bubbles: true, detail: { id: labels.checkpoint } }));
+		}
+	});
+
+	// Sent by <LessonProgress /> when the reader resets a lesson: put its questions back to their first state.
+	document.addEventListener('hf:checkpoint-reset', () => {
+		document.querySelectorAll<HTMLElement>(`${SELECTOR}[data-checkpoint]`).forEach((question) => {
+			question.querySelectorAll<HTMLInputElement>('input').forEach((input) => (input.checked = false));
+			question.querySelectorAll<HTMLElement>('.hf-question__feedback').forEach((feedback) => (feedback.hidden = true));
+			const submit = question.querySelector<HTMLButtonElement>('.hf-question__submit');
+			if (submit) submit.disabled = true;
+			const status = question.querySelector<HTMLElement>('.hf-question__status');
+			if (status) status.textContent = '';
+		});
 	});
 </script>

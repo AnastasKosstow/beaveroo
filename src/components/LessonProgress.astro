@@ -1,0 +1,113 @@
+---
+import { slugOf } from '../courses';
+import { fill } from '../scripts/fill';
+
+interface Props {
+	/** Position of the lesson in the course, starting at 1. */
+	number?: number;
+	/** How many lessons the course has. */
+	of?: number;
+	/** Reading time in minutes. */
+	minutes?: number;
+	/** How many topics the lesson covers. */
+	topics?: number;
+	/** The closing variant for the end of a lesson: no lesson facts, and a button that resets the progress. */
+	summary?: boolean;
+}
+
+const { number, of, minutes, topics, summary = false } = Astro.props;
+const { id, locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+
+const lesson = slugOf(id, locale);
+const pad = (value: number) => String(value).padStart(2, '0');
+const kicker =
+	summary || !number || !of ? t('track.summary') : fill(t('track.lesson'), { n: pad(number), total: pad(of) });
+---
+
+<div class:list={['hf-lesson', 'not-content', { 'hf-lesson--summary': summary }]} data-lesson={lesson}>
+	<div class="hf-lesson__top">
+		<p class="hf-lesson__kicker">{kicker}</p>
+		{
+			summary ? (
+				<button type="button" class="hf-lesson__reset" data-lesson-reset>
+					{t('track.reset')}
+				</button>
+			) : (
+				<ul class="hf-lesson__facts">
+					{minutes && (
+						<li>
+							<strong>{minutes}</strong> {t('track.minutes')}
+						</li>
+					)}
+					{topics && (
+						<li>
+							<strong>{topics}</strong> {t('track.topics')}
+						</li>
+					)}
+				</ul>
+			)
+		}
+	</div>
+	<div class="hf-lesson__bar">
+		<div class="hf-meter" role="progressbar" aria-label={t('track.summary')} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+			<span class="hf-meter__fill"></span>
+		</div>
+		<strong class="hf-lesson__percent" data-lesson-percent>0%</strong>
+	</div>
+	<p class="hf-lesson__note">
+		<span data-lesson-count data-template={t('track.checks')} data-complete={t('track.complete')}></span>
+		<span>{summary ? t('track.hint') : t('track.saved')}</span>
+	</p>
+</div>
+
+<script>
+	import { completeCheckpoint, isDone, lessonState, onProgress, registerLesson, resetLesson, setMeter } from '../scripts/progress';
+	import { fill } from '../scripts/fill';
+
+	const widgets = [...document.querySelectorAll<HTMLElement>('[data-lesson]')];
+	const lesson = widgets[0]?.dataset.lesson;
+
+	if (lesson) {
+		const questions = [...document.querySelectorAll<HTMLElement>('[data-checkpoint]')];
+		const checkpoints = [...new Set(questions.map((question) => question.dataset.checkpoint ?? ''))];
+
+		const render = () => {
+			const state = lessonState(lesson);
+
+			for (const widget of widgets) {
+				widget.classList.toggle('is-complete', state.percent === 100);
+				setMeter(widget.querySelector('.hf-meter'), state.percent);
+
+				const percent = widget.querySelector('[data-lesson-percent]');
+				if (percent) percent.textContent = `${state.percent}%`;
+
+				const count = widget.querySelector<HTMLElement>('[data-lesson-count]');
+				if (count) {
+					count.textContent =
+						state.percent === 100
+							? (count.dataset.complete ?? '')
+							: fill(count.dataset.template ?? '', { done: state.done, total: state.total });
+				}
+			}
+
+			for (const question of questions) {
+				question.toggleAttribute('data-solved', isDone(lesson, question.dataset.checkpoint ?? ''));
+			}
+		};
+
+		registerLesson(lesson, checkpoints);
+		render();
+		onProgress(render);
+
+		document.addEventListener('hf:checkpoint', (event) => {
+			completeCheckpoint(lesson, (event as CustomEvent<{ id: string }>).detail.id);
+		});
+
+		document.addEventListener('click', (event) => {
+			if (!(event.target instanceof Element) || !event.target.closest('[data-lesson-reset]')) return;
+			resetLesson(lesson);
+			document.dispatchEvent(new CustomEvent('hf:checkpoint-reset'));
+		});
+	}
+</script>

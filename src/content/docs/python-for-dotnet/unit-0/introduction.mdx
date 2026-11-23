@@ -1,0 +1,198 @@
+---
+title: Python за .NET програмисти
+description: Курс по Python за опитни C# и .NET програмисти - всяка тема тръгва от C# код, който вече познаваш, и показва как същата идея изглежда на Python.
+tableOfContents: false
+hero:
+  title: 'Мислиш на C#.<br /><em>Пиши на Python.</em>'
+  tagline: 'Курсът прескача въпроса какво е променлива или цикъл. Всяка тема тръгва от C# код, който вече пишеш, и показва как същата идея изглежда на Python и къде двата езика се разминават.'
+  actions:
+    - text: Започни с урок 01
+      link: /python-for-dotnet/unit-1/types-and-data/
+    - text: Учебна програма
+      link: '#учебна-програма'
+      variant: minimal
+courseHero:
+  eyebrow: За опитни C# и .NET програмисти
+  stats:
+    - value: '9'
+      label: урока
+    - value: '~7 ч.'
+      label: общо време
+    - value: '35-55 мин'
+      label: на урок
+  code:
+    file: unread.py
+    note: 'Същата програма, ред по ред. <code>[]</code> стои на мястото на <code>new List&lt;string&gt;()</code>, <code>not</code> на мястото на <code>!</code>, а отстъпът замества <code>{ }</code>.'
+    panes:
+      - label: 'C#'
+        hint: така го пишеш днес
+        lang: csharp
+        code: |
+          // Titles of the unread mail
+          var unread = new List<string>();
+
+          foreach (var mail in inbox)
+          {
+              if (!mail.IsRead)
+              {
+                  unread.Add(mail.Title);
+              }
+          }
+      - label: Python
+        hint: така изглежда тук
+        lang: python
+        code: |
+          # Titles of the unread mail
+          unread = []
+
+          for mail in inbox:
+              if not mail.is_read:
+                  unread.append(mail.title)
+---
+
+import Columns from '../../../../components/Columns.astro';
+import CoursePath from '../../../../components/CoursePath.astro';
+
+## Учебна програма
+
+Курсът има девет урока. Всеки взима една област, която вече познаваш от C#, и показва как изглежда тя на Python. Можеш да ги минеш по ред или да отвориш направо темата, която ти трябва.
+
+<CoursePath
+  lessons={[
+    {
+      title: 'Типове и данни',
+      text: 'Имена вместо типизирани променливи, вградените колекции, None и type hints.',
+      minutes: 35,
+      slug: 'python-for-dotnet/unit-1/types-and-data',
+    },
+    {
+      title: 'Класове и protocols',
+      text: 'class, dataclass на мястото на record и duck typing на мястото на интерфейсите.',
+      minutes: 55,
+      slug: 'python-for-dotnet/unit-2/classes-and-protocols',
+    },
+    {
+      title: 'От LINQ към comprehensions',
+      text: 'Where, Select и ToList, събрани в един израз.',
+      minutes: 50,
+      slug: 'python-for-dotnet/unit-3/linq-to-comprehensions',
+    },
+    {
+      title: 'Iterators и generators',
+      text: 'yield return вече ти е познат. Тук се казва само yield.',
+      minutes: 40,
+    },
+    {
+      title: 'Async и concurrency',
+      text: 'async и await изглеждат същите, но зад тях стои един event loop, а не thread pool.',
+      minutes: 55,
+    },
+    {
+      title: 'Exceptions и ресурси',
+      text: 'try/except, собствени грешки и with на мястото на using.',
+      minutes: 35,
+    },
+    {
+      title: 'Typing и инструменти',
+      text: 'Pyright и Ruff връщат проверките, които компилаторът вече не прави вместо теб.',
+      minutes: 45,
+    },
+    {
+      title: 'Тестване с pytest',
+      text: 'Тестовете са обикновени функции, а fixtures заместват setup кода.',
+      minutes: 50,
+    },
+    {
+      title: 'Пакети и environments',
+      text: 'venv, pip и pyproject.toml на мястото на NuGet и .csproj.',
+      minutes: 40,
+    },
+  ]}
+/>
+
+<Columns>
+<div>
+
+## Как работи един урок
+
+Всяка тема в един урок минава през едни и същи стъпки:
+
+1. **C# до Python.** Темата започва с код на C#, който вече познаваш, и същия код на Python до него.
+2. **Само разликите.** Обяснението е кратко: какво се пренася направо и къде навикът от C# ще те подведе.
+3. **Въпрос за самопроверка.** Един въпрос на тема. Всеки верен отговор вдига процента на урока.
+
+В края на урока те чакат **три малки задачи**. Решаваш ги на своя компютър или в екрана под всяка от тях.
+
+Процентите, които виждаш в менюто и в учебната програма, се пазят само в твоя браузър. Няма акаунти и нищо не се изпраща към сървър.
+
+</div>
+<div>
+
+## Какво ти трябва
+
+- **Опит със C# и .NET.** Курсът не обяснява какво е променлива, цикъл или клас.
+- **[Python 3.12](https://www.python.org/downloads/) или по-нов.**
+- **Редактор.** [VS Code](https://code.visualstudio.com/) с разширението Python върши отлична работа.
+
+</div>
+</Columns>
+
+---
+
+## Инсталирай Python
+
+1. Отвори [python.org/downloads](https://www.python.org/downloads/) и свали **Python 3.15 или по-нов**.
+2. На Windows, на първия екран на инсталатора, отметни **Add python.exe to PATH** и натисни Install Now. Без тази отметка терминалът не намира `python`, както не намира `dotnet`, ако SDK-то не е в PATH.
+3. Затвори отворения терминал и отвори нов, за да приеме обновения PATH.
+
+Провери:
+
+```bash
+python --version
+```
+
+Трябва да видиш `Python 3.15` или по-висока версия. На macOS и Linux командата обикновено е `python3`. На Windows, ако `python` отвори Microsoft Store, ползвай `py --version`. Това е Python launcher-ът: той избира инсталираната версия.
+
+### Отвори папка във VS Code
+
+1. Инсталирай [VS Code](https://code.visualstudio.com/), ако още го нямаш.
+2. Отвори Extensions с `Ctrl+Shift+X` (на macOS `Cmd+Shift+X`) и инсталирай разширението [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) от Microsoft. То дава подсветка, избор на интерпретатор и бутон за пускане.
+3. **File → Open Folder** и избери празна папка, например `python-start`. Няма `.sln` и няма `.csproj`. Папката е целият проект.
+
+Създай в нея файл `hello.py`:
+
+```python title="hello.py"
+print("Hello from Python")
+```
+
+### Избери интерпретатора
+
+Когато отвориш `.py` файл, VS Code пита кой Python да ползва. Ако не попита, отвори командната палитра с `Ctrl+Shift+P` (на macOS `Cmd+Shift+P`), напиши **Python: Select Interpreter** и избери версията 3.15, която току-що инсталира.
+
+В лентата най-долу трябва да пише нещо като `3.15.x`. Това е изборът на SDK. VS Code не го познава предварително и без него няма с какво да пусне файла.
+
+### Пусни файла
+
+Терминалът на VS Code се отваря в папката, която си отворил, затова намира `hello.py`. Два начина:
+
+- бутонът **Run Python File** горе вдясно в редактора
+- команда в терминала (**Terminal → New Terminal**):
+
+```bash
+python hello.py
+```
+
+На macOS и Linux командата е `python3 hello.py`.
+
+Ако видиш `Hello from Python`, файлът е изпълнен. Няма компилация: интерпретаторът чете файла и го пуска веднага. `print` е `Console.WriteLine`.
+
+За кратък опит без файл напиши само `python`. Отваря се интерактивна конзола, в която всеки ред се изпълнява веднага, както в C# Interactive. Излизаш с `exit()`.
+
+Готов си за [първия урок](/python-for-dotnet/unit-1/types-and-data/).
+
+### Ако не тръгне
+
+- **`python` не се разпознава.** Отвори нов терминал. Ако командата пак липсва, пусни инсталатора отново, избери Modify и отметни Add python.exe to PATH. На Windows `py hello.py` често минава и без това.
+- **`python` отваря Microsoft Store.** Потърси **App execution aliases** в Start и изключи **python.exe** и **python3.exe**.
+- **VS Code пише, че няма интерпретатор, или пуска стара версия.** Python: Select Interpreter и избери 3.15 или по-нов.
+- **Няма бутон Run.** Разширението Python не е инсталирано.

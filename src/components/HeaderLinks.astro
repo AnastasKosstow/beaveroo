@@ -1,11 +1,16 @@
 ---
 import { Icon } from '@astrojs/starlight/components';
 import ThemeToggle from './ThemeToggle.astro';
+import { courseOf, slugOf } from '../courses';
 
-const { locale } = Astro.locals.starlightRoute;
+const { locale, id } = Astro.locals.starlightRoute;
 const path = Astro.url.pathname.endsWith('/') ? Astro.url.pathname : `${Astro.url.pathname}/`;
 const isEnglish = locale === 'en';
 const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${path}`;
+
+// The link belongs to the courses adapted from Hugging Face. Pages outside a course keep it.
+const course = courseOf(slugOf(id, locale));
+const showHuggingFace = !course || course.huggingFace;
 ---
 
 <nav class="hf-links" aria-label={Astro.locals.t('header.linksLabel')}>
@@ -16,9 +21,13 @@ const switchHref = isEnglish ? path.replace(/^\/en(?=\/)/, '') || '/' : `/en${pa
 		hreflang={isEnglish ? 'bg' : 'en'}
 		title={Astro.locals.t('header.switchLanguageTitle')}>{Astro.locals.t('header.switchLanguageLabel')}</a
 	>
-	<a class="hf-links__hf" href="https://huggingface.co/" target="_blank" rel="noopener"
-		><span aria-hidden="true">🤗</span> {Astro.locals.t('header.huggingFace')}</a
-	>
+	{
+		showHuggingFace && (
+			<a class="hf-links__hf" href="https://huggingface.co/" target="_blank" rel="noopener">
+				<span aria-hidden="true">🤗</span> {Astro.locals.t('header.huggingFace')}
+			</a>
+		)
+	}
 	<a
 		class="hf-links__github"
 		href="https://github.com/AnastasKosstow/beaveroo"

@@ -41,8 +41,12 @@ export default defineConfig({
         },
       ],
 
+      // Keeps the sidebar and the previous/next links inside the course of the current page.
+      routeMiddleware: './src/routeData.ts',
+
       components: {
         Header: './src/components/Header.astro',
+        Hero: './src/components/Hero.astro',
         ThemeProvider: './src/components/ThemeProvider.astro',
         SiteTitle: './src/components/SiteTitle.astro',
         Sidebar: './src/components/Sidebar.astro',
@@ -83,7 +87,9 @@ export default defineConfig({
         },
       },
 
+      // One list for all courses. A page shows only the groups of its own course (see src/routeData.ts).
       sidebar: [
+        // AI Agents
         {
           label: 'Unit 0. Добре дошли в курса',
           translations: { en: 'Unit 0. Welcome to the course' },
@@ -204,6 +210,29 @@ export default defineConfig({
             },
             { label: 'Заключение', translations: { en: 'Conclusion' }, slug: 'ai-agents/unit-2/agent-framework/conclusion' },
           ],
+        },
+
+        // Python за .NET програмисти. A unit here is one page, so it is a link, not a group.
+        // AI Agents keeps groups with a lesson under each unit.
+        {
+          label: 'Unit 0. Добре дошли в курса',
+          translations: { en: 'Unit 0. Welcome to the course' },
+          slug: 'python-for-dotnet/unit-0/introduction',
+        },
+        {
+          label: 'Unit 1. Типове и данни',
+          translations: { en: 'Unit 1. Types and data' },
+          slug: 'python-for-dotnet/unit-1/types-and-data',
+        },
+        {
+          label: 'Unit 2. Класове и protocols',
+          translations: { en: 'Unit 2. Classes and protocols' },
+          slug: 'python-for-dotnet/unit-2/classes-and-protocols',
+        },
+        {
+          label: 'Unit 3. От LINQ към comprehensions',
+          translations: { en: 'Unit 3. From LINQ to comprehensions' },
+          slug: 'python-for-dotnet/unit-3/linq-to-comprehensions',
         },
       ],
     }),

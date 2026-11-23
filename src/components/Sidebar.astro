@@ -1,15 +1,19 @@
 ---
 import Default from '@astrojs/starlight/components/Sidebar.astro';
+import CourseProgress from './CourseProgress.astro';
 import HeaderLinks from './HeaderLinks.astro';
+import { courseOf, slugOf } from '../courses';
 
-const { siteTitleHref } = Astro.locals.starlightRoute;
+const { siteTitleHref, id, locale } = Astro.locals.starlightRoute;
+const course = courseOf(slugOf(id, locale));
 ---
 
 <div class="hf-course">
 	<a class="hf-course__title" href={siteTitleHref}>
 		<span class="hf-course__dot" aria-hidden="true"></span>
-		<span>{Astro.locals.t('course.title')}</span>
+		<span>{Astro.locals.t(course?.title ?? 'course.title')}</span>
 	</a>
+	{course?.progress && <CourseProgress course={course} />}
 	<div class="hf-course__tools md:sl-hidden"><HeaderLinks /></div>
 </div>
 

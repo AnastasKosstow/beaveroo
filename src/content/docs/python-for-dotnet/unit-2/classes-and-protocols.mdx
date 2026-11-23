@@ -1,0 +1,1019 @@
+---
+title: Класове и protocols
+description: Вторият урок от Python за .NET програмисти - class, __init__ и self, properties, атрибути на класа, специални методи, dataclass на мястото на record, наследяване и Protocol на мястото на интерфейсите, сравнени със C#.
+---
+
+import Compare from '../../../../components/Compare.astro';
+import LessonProgress from '../../../../components/LessonProgress.astro';
+import Question from '../../../../components/Question.astro';
+import Try from '../../../../components/Try.astro';
+
+<LessonProgress number={2} of={9} minutes={55} topics={7} />
+
+В C# почти целият код живее в класове. В Python първият урок мина без нито един: стигнаха функции и вградените колекции. Клас пишеш тогава, когато едни данни и кодът, който работи с тях, трябва да вървят заедно.
+
+Синтаксисът ще ти е познат от първия ред. Различни са правилата под него: полетата не се обявяват, `private` няма, а интерфейсът е по желание.
+
+Темите са седем. Всяка започва с код на C# и същия код на Python, а завършва с един въпрос. Накрая те чакат три задачи.
+
+## Клас, `__init__` и `self`
+
+<Compare>
+
+```csharp title="C#"
+class Playlist
+{
+    public string Name;
+    public List<string> Tracks = [];
+
+    public Playlist(string name)
+    {
+        Name = name;
+    }
+
+    public void Add(string track)
+    {
+        Tracks.Add(track);
+    }
+}
+
+var mix = new Playlist("Road trip");
+mix.Add("Intro");
+```
+
+```python title="Python"
+class Playlist:
+    def __init__(self, name):
+        self.name = name
+        self.tracks = []
+
+    def add(self, track):
+        self.tracks.append(track)
+
+
+mix = Playlist("Road trip")
+mix.add("Intro")
+```
+
+</Compare>
+
+Разликите са четири:
+
+- **Няма `new`.** Обект се създава, като извикаш класа като функция: `Playlist("Road trip")`.
+- **`__init__` върши работата на конструктора.** Python го вика сам, веднага щом създаде обекта. Имената с по две долни черти от двете страни са запазени за методи, които езикът вика вместо теб. В този урок ще срещнеш още няколко.
+- **`self` е `this`, но се пише.** Той е първият параметър на всеки метод, а до данните на обекта се стига само през него: `self.tracks`. Без `self.` името е локална променлива и изчезва в края на метода.
+- **Полетата не се обявяват.** Атрибутът се появява, когато му присвоиш стойност, обикновено в `__init__`. Списък с полета в началото на класа няма.
+
+Когато извикаш `mix.add("Intro")`, Python подава `mix` на мястото на `self`. Записът е съкратено `Playlist.add(mix, "Intro")`. Оттук идва най-честата грешка в първите дни: забравиш ли `self` в дефиницията, методът получава един аргумент повече, отколкото очаква.
+
+Понеже атрибутите се създават с присвояване, нищо не пречи това да стане и отвън. `mix.owner = "Ana"` работи. Работи и правописната грешка: `mix.trakcs = []` създава нов атрибут, а истинският остава непипнат. Затова създавай всички атрибути в `__init__`. Така списъкът им е на едно място, а type checker-ът хваща присвояване към име, което липсва там.
+
+**Провери се.** Какво става, когато изпълниш този код?
+
+```python
+class Greeter:
+    def hello():
+        return "hi"
+
+print(Greeter().hello())
+```
+
+<Question
+  id="self"
+  choices={[
+    {
+      text: 'Отпечатва hi.',
+      explain: 'Python подава обекта като първи аргумент на всеки метод. Тук няма параметър, който да го поеме.',
+    },
+    {
+      text: 'Програмата спира с TypeError.',
+      explain: 'Съобщението е „Greeter.hello() takes 0 positional arguments but 1 was given“. Единият аргумент е самият обект, а в дефиницията липсва self.',
+      correct: true,
+    },
+    {
+      text: 'Python отказва да дефинира метод без self.',
+      explain: 'Дефиницията минава. self е обикновен параметър с уговорено име и никой не проверява дали го има, докато не извикаш метода.',
+    },
+  ]}
+/>
+
+## Няма `private`: долната черта и `@property`
+
+<Compare>
+
+```csharp title="C#"
+class Account
+{
+    private int balance;
+
+    public int Balance => balance;
+
+    public void Deposit(int amount)
+    {
+        balance += amount;
+    }
+}
+```
+
+```python title="Python"
+class Account:
+    def __init__(self):
+        self._balance = 0
+
+    @property
+    def balance(self):
+        return self._balance
+
+    def deposit(self, amount):
+        self._balance += amount
+```
+
+</Compare>
+
+В Python няма `public`, `private`, `protected` и `internal`. Всеки атрибут и всеки метод се достига отвън.
+
+На мястото на `private` стои уговорка: име, което започва с долна черта, е вътрешно за класа. `_balance` казва на всеки, който чете кода, да не го пипа отвън. Python не следи за това и `account._balance = -500` минава без грешка. Следят го колегите ти и type checker-ът, ако му включиш тази проверка.
+
+Ще срещнеш и имена с две черти отпред, например `__balance`. Python ги преименува вътрешно на `_Account__balance`, за да не се застъпят със същото име в наследник. Това пак не е `private` и рядко ти трябва.
+
+`@property` превръща метод в свойство. `account.balance` се чете без скоби, а `account.balance = 5` хвърля `AttributeError`, защото свойството няма setter. Редът с `@` над метода се нарича **decorator**: функция, която получава метода и го заменя с нещо друго. На вид прилича на атрибут в C#, но атрибутът само описва метода, а decorator-ът го променя.
+
+Когато свойството трябва и да се записва, добавяш setter със същото име:
+
+```python
+class Product:
+    def __init__(self, price):
+        self.price = price    # runs the setter below
+
+    @property
+    def price(self):
+        return self._price
+
+    @price.setter
+    def price(self, value):
+        if value < 0:
+            raise ValueError("price cannot be negative")
+        self._price = value
+```
+
+`raise` е `throw`. Присвояването в `__init__` също минава през setter-а, така че и `Product(-1)` хвърля грешка.
+
+В C# пишеш `{ get; set; }` от първия ден, защото поле, сменено със свойство по-късно, чупи вече компилирания код, който го ползва. В Python тази причина я няма. Обикновен атрибут и property се четат и записват по един и същ начин, `product.price`. Затова започни с атрибут и го превърни в property в деня, в който ти потрябва проверка. Кодът, който го ползва, не се променя.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+class Account:
+    def __init__(self):
+        self._balance = 0
+
+account = Account()
+account._balance = -500
+print(account._balance)
+```
+
+<Question
+  id="private"
+  choices={[
+    {
+      text: '-500',
+      explain: 'Долната черта е уговорка между програмистите. Python изпълнява присвояването като всяко друго.',
+      correct: true,
+    },
+    {
+      text: 'AttributeError, защото _balance е private.',
+      explain: 'В Python няма private. Чертата казва „не пипай“, но не го налага.',
+    },
+    {
+      text: '0, защото присвояването отвън се пренебрегва.',
+      explain: 'Python не пренебрегва присвоявания. Атрибутът получава новата стойност.',
+    },
+  ]}
+/>
+
+## Атрибути на класа: `static` в Python
+
+<Compare>
+
+```csharp title="C#"
+class Ticket
+{
+    public static int Issued;
+
+    public int Number;
+
+    public Ticket()
+    {
+        Issued++;
+        Number = Issued;
+    }
+}
+```
+
+```python title="Python"
+class Ticket:
+    issued = 0
+
+    def __init__(self):
+        Ticket.issued += 1
+        self.number = Ticket.issued
+```
+
+</Compare>
+
+Име, на което присвоиш стойност направо в тялото на класа, принадлежи на самия клас. Стойността е една и я виждат всички обекти, тоест това е `static`. Достига се през името на класа: `Ticket.issued`.
+
+Тук навикът от C# подвежда. Ред в началото на класа прилича на обявяване на поле, но в Python създава общ атрибут:
+
+```python
+class Playlist:
+    tracks = []    # one list, shared by every playlist
+
+    def add(self, track):
+        self.tracks.append(track)
+
+
+rock = Playlist()
+jazz = Playlist()
+rock.add("Thunderstruck")
+
+print(jazz.tracks)   # ['Thunderstruck']
+```
+
+`self.tracks` търси атрибута първо в обекта. Обектът няма такъв, затова Python взима този на класа, а той е един за `rock` и за `jazz`. Същото споделяне видя при стойностите по подразбиране в първия урок и лекарството е същото: създай списъка в `__init__`, с `self.tracks = []`.
+
+Четенето през `self` стига до атрибута на класа, но присвояването през `self` създава нов атрибут в обекта. Затова броячът в примера се увеличава с `Ticket.issued += 1`. `self.issued += 1` щеше да остави общия брояч на нула.
+
+### Статични методи и втори конструктор
+
+Метод, който не ползва обекта, в Python най-често е обикновена функция във файла. Не ти трябва `static class Helpers`, за да има къде да стои. Ако все пак го искаш в класа, сложи му `@staticmethod` и го напиши без `self`.
+
+Overloads няма. Втори `__init__` в същия клас замества първия. Когато обектът може да се създаде по няколко начина, имаш два изхода. Единият е параметър със стойност по подразбиране, както в C#: `def __init__(self, name, public=False)`. Другият е `@classmethod`:
+
+```python
+from typing import Self
+
+class Playlist:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.tracks: list[str] = []
+
+    @classmethod
+    def from_text(cls, text: str) -> Self:
+        parts = text.split(";")
+        playlist = cls(parts[0])
+        playlist.tracks = parts[1:]
+        return playlist
+
+
+mix = Playlist.from_text("Road trip;Intro;Highway")
+print(mix.tracks)   # ['Intro', 'Highway']
+```
+
+Class method получава самия клас като първи параметър, който по уговорка се казва `cls`. `cls(...)` създава обект точно както `Playlist(...)`. Това е статичният factory метод от C#, `Playlist.FromText(...)`. `Self` в анотацията значи „обект от този клас“.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+class Basket:
+    items = []
+
+first = Basket()
+second = Basket()
+first.items.append("tea")
+
+print(len(second.items))
+```
+
+<Question
+  id="class-attributes"
+  choices={[
+    {
+      text: '0',
+      explain: 'Така щеше да е, ако списъкът се създаваше в __init__. Тук items е атрибут на класа и е един за всички кошници.',
+    },
+    {
+      text: '1',
+      explain: 'first.items и second.items стигат до един и същ list, този на класа Basket.',
+      correct: true,
+    },
+    {
+      text: 'AttributeError, защото second няма items.',
+      explain: 'Обектът няма свой items, но Python продължава търсенето в класа и го намира там.',
+    },
+  ]}
+/>
+
+## Специални методи: `__repr__` и `__eq__`
+
+<Compare>
+
+```csharp title="C#"
+class Point(int x, int y)
+{
+    public override string ToString()
+    {
+        return $"({x}, {y})";
+    }
+}
+
+var start = new Point(2, 5);
+Console.WriteLine(start);  // (2, 5)
+```
+
+```python title="Python"
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return f"({self.x}, {self.y})"
+
+
+start = Point(2, 5)
+print(start)  # (2, 5)
+```
+
+</Compare>
+
+`__init__` не е единственият метод, който Python вика сам. `print(start)` търси `__repr__`, `a == b` търси `__eq__`, а `len(x)` търси `__len__`. Това са **специалните методи**. В C# на тяхно място стоят `override`, операторите и интерфейси като `IComparable`.
+
+| Пишеш | Python вика | В C# |
+| --- | --- | --- |
+| `print(p)`, `str(p)`, f-string | `__str__`, а ако го няма, `__repr__` | `ToString()` |
+| `a == b` | `__eq__` | `Equals`, `operator ==` |
+| `a < b`, `sorted(items)` | `__lt__` | `IComparable<T>` |
+| `a + b` | `__add__` | `operator +` |
+| `len(x)` | `__len__` | `Count` |
+| `item in x` | `__contains__` | `Contains` |
+| `x[key]` | `__getitem__` | indexer |
+
+Без `__repr__` обектът се отпечатва като `<__main__.Point object at 0x7f3a2c1b4d10>`. Затова той е първият специален метод, който си струва да напишеш: вижда се в конзолата, в дебъгера и когато отпечаташ `list` с такива обекти. `__str__` добавяш само ако искаш отделен текст за потребителя.
+
+Клас с `__len__` работи и в `if cart:` от първия урок. Обект с дължина нула е falsy.
+
+### Равенство
+
+В първия урок `==` сравняваше съдържанието на два списъка. Това е така, защото `list` има `__eq__`. Клас без собствен `__eq__` се сравнява по идентичност, както reference type в C#, и `Point(2, 5) == Point(2, 5)` е `False`. За да сравнява стойностите, добавяш:
+
+```python
+    def __eq__(self, other):
+        if not isinstance(other, Point):
+            return False
+        return (self.x, self.y) == (other.x, other.y)
+```
+
+`isinstance(other, Point)` е `other is Point` от C#. Двата tuple-а се сравняват по съдържание, така че един ред покрива всички полета.
+
+Има и същата уловка като с `Equals` без `GetHashCode`. Клас със собствен `__eq__` спира да бъде hashable: обектите му не могат да са ключове в `dict` или елементи на `set`, докато не напишеш и `__hash__`.
+
+В C# това писане ти го спестява `record`. В Python го спестява dataclass, следващата тема.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+print(Point(1, 2) == Point(1, 2))
+```
+
+<Question
+  id="special-methods"
+  choices={[
+    {
+      text: 'True, защото == сравнява съдържанието.',
+      explain: 'Така е за list и dict, защото те имат __eq__. Този клас няма.',
+    },
+    {
+      text: 'False',
+      explain: 'Без __eq__ два обекта са равни само ако са един и същ обект. Тук са създадени два.',
+      correct: true,
+    },
+    {
+      text: 'TypeError, защото класът няма __eq__.',
+      explain: 'Сравнението работи за всеки обект. Когато няма __eq__, Python сравнява по идентичност.',
+    },
+  ]}
+/>
+
+## dataclass на мястото на record
+
+<Compare>
+
+```csharp title="C#"
+record Point(int X, int Y);
+
+var a = new Point(2, 5);
+var b = new Point(2, 5);
+
+Console.WriteLine(a == b);  // True
+Console.WriteLine(a);
+// Point { X = 2, Y = 5 }
+```
+
+```python title="Python"
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+a = Point(2, 5)
+b = Point(2, 5)
+
+print(a == b)  # True
+print(a)       # Point(x=2, y=5)
+```
+
+</Compare>
+
+`@dataclass` чете анотираните имена в тялото на класа и по тях сам написва `__init__`, `__repr__` и `__eq__`, трите метода от предишните теми. Тук редовете в началото на класа наистина са полета, защото decorator-ът ги превръща в параметри на конструктора.
+
+Анотацията е задължителна: име без тип не става поле. Самите типове пак никой не проверява, докато програмата работи, и `Point("a", None)` създава обект без оплакване.
+
+Във всичко останало това е обикновен клас и можеш да му добавяш методи и properties. Ето какво ще ползваш най-често:
+
+```python
+from dataclasses import dataclass, field, replace
+
+@dataclass
+class Playlist:
+    name: str
+    tracks: list[str] = field(default_factory=list)
+    public: bool = False
+
+
+@dataclass(frozen=True)
+class Point:
+    x: int
+    y: int
+
+
+start = Point(2, 5)
+start.x = 10                    # FrozenInstanceError
+moved = replace(start, x=10)    # Point(x=10, y=5)
+```
+
+- **Стойност по подразбиране** се пише след типа: `public: bool = False`. Полетата с такава стойност стоят след тези без, както незадължителните параметри.
+- **Mutable стойност по подразбиране** се задава с `field(default_factory=list)`. `default_factory` е функция, която dataclass вика за всеки нов обект, така че всеки плейлист получава свой списък. Напишеш ли `tracks: list[str] = []`, dataclass отказва още при дефинирането на класа. Това е капанът от първия урок, но този път хванат навреме.
+- **`frozen=True`** прави обекта immutable: присвояване към поле хвърля `FrozenInstanceError`. Frozen dataclass е и hashable, тоест става за ключ в `dict`.
+- **`replace(start, x=10)`** връща копие с едно сменено поле. В C# това е `start with { X = 10 }`.
+- **`order=True`** добавя `<`, `>` и останалите сравнения. Полетата се сравняват по реда, в който са написани, както при tuple.
+
+`x=10` е аргумент, подаден по име. Така може да се извика и конструкторът: `Point(x=2, y=5)`, което в C# е `new Point(X: 2, Y: 5)`.
+
+Разликата със C# е в това, което получаваш, без да си го поискал. `record` е immutable, а dataclass не е. Когато ти трябва `record`, пиши `@dataclass(frozen=True)`.
+
+**Провери се.** Какво става с този клас?
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Team:
+    name: str
+    members: list[str] = []
+```
+
+<Question
+  id="dataclass"
+  choices={[
+    {
+      text: 'Всички отбори споделят един и същ списък.',
+      explain: 'Така щеше да стане в обикновен клас или при параметър на функция. dataclass не стига дотам, защото спира по-рано.',
+    },
+    {
+      text: 'Python хвърля ValueError още при дефинирането на класа.',
+      explain: 'dataclass не приема mutable стойност по подразбиране и в съобщението сам предлага решението: default_factory.',
+      correct: true,
+    },
+    {
+      text: 'Всеки отбор получава свой празен списък.',
+      explain: 'За това ти трябва field(default_factory=list). Литералът [] се създава само веднъж.',
+    },
+  ]}
+/>
+
+## Наследяване
+
+<Compare>
+
+```csharp title="C#"
+class Parcel(double kg)
+{
+    public double Kg = kg;
+
+    public virtual double Price()
+    {
+        return Kg * 2;
+    }
+}
+
+class Express(double kg, double fee)
+    : Parcel(kg)
+{
+    public override double Price()
+    {
+        return base.Price() + fee;
+    }
+}
+```
+
+```python title="Python"
+class Parcel:
+    def __init__(self, kg):
+        self.kg = kg
+
+    def price(self):
+        return self.kg * 2
+
+
+class Express(Parcel):
+    def __init__(self, kg, fee):
+        super().__init__(kg)
+        self.fee = fee
+
+    def price(self):
+        base = super().price()
+        return base + self.fee
+```
+
+</Compare>
+
+Базовият клас се пише в скоби след името, а `super()` е `base`. Три правила са различни от C#:
+
+- **Базовият `__init__` не се вика сам.** Щом наследникът има свой `__init__`, той трябва да извика `super().__init__(...)`. Пропуснеш ли го, `self.kg` никога не се създава и грешката идва по-късно, от първия метод, който го прочете. Наследник без собствен `__init__` ползва този на базовия клас.
+- **Всеки метод е `virtual`.** Метод със същото име в наследника замества базовия, без `virtual` и `override`. Никой не проверява дали наистина заместваш нещо, затова `def pirce(self)` е нов метод, а не грешка. От Python 3.12 можеш да сложиш `@override` от `typing` над метода и type checker-ът ще се оплаче, ако в базовия клас няма такъв.
+- **`abstract` не е ключова дума.** Абстрактен клас се прави с модула `abc`:
+
+```python
+from abc import ABC, abstractmethod
+
+class Shipment(ABC):
+    @abstractmethod
+    def price(self) -> float: ...
+
+
+Shipment()   # TypeError: Can't instantiate abstract class Shipment
+```
+
+Трите точки са валиден Python и стоят на мястото на празно тяло. Същото върши и думата `pass`. Клас, който наследява `Shipment`, може да се създаде чак когато има свой `price`.
+
+`isinstance(box, Parcel)` е `box is Parcel` и е вярно и за наследниците. Python позволява и няколко базови класа наведнъж, `class C(A, B)`, но това ще го срещаш повече в библиотеки, отколкото ще го пишеш.
+
+В Python наследяване се пише по-рядко, отколкото в C#. Голяма част от него в C# съществува, за да може един метод да приеме различни обекти. Тук за това не ти трябва общ базов клас и последната тема показва защо.
+
+**Провери се.** Какво става, когато изпълниш този код?
+
+```python
+class Parcel:
+    def __init__(self, kg):
+        self.kg = kg
+
+class Express(Parcel):
+    def __init__(self, kg, fee):
+        self.fee = fee
+
+box = Express(2, 5)
+print(box.kg)
+```
+
+<Question
+  id="inheritance"
+  choices={[
+    {
+      text: 'Отпечатва 2.',
+      explain: 'Така щеше да е, ако Express.__init__ викаше super().__init__(kg). Python не го прави вместо теб.',
+    },
+    {
+      text: 'Отпечатва None.',
+      explain: 'Атрибут, който не е създаден, няма стойност None. Той не съществува.',
+    },
+    {
+      text: 'Програмата спира с AttributeError.',
+      explain: 'Parcel.__init__ не е извикан и self.kg не е създаден. Грешката идва при четенето, а не при създаването на обекта.',
+      correct: true,
+    },
+  ]}
+/>
+
+## Duck typing и `Protocol`
+
+<Compare>
+
+```csharp title="C#"
+interface INotifier
+{
+    void Send(string text);
+}
+
+class EmailNotifier : INotifier
+{
+    public void Send(string text)
+        => Console.WriteLine(text);
+}
+
+void Alert(INotifier notifier)
+{
+    notifier.Send("Disk is full");
+}
+
+Alert(new EmailNotifier());
+```
+
+```python title="Python"
+class EmailNotifier:
+    def send(self, text):
+        print(text)
+
+
+def alert(notifier):
+    notifier.send("Disk is full")
+
+
+alert(EmailNotifier())
+```
+
+</Compare>
+
+В кода на Python няма интерфейс и въпреки това той работи. `alert` не пита от какъв тип е `notifier`. Вика `send` и ако обектът има такъв метод, всичко е наред. Това се нарича **duck typing**, по поговорката: щом върви като патица и кряка като патица, значи е патица. Важно е какво може обектът, а не какво е наследил.
+
+Ти вече го ползваш. `len()` работи с всичко, което има `__len__`, а `for` обхожда всичко, което може да се обходи.
+
+Цената е, че `def alert(notifier)` не казва нищо нито на човека, който чете кода, нито на редактора. Грешен обект се открива чак когато програмата стигне до `send` и хвърли `AttributeError`. Затова има `Protocol`: интерфейс, предназначен за type checker-а.
+
+```python
+from typing import Protocol
+
+class Notifier(Protocol):
+    def send(self, text: str) -> None: ...
+
+
+class EmailNotifier:
+    def send(self, text: str) -> None:
+        print(f"mail: {text}")
+
+
+class SmsNotifier:
+    def send(self, text: str) -> None:
+        print(f"sms: {text}")
+
+
+def alert(notifier: Notifier) -> None:
+    notifier.send("Disk is full")
+
+
+alert(EmailNotifier())
+alert(SmsNotifier())
+```
+
+Нито `EmailNotifier`, нито `SmsNotifier` споменава `Notifier`. Клас покрива един protocol, когато има неговите методи със същите параметри. Не е нужно да го наследява, нито дори да знае, че той съществува. В C# класът трябва да назове интерфейса си. Ако си писал TypeScript, правилото ти е познато: там интерфейсите работят по същия начин.
+
+От това следват две удобства. С protocol можеш да опишеш клас, който не е твой, например от чужда библиотека, без да го пипаш. А в тестовете фалшивият `Notifier` е три реда клас с един метод, без mocking библиотека.
+
+Проверката остава работа на type checker-а. Докато програмата работи, `alert(42)` пак стига до `send` и пак хвърля `AttributeError`. Не работи и навикът от C# да питаш `obj is INotifier`: `isinstance(obj, Notifier)` хвърля `TypeError`, освен ако protocol-ът не е отбелязан с `@runtime_checkable`.
+
+`Protocol` стига, когато ти трябва само „обект с тези методи“. Абстрактен клас с `ABC` избираш, когато наследниците трябва да получат и общ код.
+
+**Провери се.** `Door` не наследява `Closer`. Какво става с този код?
+
+```python
+from typing import Protocol
+
+class Closer(Protocol):
+    def close(self) -> None: ...
+
+class Door:
+    def close(self) -> None:
+        print("closed")
+
+def shut(thing: Closer) -> None:
+    thing.close()
+
+shut(Door())
+```
+
+<Question
+  id="protocol"
+  choices={[
+    {
+      text: 'Type checker-ът го отхвърля, защото Door не е обявен като Closer.',
+      explain: 'Така работят интерфейсите в C#. Protocol гледа методите на класа, а не базовите му класове.',
+    },
+    {
+      text: 'Type checker-ът го приема и програмата отпечатва closed.',
+      explain: 'Door има close със същата сигнатура и това стига, за да покрие Closer.',
+      correct: true,
+    },
+    {
+      text: 'Python хвърля TypeError при извикването на shut.',
+      explain: 'Python не проверява анотациите, докато програмата работи. Той само вика close, а Door го има.',
+    },
+  ]}
+/>
+
+## Твой ред
+
+Три задачи. Всяка събира няколко теми от урока в един или два малки класа. Напиши кода в екрана под условието, на мястото на `# TODO`, и натисни **Пусни**. Проверката създава обекти от твоите класове и ги пробва и с други данни. Решението е скрито под екрана.
+
+### Количка
+
+Напиши клас `Cart` за количка в магазин:
+
+1. всяка количка пази редовете си в собствен списък;
+2. `add(name, price, qty=1)` добавя ред;
+3. `total` е property и връща сбора от цена по брой за всички редове;
+4. `len(cart)` връща броя на редовете.
+
+После отпечатай броя на редовете и сбора. Очакваният изход е:
+
+```text
+2 items, 11.00
+```
+
+Няколко подсказки:
+
+- Списъкът се създава в `__init__`. Напишеш ли го в тялото на класа, всички колички ще го споделят.
+- Един ред може да е tuple: `(name, price, qty)`.
+- `cart.total` се чете без скоби, значи иска `@property`. `len(cart)` вика `__len__`.
+
+<Try
+  file="cart.py"
+  starter={`
+|class Cart:
+|    pass  # TODO
+|
+|
+|cart = Cart()
+|cart.add("pen", 1.50, 2)
+|cart.add("mug", 8.00)
+|# TODO
+`}
+  check={`
+|first = Cart()
+|second = Cart()
+|first.add("pen", 1.5, 2)
+|first.add("mug", 8.0)
+|_eq(len(second), 0, "Всяка количка трябва да има свой списък.")
+|_eq(len(first), 2, "len(cart) е броят на редовете.")
+|_eq(isinstance(getattr(Cart, "total", None), property), True, "total трябва да е property, а не метод.")
+|_eq(round(first.total, 2), 11.0, "Сборът на количката от задачата.")
+|_eq(round(second.total, 2), 0, "Сборът на празна количка.")
+|
+|third = Cart()
+|third.add("tea", 2.25, 4)
+|third.add("jam", 3.1)
+|_eq(round(third.total, 2), 12.1, "Втори пример.")
+|_out("2 items, 11.00", "Отпечатаният текст.")
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="cart.py"
+class Cart:
+    def __init__(self) -> None:
+        self._lines: list[tuple[str, float, int]] = []
+
+    def add(self, name: str, price: float, qty: int = 1) -> None:
+        self._lines.append((name, price, qty))
+
+    @property
+    def total(self) -> float:
+        total = 0.0
+        for _, price, qty in self._lines:
+            total += price * qty
+        return total
+
+    def __len__(self) -> int:
+        return len(self._lines)
+
+
+cart = Cart()
+cart.add("pen", 1.50, 2)
+cart.add("mug", 8.00)
+
+print(f"{len(cart)} items, {cart.total:.2f}")
+```
+
+Списъкът се създава в `__init__`, затова всяка количка има свой. `total` е property, защото е стойност, която се чете, а не действие. Името `_` в цикъла е за стойност, която не ти трябва, както discard в C#.
+
+</details>
+
+---
+
+### Версии
+
+Напиши dataclass `Version` за номер на версия като `3.12.1`:
+
+1. има три цели числа: `major`, `minor` и `patch`. Последните две са `0`, ако не са подадени;
+2. обектът е immutable, а версиите се сравняват с `<` и `>` число по число;
+3. class method `parse` създава версия от текст с три числа: `Version.parse("3.12.1")`;
+4. `print(version)` отпечатва трите числа с точки между тях.
+
+После отпечатай инсталираната версия и дали тя покрива изискваната. Очакваният изход е:
+
+```text
+3.12.1
+True
+```
+
+Няколко подсказки:
+
+- `@dataclass(frozen=True, order=True)` дава и двете: immutable обект и сравнения по реда на полетата.
+- `text.split(".")` връща три низа. Превърни ги с `int()`. Като текст `"9"` е по-голямо от `"12"`, защото низовете се сравняват символ по символ.
+- `print` търси `__str__`. Без него dataclass отпечатва `Version(major=3, minor=12, patch=1)`.
+
+<Try
+  file="version.py"
+  starter={`
+|from dataclasses import dataclass
+|
+|# TODO: Version
+|
+|
+|installed = Version.parse("3.12.1")
+|required = Version(3, 12)
+|# TODO
+`}
+  check={`
+|short = Version(3, 12)
+|_eq((short.major, short.minor, short.patch), (3, 12, 0), "minor и patch са 0, ако не са подадени.")
+|_eq(Version(3, 12, 1) == Version(3, 12, 1), True, "Две версии с еднакви числа са равни.")
+|
+|parsed = Version.parse("3.12.1")
+|_eq((parsed.major, parsed.minor, parsed.patch), (3, 12, 1), "parse връща трите числа като int.")
+|_eq(Version.parse("3.9.0") < Version.parse("3.12.0"), True, "3.9.0 е преди 3.12.0.")
+|_eq(Version(4) > Version(3, 99, 99), True, "Първо се сравнява major.")
+|_eq(str(Version(3, 12)), "3.12.0", "str(version) дава трите числа с точки.")
+|
+|try:
+|    Version(1, 2, 3).major = 9
+|    changed = True
+|except Exception:
+|    changed = False
+|_eq(changed, False, "Version трябва да е immutable.")
+|_out(
+|    """3.12.1
+|True""",
+|    "Отпечатаният текст.",
+|)
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="version.py"
+from dataclasses import dataclass
+from typing import Self
+
+
+@dataclass(frozen=True, order=True)
+class Version:
+    major: int
+    minor: int = 0
+    patch: int = 0
+
+    @classmethod
+    def parse(cls, text: str) -> Self:
+        major, minor, patch = text.split(".")
+        return cls(int(major), int(minor), int(patch))
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+
+installed = Version.parse("3.12.1")
+required = Version(3, 12)
+
+print(installed)
+print(installed >= required)
+```
+
+Decorator-ът написа `__init__`, `__eq__` и сравненията. За теб останаха двете неща, които той няма откъде да знае: как се чете версия от текст и как се отпечатва.
+
+</details>
+
+---
+
+### Отстъпки
+
+Магазин прилага отстъпките една след друга. Всяка отстъпка е обект с метод `apply(amount)`, който получава цена и връща новата.
+
+Напиши:
+
+1. protocol `Discount` с метода `apply(self, amount: float) -> float`;
+2. клас `Percent(percent)`, който маха дадения процент от цената;
+3. клас `Capped(percent, limit)`, който наследява `Percent` и маха същия процент, но не повече от `limit`;
+4. функция `final_price(amount, discounts)`, която прилага отстъпките по ред и връща крайната цена.
+
+За 80 с `Percent(25)` и после `Capped(50, 10)` цената става 60, а след това 50: половината от 60 е 30, но лимитът е 10. Отпечатай я с две цифри след десетичната точка. Очакваният изход е:
+
+```text
+50.00
+```
+
+Няколко подсказки:
+
+- `Capped.__init__` трябва да извика `super().__init__(percent)`. Иначе процентът не се записва.
+- В `Capped.apply` вземи цената от `super().apply(amount)`. Тя не бива да пада под `amount - self.limit`, а по-голямото от две числа дава `max(a, b)`.
+- `final_price` не бива да пита от какъв клас е отстъпката. Проверката ѝ подава и собствено правило, което не наследява нищо от твоя код.
+
+<Try
+  file="discounts.py"
+  starter={`
+|from typing import Protocol
+|
+|# TODO: Discount, Percent, Capped
+|
+|
+|def final_price(amount: float, discounts: list[Discount]) -> float:
+|    # TODO
+|    return amount
+|
+|
+|price = final_price(80, [Percent(25), Capped(50, 10)])
+|# TODO
+`}
+  check={`
+|from typing import is_protocol
+|
+|_eq(is_protocol(Discount), True, "Discount трябва да е Protocol.")
+|_eq(round(Percent(25).apply(80), 2), 60.0, "Percent(25) върху 80.")
+|_eq(isinstance(Capped(50, 10), Percent), True, "Capped трябва да наследява Percent.")
+|_eq(round(Capped(50, 10).apply(80), 2), 70.0, "Capped(50, 10) върху 80: отстъпката спира на 10.")
+|_eq(round(Capped(10, 50).apply(80), 2), 72.0, "Capped(10, 50) върху 80: лимитът не е достигнат.")
+|
+|class Half:
+|    def apply(self, amount):
+|        return amount / 2
+|
+|_eq(round(final_price(80, [Half(), Percent(25)]), 2), 30.0, "final_price трябва да работи с всеки обект, който има apply.")
+|_eq(round(final_price(80, []), 2), 80, "Без отстъпки цената остава същата.")
+|_out("50.00", "Отпечатаният текст.")
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="discounts.py"
+from typing import Protocol
+
+
+class Discount(Protocol):
+    def apply(self, amount: float) -> float: ...
+
+
+class Percent:
+    def __init__(self, percent: float) -> None:
+        self.percent = percent
+
+    def apply(self, amount: float) -> float:
+        return amount * (1 - self.percent / 100)
+
+
+class Capped(Percent):
+    def __init__(self, percent: float, limit: float) -> None:
+        super().__init__(percent)
+        self.limit = limit
+
+    def apply(self, amount: float) -> float:
+        return max(super().apply(amount), amount - self.limit)
+
+
+def final_price(amount: float, discounts: list[Discount]) -> float:
+    for discount in discounts:
+        amount = discount.apply(amount)
+    return amount
+
+
+price = final_price(80, [Percent(25), Capped(50, 10)])
+print(f"{price:.2f}")
+```
+
+`Capped` взима процента и сметката от `Percent` и добавя само лимита. `final_price` не знае за нито един от двата класа, тя само вика `apply`. Затова работи и с правилото от проверката, което е писано другаде.
+
+</details>
+
+## Обобщение
+
+- Обект се създава без `new`. `__init__` върши работата на конструктора, а `self` се пише във всеки метод.
+- `private` няма. Долната черта е уговорка, а `@property` превръща метод в свойство, когато ти потрябва логика.
+- Име в тялото на класа е **атрибут на класа** и е общо за всички обекти. Данните на обекта се създават в `__init__`.
+- Специалните методи като `__repr__`, `__eq__` и `__len__` свързват класа с `print`, `==` и `len()`.
+- **`@dataclass`** написва `__init__`, `__repr__` и `__eq__` вместо теб. С `frozen=True` е най-близкото до `record`.
+- При наследяване базовият `__init__` се вика изрично със `super()`, а всеки метод може да бъде заместен.
+- При **duck typing** е важно какви методи има обектът. **`Protocol`** описва тези методи за type checker-а, без класовете да го наследяват.
+
+Следващият урок е [От LINQ към comprehensions](/python-for-dotnet/unit-3/linq-to-comprehensions/): как `Where`, `Select` и `ToList` се събират в един израз.
+
+<LessonProgress summary />

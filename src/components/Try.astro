@@ -1,0 +1,96 @@
+---
+interface Props {
+	/** Name shown on the editor tab, for example `views.py`. */
+	file: string;
+	/**
+	 * Code in the editor when the panel opens, and after Reset.
+	 * Every line has to start with `|`. MDX removes leading spaces inside the string.
+	 */
+	starter: string;
+	/**
+	 * Python that runs after the reader's code, in the same namespace.
+	 * Call `_eq(actual, expected, label)` and `_out(expected, label)`.
+	 * `_stdout` is everything the reader's code printed.
+	 */
+	check: string;
+}
+
+const { file, starter, check } = Astro.props;
+const t = Astro.locals.t;
+
+/**
+ * Each source line starts with `|`. MDX strips leading spaces inside a JavaScript
+ * string, which would break Python's indentation. The bar is not a space, so it stays.
+ */
+function prepare(text: string): string {
+	const lines = text.replace(/^\n/, '').replace(/\s+$/, '').split('\n');
+	return lines.map((line) => (line.startsWith('|') ? line.slice(1) : line)).join('\n');
+}
+
+const code = prepare(starter);
+const tests = prepare(check);
+---
+
+<div
+	class="hf-try not-content"
+	data-hf-try
+	data-file={file}
+	data-label-run={t('try.run')}
+	data-label-running={t('try.running')}
+	data-label-loading={t('try.loading')}
+	data-label-expected={t('try.expected')}
+	data-label-actual={t('try.actual')}
+	data-label-empty={t('try.empty')}
+	data-label-correct={t('try.correct')}
+	data-label-wrong={t('try.wrong')}
+	data-label-error={t('try.error')}
+	data-label-timeout={t('try.timeout')}
+	data-label-load={t('try.loadFailed')}
+	data-placeholder={t('try.outputEmpty')}
+>
+	<div class="hf-try__panes">
+		<section class="hf-try__pane">
+			<div class="hf-try__bar">
+				<span class="hf-try__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+				<span class="hf-try__title">{file}</span>
+				<span class="hf-try__tag">{t('try.editable')}</span>
+			</div>
+			<textarea
+				class="hf-try__editor"
+				spellcheck="false"
+				autocapitalize="off"
+				autocomplete="off"
+				autocorrect="off"
+				aria-label={file}>{code}</textarea>
+		</section>
+		<section class="hf-try__pane" aria-label={t('try.output')}>
+			<div class="hf-try__bar">
+				<span class="hf-try__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+				<span class="hf-try__title">{t('try.output')}</span>
+				<span class="hf-try__tag">{t('try.console')}</span>
+			</div>
+			<pre class="hf-try__output is-muted">{t('try.outputEmpty')}</pre>
+		</section>
+	</div>
+	<div class="hf-try__foot">
+		<div class="hf-try__actions">
+			<button type="button" class="hf-try__run" data-run>
+				<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+					<path fill="currentColor" d="M8 5.5v13l11-6.5z"></path>
+				</svg>
+				<span data-run-label>{t('try.run')}</span>
+			</button>
+			<button type="button" class="hf-try__reset" data-reset>{t('try.reset')}</button>
+			<p class="hf-try__status" role="status" data-status></p>
+		</div>
+		<pre class="hf-try__verdict" data-verdict hidden></pre>
+		<p class="hf-try__note">{t('try.note')}</p>
+	</div>
+	<textarea hidden data-try-check aria-hidden="true" tabindex="-1">{tests}</textarea>
+</div>
+
+<script>
+	import { bindTry } from '../scripts/try';
+
+	bindTry();
+</script>

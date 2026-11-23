@@ -1,0 +1,991 @@
+---
+title: Типове и данни
+description: Първият урок от Python за .NET програмисти - имена вместо типизирани променливи, числа и текст, list, tuple, dict и set, None, truthiness, споделени референции и type hints, сравнени със C#.
+---
+
+import Compare from '../../../../components/Compare.astro';
+import LessonProgress from '../../../../components/LessonProgress.astro';
+import Question from '../../../../components/Question.astro';
+import Try from '../../../../components/Try.astro';
+
+<LessonProgress number={1} of={9} minutes={35} topics={7} />
+
+В C# първото нещо, което пишеш за една стойност, е нейният тип. В Python не пишеш тип изобщо, а програмата пак работи. В този урок ще видиш защо и ще минеш през данните, които ще срещаш във всеки следващ урок: числа, текст, колекции и `None`.
+
+Темите са седем. Всяка започва с код на C# и същия код на Python, а завършва с един въпрос. Верните отговори движат процента в лентата по-горе.
+
+:::tip[Как да изпълняваш примерите]
+Запиши кода във файл, например `main.py`, и го пусни с `python main.py`. За кратки опити напиши само `python` в терминала: отваря се интерактивна конзола, в която всеки ред се изпълнява веднага, подобно на C# Interactive. Ако още нямаш Python, виж [въведението](/python-for-dotnet/unit-0/introduction/). Задачите в края на урока имат екран, в който ги пускаш и проверяваш направо в браузъра.
+:::
+
+## Как се чете Python код
+
+Преди типовете ти трябва само едно: да можеш да прочетеш примерите. Ето една и съща програма на двата езика:
+
+<Compare>
+
+```csharp title="C#"
+static int TicketFor(int age)
+{
+    if (age < 7)
+    {
+        return 0;
+    }
+    else if (age < 18)
+    {
+        return 8;
+    }
+
+    return 14;
+}
+
+int[] family = [5, 12, 40];
+
+foreach (var age in family)
+{
+    Console.WriteLine(TicketFor(age));
+}
+```
+
+```python title="Python"
+def ticket_for(age):
+    if age < 7:
+        return 0
+    elif age < 18:
+        return 8
+
+    return 14
+
+
+family = [5, 12, 40]
+
+for age in family:
+    print(ticket_for(age))
+```
+
+</Compare>
+
+Разликите се броят на пръсти:
+
+- **Блокът е отстъп.** Двоеточието отваря блок, а четирите интервала навътре го очертават. Няма `{ }` и няма `;`.
+- **`def` обявява функция.** Не ѝ трябва клас. Функциите и кодът стоят направо във файла, както при top-level statements.
+- **Имената са в `snake_case`:** `ticket_for`, `is_active`, `user_name`. `PascalCase` остава само за класовете.
+- **`elif` е `else if`**, а `for x in xs` е `foreach`.
+- **Думи вместо символи:** `and`, `or` и `not` на мястото на `&&`, `||` и `!`, а `True`, `False` и `None` на мястото на `true`, `false` и `null`.
+- **`print()` е `Console.WriteLine()`**, а коментарите започват с `#`.
+
+Това е достатъчно, за да продължиш. Останалият синтаксис ще идва заедно с темите.
+
+## Имена, а не типизирани променливи
+
+<Compare>
+
+```csharp title="C#"
+int count = 3;
+count = "three";   // error CS0029
+
+var name = "Ana";  // string, forever
+```
+
+```python title="Python"
+count = 3
+count = "three"    # works
+
+name = "Ana"
+```
+
+</Compare>
+
+В C# типът принадлежи на **променливата**. Обявиш ли я като `int`, тя остава `int` и компилаторът следи за това. В Python типът принадлежи на **стойността**. Променливата е само име, закачено за обект, и по всяко време можеш да го закачиш за друг обект, дори от друг тип.
+
+Затова няма ключова дума за деклариране: първото присвояване създава името. За типа питаш самия обект:
+
+```python
+count = 3
+print(type(count))   # <class 'int'>
+
+count = "three"
+print(type(count))   # <class 'str'>
+```
+
+Най-близкото в C# е `dynamic`: проверките стават, докато програмата работи, а не преди това. Това не прави Python небрежен към типовете. Той не превръща стойности мълчаливо:
+
+```python
+total = "10" + 5
+# TypeError: can only concatenate str (not "int") to str
+```
+
+В C# същият израз се компилира и дава `"105"`. Python отказва да гадае дали искаш число или текст. С термините, които ще срещаш в документацията: Python е *dynamically typed*, но *strongly typed*.
+
+Това, че можеш да смениш типа на едно име, не значи, че трябва. Код, в който `count` е ту число, ту текст, се чете трудно. Няма и `const`: константите се пишат с главни букви, `MAX_RETRIES = 3`, и това е само уговорка между програмистите.
+
+**Провери се.** Какво става, когато Python изпълни този код?
+
+```python
+price = "20"
+total = price + 5
+```
+
+<Question
+  id="names"
+  choices={[
+    {
+      text: 'total става 25.',
+      explain: 'Python не превръща текста в число вместо теб. За това ти трябва int(price) + 5.',
+    },
+    {
+      text: 'total става "205", както в C#.',
+      explain: 'Така работи C#, където числото се превръща в текст. Python не го прави.',
+    },
+    {
+      text: 'Програмата спира с TypeError.',
+      explain: 'Python е strongly typed: str и int не се събират. Трябва изрично int(price) + 5 или price + str(5).',
+      correct: true,
+    },
+  ]}
+/>
+
+## Числа, текст и bool
+
+<Compare>
+
+```csharp title="C#"
+int quantity = 3;
+long views = 9_000_000_000;
+double rating = 4.5;
+decimal price = 19.99m;
+bool inStock = true;
+string title = "Keyboard";
+```
+
+```python title="Python"
+quantity = 3
+views = 9_000_000_000
+rating = 4.5
+price = Decimal("19.99")
+in_stock = True
+title = "Keyboard"
+```
+
+</Compare>
+
+Основните типове са по-малко, отколкото в C#, и повечето ще ти се сторят познати:
+
+| C# | Python | Какво е различно |
+| --- | --- | --- |
+| `int`, `long`, `BigInteger` | `int` | Един тип за всички цели числа. Расте, колкото е нужно, и няма overflow. |
+| `double`, `float` | `float` | Винаги е 64-битов, тоест отговаря на `double`. |
+| `decimal` | `Decimal` | Идва от стандартната библиотека с `from decimal import Decimal` и се създава от текст. |
+| `bool` | `bool` | Стойностите са `True` и `False`, с главна буква. |
+| `string`, `char` | `str` | Няма тип за един символ: `"a"` е `str` с дължина 1. Низовете са immutable, както в C#. |
+
+Три неща ще те изненадат още първия ден.
+
+**Делението.** `/` винаги връща `float`. За целочислено деление има отделен оператор, `//`:
+
+```python
+print(7 / 2)     # 3.5
+print(7 // 2)    # 3
+print(2 ** 10)   # 1024, ** is the power operator
+```
+
+В C# `7 / 2` е `3`. Пренесеш ли този навик, ще получиш `3.5` там, където очакваш индекс.
+
+**Превръщането е изрично.** `int("42")`, `float("3.5")` и `str(42)` вършат работата на `int.Parse`, `double.Parse` и `ToString()`. При невалиден текст `int("abc")` хвърля `ValueError`. Няма `TryParse`: вместо него се използва `try`/`except`, темата на урок 6.
+
+**f-strings.** Буквата `f` пред низа прави това, което `$` прави в C#. Форматът след двоеточието е малко по-различен:
+
+```python
+name = "Ana"
+balance = 1234.5
+
+print(f"{name} has {balance:,.2f} EUR")   # Ana has 1,234.50 EUR
+```
+
+:::caution[Пари и float]
+`0.1 + 0.2` дава `0.30000000000000004`, точно както при `double` в C#. За пари използвай `Decimal` и го създавай от текст: `Decimal("0.1")`, а не `Decimal(0.1)`.
+:::
+
+**Провери се.** Какво отпечатва `print(7 / 2, 7 // 2)`?
+
+<Question
+  id="scalars"
+  choices={[
+    {
+      text: '3 3',
+      explain: 'Така е в C#, където деленето на две цели числа е целочислено. В Python / винаги връща float.',
+    },
+    {
+      text: '3.5 3',
+      explain: '/ винаги връща float, а // закръгля надолу до цяло число.',
+      correct: true,
+    },
+    {
+      text: '3.5 3.5',
+      explain: '// е отделен оператор за целочислено деление и връща 3.',
+    },
+  ]}
+/>
+
+## Четирите вградени колекции
+
+<Compare>
+
+```csharp title="C#"
+List<string> days = ["Mon", "Tue"];
+(int Row, int Col) cell = (2, 7);
+Dictionary<string, int> stock = new()
+{
+    ["tea"] = 12,
+};
+HashSet<string> seen = ["tea", "milk"];
+```
+
+```python title="Python"
+days = ["Mon", "Tue"]
+cell = (2, 7)
+stock = {"tea": 12}
+seen = {"tea", "milk"}
+```
+
+</Compare>
+
+Четири колекции са част от самия език. Всяка има свой литерал и не ѝ трябва `using`:
+
+| Python | Литерал | В C# | Кога я избираш |
+| --- | --- | --- | --- |
+| `list` | `[1, 2]` | `List<T>` | Редът има значение и съдържанието се променя. |
+| `tuple` | `(1, 2)` | `ValueTuple` | Малък запис, който не се променя, например координати. |
+| `dict` | `{"a": 1}` | `Dictionary<K, V>` | Търсиш по ключ. Пази реда, в който добавяш. |
+| `set` | `{1, 2}` | `HashSet<T>` | Трябват ти уникални стойности. Няма ред. |
+
+Операциите, които ще пишеш всеки ден:
+
+| Искаш да... | C# | Python |
+| --- | --- | --- |
+| вземеш броя | `days.Count` | `len(days)` |
+| вземеш последния елемент | `days[^1]` | `days[-1]` |
+| вземеш част от списъка | `days[1..3]` | `days[1:3]` |
+| провериш дали има елемент | `days.Contains("Mon")` | `"Mon" in days` |
+| добавиш елемент | `days.Add("Wed")` | `days.append("Wed")` |
+| прочетеш ключ, който може да липсва | `stock.GetValueOrDefault("milk")` | `stock.get("milk", 0)` |
+| разопаковаш tuple | `var (row, col) = cell;` | `row, col = cell` |
+
+Няколко подробности, в които всеки се спъва веднъж:
+
+- **`len()` е функция, а не свойство.** Работи за всичко, което има дължина: `list`, `tuple`, `dict`, `set` и `str`.
+- **`stock["milk"]` за липсващ ключ хвърля `KeyError`**, както `KeyNotFoundException`. `stock.get("milk")` връща `None`.
+- **Празният set е `set()`.** `{}` вече е зает: това е празен `dict`.
+- **Tuple с един елемент иска запетая:** `(42,)`. Без нея `(42)` е просто числото 42 в скоби.
+
+**Провери се.** Какво създава `box = {}`?
+
+<Question
+  id="collections"
+  choices={[
+    {
+      text: 'Празен dict.',
+      explain: 'Празните къдрави скоби са dict. Със стойности вътре типът личи от формата: {1, 2} е set, а {"a": 1} е dict.',
+      correct: true,
+    },
+    {
+      text: 'Празен set.',
+      explain: 'Логично предположение, но празният set се създава със set().',
+    },
+    {
+      text: 'Празен tuple.',
+      explain: 'Празният tuple се пише с кръгли скоби: ().',
+    },
+  ]}
+/>
+
+## None на мястото на null
+
+<Compare>
+
+```csharp title="C#"
+string Greeting(string? nickname)
+{
+    if (nickname is null)
+    {
+        return "Hello, stranger";
+    }
+
+    return $"Hello, {nickname}";
+}
+```
+
+```python title="Python"
+def greeting(nickname):
+    if nickname is None:
+        return "Hello, stranger"
+
+    return f"Hello, {nickname}"
+```
+
+</Compare>
+
+`None` е единствената стойност в Python, която означава „няма нищо“. Тя е обект и в цялата програма съществува точно един такъв. Затова проверката се прави с `is`, който пита дали две имена сочат един и същ обект: `nickname is None` и `nickname is not None`.
+
+Функция, която не връща нищо, също връща `None`. Няма `void`.
+
+Забравиш ли проверката, грешката идва, докато програмата работи, точно както `NullReferenceException`:
+
+```python
+order = None
+print(order.total)
+# AttributeError: 'NoneType' object has no attribute 'total'
+```
+
+Двата оператора, които ще ти липсват, са `?.` и `??`. В Python ги няма и на тяхно място се пише обикновено условие:
+
+| C# | Python |
+| --- | --- |
+| `order is null` | `order is None` |
+| `order is not null` | `order is not None` |
+| `nickname ?? "stranger"` | `nickname if nickname is not None else "stranger"` |
+| `order?.Total` | `order.total if order is not None else None` |
+
+Изразът `A if условие else B` е тернарният оператор на Python. Той е `условие ? A : B`, само че условието стои в средата.
+
+:::caution[or не е ??]
+Често ще срещаш `nickname or "stranger"` като кратък запис за `??`. Той обаче заменя не само `None`, а всяка „празна“ стойност: `0`, `""` и празен `list`. Ако нулата е валидна стойност, `or` ще я загуби. Защо е така, обяснява следващата тема.
+:::
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+timeout = 0
+effective = timeout or 30
+print(effective)
+```
+
+<Question
+  id="none"
+  choices={[
+    {
+      text: '0',
+      explain: 'Така би работил ?? в C#: нулата не е null и остава. or обаче гледа дали стойността е „празна“.',
+    },
+    {
+      text: '30',
+      explain: 'Нулата е „празна“ стойност, затова or връща дясната страна. Ако 0 е валиден timeout, напиши 30 if timeout is None else timeout.',
+      correct: true,
+    },
+    {
+      text: 'None',
+      explain: 'or винаги връща един от двата си операнда. Тук това е 30.',
+    },
+  ]}
+/>
+
+## Равенство и truthiness
+
+Тук има две идеи, които в C# изглеждат по друг начин.
+
+### `==` сравнява съдържанието
+
+<Compare>
+
+```csharp title="C#"
+List<int> a = [1, 2];
+List<int> b = [1, 2];
+
+Console.WriteLine(a == b);
+// False: two different objects
+
+Console.WriteLine(a.SequenceEqual(b));
+// True: the same contents
+```
+
+```python title="Python"
+a = [1, 2]
+b = [1, 2]
+
+print(a is b)
+# False: two different objects
+
+print(a == b)
+# True: the same contents
+```
+
+</Compare>
+
+В Python `==` сравнява **съдържанието**, а `is` проверява дали двете имена сочат **един и същ обект**. За `list`, `tuple`, `dict` и `set` това значи, че две колекции с еднакво съдържание са равни, както два `record` в C#.
+
+Правилото е кратко: сравнявай с `==`, а `is` пази за `None`.
+
+### Всяка стойност може да бъде условие
+
+<Compare>
+
+```csharp title="C#"
+if (cart.Count > 0)
+{
+    Checkout(cart);
+}
+
+if (!string.IsNullOrEmpty(note))
+{
+    Attach(note);
+}
+```
+
+```python title="Python"
+if cart:
+    checkout(cart)
+
+if note:
+    attach(note)
+```
+
+</Compare>
+
+`if` в Python приема всяка стойност, не само `bool`. Няколко стойности се броят за неверни и се наричат **falsy**:
+
+- `False` и `None`;
+- нулата: `0` и `0.0`;
+- празният текст: `""`;
+- празните колекции: `[]`, `()`, `{}` и `set()`.
+
+Всичко останало е **truthy**. Затова `if cart:` означава „ако количката не е празна“, а `if note:` покрива едновременно `None` и празен низ. Това е обичайният запис и ще го срещаш навсякъде.
+
+Цената е, че `if count:` не различава `0` от `None`. Когато нулата е валидна стойност, питай изрично: `if count is not None:`.
+
+`and` и `or` следват същото правило и връщат един от двата си операнда, а не `bool`. Затова `timeout or 30` от предишната тема върна `30`: нулата е falsy.
+
+**Провери се.** Кое е вярно след тези два реда?
+
+```python
+first = {"id": 7}
+second = {"id": 7}
+```
+
+<Question
+  id="equality"
+  choices={[
+    {
+      text: 'И двете сравнения, first == second и first is second, връщат True.',
+      explain: 'is е вярно само когато двете имена сочат един и същ обект. Тук са създадени два.',
+    },
+    {
+      text: 'И двете сравнения връщат False.',
+      explain: 'Така би било с == за два Dictionary в C#. В Python == сравнява съдържанието.',
+    },
+    {
+      text: 'first == second е True, а first is second е False.',
+      explain: 'Двата dict-а имат еднакво съдържание, но са два отделни обекта.',
+      correct: true,
+    },
+  ]}
+/>
+
+## Присвояването не копира
+
+<Compare>
+
+```csharp title="C#"
+List<string> team = ["Ana", "Boris"];
+List<string> backup = team;
+
+backup.Add("Vera");
+
+Console.WriteLine(team.Count);  // 3
+```
+
+```python title="Python"
+team = ["Ana", "Boris"]
+backup = team
+
+backup.append("Vera")
+
+print(len(team))  # 3
+```
+
+</Compare>
+
+Тук няма изненада: `list` се държи като reference type. `backup = team` не създава втори списък, а дава второ име на същия.
+
+Разликата е, че в Python **всичко** работи така. Няма `struct` и няма value types, които се копират при присвояване. При числата, низовете и tuples това не се усеща, защото са **immutable**: не можеш да промениш `5` или `"abc"`, можеш само да закачиш името за друга стойност. `list`, `dict`, `set` и обектите от твоите класове са **mutable** и при тях споделянето се вижда.
+
+Когато ти трябва копие, го искаш изрично:
+
+```python
+import copy
+
+week = [["gym"], ["work", "cinema"]]
+
+same = week                  # the same object
+shallow = week.copy()        # a new outer list, the same inner lists
+deep = copy.deepcopy(week)   # everything is new
+```
+
+`.copy()` копира само първото ниво. Вътрешните списъци остават споделени, докато не поискаш `deepcopy`.
+
+Същото важи за аргументите на функция. Тя получава самия обект, а не негово копие, така че промяна на място се вижда и отвън. Няма `ref` и `out`: когато ти трябват няколко резултата, връщаш tuple.
+
+### Капанът със стойностите по подразбиране
+
+```python
+def log(message, history=[]):
+    history.append(message)
+    return history
+
+print(log("start"))   # ['start']
+print(log("stop"))    # ['start', 'stop']
+```
+
+Второто извикване връща и двата елемента. Стойността по подразбиране се създава **веднъж**, когато функцията се дефинира, а не при всяко извикване. Така всички извиквания без втори аргумент споделят един и същ `list`. В C# това не може да се случи, защото стойностите по подразбиране са константи.
+
+Решението е стойността по подразбиране да бъде `None`, а списъкът да се създава вътре във функцията:
+
+```python
+def log(message, history=None):
+    if history is None:
+        history = []
+    history.append(message)
+    return history
+```
+
+Това е най-известният капан в Python. Правилото е просто: **никога mutable стойност по подразбиране**.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+grid = [[0, 0], [0, 0]]
+clone = grid.copy()
+clone[0][0] = 9
+print(grid[0][0])
+```
+
+<Question
+  id="mutability"
+  choices={[
+    {
+      text: '0',
+      explain: 'Така щеше да е с copy.deepcopy(grid). Методът copy() копира само външния list.',
+    },
+    {
+      text: '9',
+      explain: 'clone е нов list, но елементите му са същите вътрешни lists. Промяната през clone[0] се вижда и през grid[0].',
+      correct: true,
+    },
+    {
+      text: 'Грешка, защото копието не може да се променя.',
+      explain: 'Копието е обикновен list и се променя като всеки друг.',
+    },
+  ]}
+/>
+
+## Type hints: типовете по желание
+
+<Compare>
+
+```csharp title="C#"
+double Total(
+    List<double> prices,
+    double? discount = null)
+{
+    var sum = prices.Sum();
+    return sum - (discount ?? 0);
+}
+```
+
+```python title="Python"
+def total(
+    prices: list[float],
+    discount: float | None = None,
+) -> float:
+    subtotal = sum(prices)
+    if discount is None:
+        return subtotal
+    return subtotal - discount
+```
+
+</Compare>
+
+**Type hints** са начинът да запишеш типовете в Python код. Параметрите и променливите се анотират с `име: тип`, а резултатът на функцията с `-> тип`.
+
+Голямата разлика със C# е, че Python **не ги проверява**. Докато програмата работи, анотациите просто се пренебрегват:
+
+```python
+def double(value: int) -> int:
+    return value * 2
+
+print(double("ab"))   # abab
+```
+
+Няма грешка. `"ab" * 2` е валидна операция за текст и Python я изпълнява. Грешката я намира **type checker**: отделен инструмент, който чете анотациите, без да изпълнява кода. Най-използваните са [Pyright](https://microsoft.github.io/pyright/), който във VS Code работи зад разширението Pylance, и [mypy](https://mypy-lang.org/). Type checker-ът върши работата на C# компилатора, но ти решаваш дали да го пуснеш.
+
+Повечето типове се превеждат направо:
+
+| C# | Python |
+| --- | --- |
+| `int`, `double`, `bool`, `string` | `int`, `float`, `bool`, `str` |
+| `string?` | `str \| None` |
+| `List<int>` | `list[int]` |
+| `Dictionary<string, int>` | `dict[str, int]` |
+| `HashSet<string>` | `set[str]` |
+| `(int, string)` | `tuple[int, str]` |
+| `void` | `None` |
+
+Две практически правила:
+
+- **Анотирай параметрите и резултата на всяка функция.** Локалните променливи type checker-ът извежда сам, както `var` в C#.
+- **Проверявай данните, които идват отвън.** JSON, файл или вход от потребител не стават верни само защото си ги анотирал. Докато програмата работи, никой не следи типовете.
+
+**Провери се.** Какво става, когато изпълниш този код?
+
+```python
+def area(width: int, height: int) -> int:
+    return width * height
+
+print(area("ab", 3))
+```
+
+<Question
+  id="hints"
+  choices={[
+    {
+      text: 'Отпечатва ababab.',
+      explain: 'Анотациите се пренебрегват, а "ab" * 3 е валидна операция за текст. Грешката би я хванал type checker като Pyright, преди да пуснеш кода.',
+      correct: true,
+    },
+    {
+      text: 'Python спира с TypeError, защото "ab" не е int.',
+      explain: 'Type hints не се проверяват, докато програмата работи.',
+    },
+    {
+      text: 'Кодът не може да се стартира, докато типовете не съвпаднат.',
+      explain: 'Python няма стъпка на компилация, която да проверява типовете. Това прави отделен инструмент, ако го пуснеш.',
+    },
+  ]}
+/>
+
+## Твой ред
+
+Три задачи. Всяка събира нещо от урока в една функция. Напиши я в екрана под условието, на мястото на `# TODO`, и натисни **Пусни**. Кодът се изпълнява в браузъра ти, а проверката вика функцията с примера и с още данни. Решението е скрито под екрана.
+
+### Посещения
+
+Имаш лог с посещения на страници. Всеки ред е `страница:брой`, но някои редове са повредени:
+
+```python title="views.py"
+lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+```
+
+Напиши функция `count_views(lines: list[str]) -> dict[str, int]`, която:
+
+1. разделя всеки ред на страница и брой с `line.split(":")`;
+2. пропуска редовете, в които броят липсва или не е число;
+3. събира посещенията за всяка страница в един `dict`.
+
+После отпечатай всяка страница с броя и с дела ѝ от всички посещения. Очакваният изход е:
+
+```text
+home: 200 (82%)
+docs: 45 (18%)
+```
+
+Няколко подсказки:
+
+- `"45".isdigit()` е `True`, а `"n/a".isdigit()` и `"".isdigit()` са `False`.
+- `views.get(page, 0)` дава досегашния брой, а `int(raw)` превръща текста в число.
+- Форматът `:.0%` в един f-string превръща `0.82` в `82%`.
+
+<Try
+  file="views.py"
+  starter={`
+|lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+|
+|def count_views(lines: list[str]) -> dict[str, int]:
+|    views: dict[str, int] = {}
+|
+|    # TODO
+|
+|    return views
+|
+|
+|views = count_views(lines)
+|# TODO
+`}
+  check={`
+|_eq(
+|    count_views(["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]),
+|    {"home": 200, "docs": 45},
+|    "Примерът от задачата.",
+|)
+|_eq(
+|    count_views(["a:1", "b:2", "a:4", "c:", "b:no"]),
+|    {"a": 5, "b": 2},
+|    "Втори пример.",
+|)
+|_eq(count_views(["x:0", "x:10"]), {"x": 10}, "Нула е валиден брой.")
+|_eq(count_views([]), {}, "Празен списък.")
+|_out(
+|    """home: 200 (82%)
+|docs: 45 (18%)""",
+|    "Отпечатаният текст.",
+|)
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="views.py"
+def count_views(lines: list[str]) -> dict[str, int]:
+    views: dict[str, int] = {}
+
+    for line in lines:
+        page, raw = line.split(":")
+        if not raw.isdigit():
+            continue
+        views[page] = views.get(page, 0) + int(raw)
+
+    return views
+
+
+lines = ["home:120", "docs:45", "home:80", "blog:", "docs:n/a"]
+
+views = count_views(lines)
+total = sum(views.values())
+
+for page, count in views.items():
+    print(f"{page}: {count} ({count / total:.0%})")
+```
+
+В тези редове е почти целият урок: разопаковане в две имена, `dict` с `get` и резервна стойност, изрично превръщане с `int()`, деление, което връща `float`, type hints и f-string.
+
+</details>
+
+---
+
+### Настройки
+
+Имаш настройки по подразбиране и настройки, които идват отвън. `None` значи „не пипай това“. `0` и `False` са истински стойности и трябва да се запишат.
+
+```python title="settings.py"
+defaults = {"timeout": 30, "retries": 3, "verbose": False}
+overrides = {"timeout": None, "retries": 0, "verbose": True}
+```
+
+Напиши функция `apply_overrides(defaults, overrides) -> dict`, която:
+
+1. тръгва от копие на `defaults`, за да не променя оригинала;
+2. за всеки ключ в `overrides` записва стойността, когато не е `None`;
+3. връща новото `dict`.
+
+Стойностите са числа и `bool`, затова в hint-овете са `int | bool`, а липсата е `None`. Файлът отпечатва резултата и оригинала. Очакваният изход е:
+
+```text
+{'timeout': 30, 'retries': 0, 'verbose': True}
+{'timeout': 30, 'retries': 3, 'verbose': False}
+```
+
+Няколко подсказки:
+
+- `value is None` оставя досегашната стойност. `if value` изпуска `0` и `False`.
+- `defaults.copy()` е ново `dict`. `merged = defaults` е второ име на същото.
+- `print(result)` слага единични кавички. Така изглежда очакваният изход.
+
+<Try
+  file="settings.py"
+  starter={`
+|defaults = {"timeout": 30, "retries": 3, "verbose": False}
+|overrides = {"timeout": None, "retries": 0, "verbose": True}
+|
+|def apply_overrides(
+|    defaults: dict[str, int | bool],
+|    overrides: dict[str, int | bool | None],
+|) -> dict[str, int | bool]:
+|    merged = defaults
+|
+|    for key, value in overrides.items():
+|        // TODO
+|        pass
+|
+|    return merged
+|
+|
+|result = apply_overrides(defaults, overrides)
+|print(result)
+|print(defaults)
+`}
+  check={`
+|defaults = {"timeout": 30, "retries": 3, "verbose": False}
+|overrides = {"timeout": None, "retries": 0, "verbose": True}
+|result = apply_overrides(defaults, overrides)
+|_eq(result, {"timeout": 30, "retries": 0, "verbose": True}, "Събраните настройки.")
+|_eq(defaults, {"timeout": 30, "retries": 3, "verbose": False}, "Оригиналът трябва да остане непроменен.")
+|
+|second = {"limit": 10, "verbose": True}
+|second_result = apply_overrides(second, {"limit": None, "verbose": False, "name": None, "slots": 4})
+|_eq(second_result, {"limit": 10, "verbose": False, "slots": 4}, "Втори пример.")
+|_eq(second, {"limit": 10, "verbose": True}, "Оригиналът на втория пример трябва да остане същият.")
+|_out(
+|    """{'timeout': 30, 'retries': 0, 'verbose': True}
+|{'timeout': 30, 'retries': 3, 'verbose': False}""",
+|    "Отпечатаният текст.",
+|)
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="settings.py"
+def apply_overrides(
+    defaults: dict[str, int | bool],
+    overrides: dict[str, int | bool | None],
+) -> dict[str, int | bool]:
+    merged = defaults.copy()
+
+    for key, value in overrides.items():
+        if value is None:
+            continue
+        merged[key] = value
+
+    return merged
+
+
+defaults = {"timeout": 30, "retries": 3, "verbose": False}
+overrides = {"timeout": None, "retries": 0, "verbose": True}
+
+result = apply_overrides(defaults, overrides)
+print(result)
+print(defaults)
+```
+
+Тук са двете места, на които навикът от C# подвежда: `None` не е всяка празна стойност, а `defaults.copy()` е ново `dict`, не второ име на старото.
+
+</details>
+
+---
+
+### Суми
+
+Всеки ред е вид, цена като текст и брой. Някои цени са повредени.
+
+```python title="totals.py"
+rows = [
+    ("pen", "1.50", 2),
+    ("mug", "n/a", 1),
+    ("pen", "1.50", 3),
+    ("book", "", 1),
+    ("mug", "4.00", 2),
+]
+```
+
+Напиши функция `item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]`, която:
+
+1. прескача реда, ако цената не е число;
+2. добавя цената по броя към сумата за този вид;
+3. връща `dict` с видовете и сумите.
+
+Файлът отпечатва всеки вид със сумата до две цифри след десетичната точка. Очакваният изход е:
+
+```text
+pen: 7.50
+mug: 8.00
+```
+
+Няколко подсказки:
+
+- `"1.50".replace(".", "", 1).isdigit()` е `True`. `"n/a".replace(".", "", 1).isdigit()` и `"".replace(".", "", 1).isdigit()` са `False`.
+- `float(price)` превръща текста в число, а `totals.get(name, 0)` дава досегашната сума.
+- Форматът `:.2f` в един f-string превръща `7.5` в `7.50`.
+
+<Try
+  file="totals.py"
+  starter={`
+|rows = [
+|    ("pen", "1.50", 2),
+|    ("mug", "n/a", 1),
+|    ("pen", "1.50", 3),
+|    ("book", "", 1),
+|    ("mug", "4.00", 2),
+|]
+|
+|def item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]:
+|    totals: dict[str, float] = {}
+|
+|    for name, price, qty in rows:
+|        // TODO
+|        pass
+|
+|    return totals
+|
+|
+|for name, total in item_totals(rows).items():
+|    print(f"{name}: {total:.2f}")
+`}
+  check={`
+|_eq(
+|    item_totals([
+|        ("pen", "1.50", 2),
+|        ("mug", "n/a", 1),
+|        ("pen", "1.50", 3),
+|        ("book", "", 1),
+|        ("mug", "4.00", 2),
+|    ]),
+|    {"pen": 7.5, "mug": 8.0},
+|    "Примерът от задачата.",
+|)
+|_eq(
+|    item_totals([("a", "2", 2), ("a", "x", 5), ("b", "0.5", 4), ("c", "1.2.3", 1)]),
+|    {"a": 4.0, "b": 2.0},
+|    "Втори пример.",
+|)
+|_out(
+|    """pen: 7.50
+|mug: 8.00""",
+|    "Отпечатаният текст.",
+|)
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="totals.py"
+def item_totals(rows: list[tuple[str, str, int]]) -> dict[str, float]:
+    totals: dict[str, float] = {}
+
+    for name, price, qty in rows:
+        if not price.replace(".", "", 1).isdigit():
+            continue
+        totals[name] = totals.get(name, 0) + float(price) * qty
+
+    return totals
+
+
+rows = [
+    ("pen", "1.50", 2),
+    ("mug", "n/a", 1),
+    ("pen", "1.50", 3),
+    ("book", "", 1),
+    ("mug", "4.00", 2),
+]
+
+for name, total in item_totals(rows).items():
+    print(f"{name}: {total:.2f}")
+```
+
+Същите стъпки като при посещенията: прескочи лошия ред, събери в `dict` с `get`, превърни текста с `float` и форматирай при печата.
+
+</details>
+
+## Обобщение
+
+- Типът принадлежи на **стойността**, а не на името. Python е dynamically typed, но strongly typed.
+- `int` няма overflow, `/` винаги връща `float`, а превръщането между типове е изрично.
+- **`list`, `tuple`, `dict` и `set`** са част от езика. Имат свои литерали и общи операции: `len()`, `in`, индекси и slices.
+- **`None`** е `null`. Проверява се с `is None`, а `?.` и `??` ги няма.
+- `==` сравнява съдържанието, а `is` идентичността. Празните стойности са **falsy**, затова `if items:` е нормален код.
+- **Присвояването никога не копира.** Копие се иска изрично, а стойността по подразбиране не бива да е mutable.
+- **Type hints** описват типовете, но ги проверява type checker, а не Python.
+
+Следващият урок е [Класове и protocols](/python-for-dotnet/unit-2/classes-and-protocols/): `class`, dataclass на мястото на `record` и защо в Python рядко ти трябва интерфейс.
+
+<LessonProgress summary />

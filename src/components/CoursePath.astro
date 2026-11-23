@@ -1,0 +1,176 @@
+---
+import { courseOf, slugOf } from '../courses';
+import { fill } from '../scripts/fill';
+
+interface Lesson {
+	title: string;
+	text: string;
+	/** Reading time in minutes. */
+	minutes: number;
+	/** Slug of the lesson page, without a locale. Leave it out for a lesson that is not published yet. */
+	slug?: string;
+}
+
+interface Props {
+	/** Every lesson of the course in reading order, published or not. */
+	lessons: Lesson[];
+}
+
+const { lessons } = Astro.props;
+const { id, locale } = Astro.locals.starlightRoute;
+const t = Astro.locals.t;
+
+const course = courseOf(slugOf(id, locale));
+const progress = course?.progress;
+if (!progress) {
+	throw new Error(`<CoursePath /> is used on "${id}", but its course has no "progress" entry in src/courses.ts.`);
+}
+
+const published = lessons.flatMap((lesson) => (lesson.slug ? [lesson.slug] : []));
+if (lessons.length !== progress.planned || published.join() !== progress.lessons.join()) {
+	throw new Error(
+		`<CoursePath /> on "${id}" lists ${lessons.length} lessons (${published.length} published), ` +
+			`but src/courses.ts expects ${progress.planned} (${progress.lessons.length} published). Keep the two in step.`
+	);
+}
+
+const base = locale ? `/${locale}` : '';
+const pad = (value: number) => String(value).padStart(2, '0');
+const first = lessons.findIndex((lesson) => lesson.slug);
+---
+
+<section class="hf-path not-content" data-path data-planned={progress.planned} data-lessons={JSON.stringify(published)}>
+	<div class="hf-path__layout">
+		<div class="hf-path__card">
+			<p class="hf-path__kicker">{t('track.course')}</p>
+			<p class="hf-path__percent"><span data-path-percent>0</span><sup>%</sup></p>
+			<div class="hf-meter" role="progressbar" aria-label={t('track.course')} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+				<span class="hf-meter__fill"></span>
+			</div>
+			<p class="hf-path__count" data-path-count data-template={t('track.lessons')}>
+				{fill(t('track.lessons'), { done: 0, total: progress.planned })}
+			</p>
+			{
+				first >= 0 && (
+					<a
+						class="hf-button"
+						href={`${base}/${lessons[first].slug}/`}
+						data-path-cta
+						data-start={t('track.start')}
+						data-resume={t('track.resume')}
+						data-review={t('track.review')}
+					>
+						<span data-path-cta-label>{fill(t('track.start'), { n: pad(first + 1) })}</span>
+						<span aria-hidden="true">→</span>
+					</a>
+				)
+			}
+			<p class="hf-path__saved">{t('track.saved')}</p>
+		</div>
+
+		<ol class="hf-path__list">
+			{
+				lessons.map((lesson, index) => {
+					const number = pad(index + 1);
+					const copy = (
+						<span class="hf-path__copy">
+							<strong>{lesson.title}</strong>
+							<span>{lesson.text}</span>
+						</span>
+					);
+					const time = (
+						<span class="hf-path__time">
+							{lesson.minutes} {t('track.minutes')}
+						</span>
+					);
+
+					return (
+						<li>
+							{lesson.slug ? (
+								<a class="hf-path__row" href={`${base}/${lesson.slug}/`} data-lesson-row={lesson.slug} data-number={number}>
+									<span class="hf-path__marker" aria-hidden="true">
+										<span class="hf-path__number">{number}</span>
+										<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M5 12.5 10 17.5 19 7" />
+										</svg>
+									</span>
+									{copy}
+									<span class="hf-path__meta">
+										{time}
+										<span class="hf-path__progress">
+											<span class="hf-meter" aria-hidden="true">
+												<span class="hf-meter__fill" />
+											</span>
+											<strong data-row-percent>0%</strong>
+										</span>
+									</span>
+								</a>
+							) : (
+								<div class="hf-path__row is-soon">
+									<span class="hf-path__marker" aria-hidden="true">
+										<span class="hf-path__number">{number}</span>
+									</span>
+									{copy}
+									<span class="hf-path__meta">
+										{time}
+										<span class="hf-path__soon">{t('track.soon')}</span>
+									</span>
+								</div>
+							)}
+						</li>
+					);
+				})
+			}
+		</ol>
+	</div>
+</section>
+
+<script>
+	import { courseState, lessonState, onProgress, setMeter } from '../scripts/progress';
+	import { fill } from '../scripts/fill';
+
+	const root = document.querySelector<HTMLElement>('[data-path]');
+
+	if (root) {
+		const lessons: string[] = JSON.parse(root.dataset.lessons ?? '[]');
+		const planned = Number(root.dataset.planned);
+		const rows = [...root.querySelectorAll<HTMLAnchorElement>('[data-lesson-row]')];
+		const percent = root.querySelector('[data-path-percent]');
+		const count = root.querySelector<HTMLElement>('[data-path-count]');
+		const cta = root.querySelector<HTMLAnchorElement>('[data-path-cta]');
+		const ctaLabel = root.querySelector('[data-path-cta-label]');
+
+		const render = () => {
+			const course = courseState(lessons, planned);
+			setMeter(root.querySelector('.hf-path__card .hf-meter'), course.percent);
+			if (percent) percent.textContent = String(course.percent);
+			if (count) count.textContent = fill(count.dataset.template ?? '', { done: course.completed, total: planned });
+
+			let next: HTMLAnchorElement | undefined;
+			let started = false;
+
+			for (const row of rows) {
+				const state = lessonState(row.dataset.lessonRow ?? '');
+				row.dataset.state = state.percent === 100 ? 'done' : state.percent > 0 ? 'current' : 'todo';
+				setMeter(row.querySelector('.hf-meter'), state.percent);
+
+				const label = row.querySelector('[data-row-percent]');
+				if (label) label.textContent = `${state.percent}%`;
+
+				if (state.percent > 0) started = true;
+				if (!next && state.percent < 100) next = row;
+			}
+
+			// The button leads to the first lesson that is not finished. When all are, it offers the first one again.
+			const target = next ?? rows[0];
+			if (cta && ctaLabel && target) {
+				const template = !next ? cta.dataset.review : started ? cta.dataset.resume : cta.dataset.start;
+				cta.href = target.href;
+				ctaLabel.textContent = fill(template ?? '', { n: target.dataset.number ?? '' });
+			}
+		};
+
+		render();
+		onProgress(render);
+	}
+</script>

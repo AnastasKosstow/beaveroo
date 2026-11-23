@@ -1,6 +1,8 @@
 declare namespace StarlightApp {
   interface I18n {
     'course.title': string;
+    'python.title': string;
+    'python.description': string;
     'header.linksLabel': string;
     'header.switchLanguageLabel': string;
     'header.switchLanguageTitle': string;
@@ -15,6 +17,7 @@ declare namespace StarlightApp {
     'quiz.incorrect': string;
     'quiz.allCorrect': string;
     'quiz.someWrong': string;
+    'quiz.solved': string;
     'embed.note': string;
     'embed.open': string;
     'progress.label': string;
@@ -29,5 +32,37 @@ declare namespace StarlightApp {
     'cycle.action': string;
     'cycle.observation': string;
     'cycle.center': string;
+    'track.course': string;
+    'track.lessons': string;
+    'track.lesson': string;
+    'track.minutes': string;
+    'track.topics': string;
+    'track.checks': string;
+    'track.saved': string;
+    'track.summary': string;
+    'track.hint': string;
+    'track.complete': string;
+    'track.reset': string;
+    'track.soon': string;
+    'track.start': string;
+    'track.resume': string;
+    'track.review': string;
+    'try.run': string;
+    'try.running': string;
+    'try.loading': string;
+    'try.reset': string;
+    'try.output': string;
+    'try.outputEmpty': string;
+    'try.editable': string;
+    'try.console': string;
+    'try.correct': string;
+    'try.wrong': string;
+    'try.error': string;
+    'try.timeout': string;
+    'try.loadFailed': string;
+    'try.note': string;
+    'try.expected': string;
+    'try.actual': string;
+    'try.empty': string;
   }
 }
