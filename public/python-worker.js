@@ -6,6 +6,9 @@
 
 const INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v314.0.8/full/';
 
+/** The hidden check runs under its own file name, so a traceback can tell its lines from the reader's. */
+const CHECK_FILE = '<check>';
+
 let pyodidePromise = null;
 
 function loadRuntime() {
@@ -57,6 +60,9 @@ self.onmessage = async (event) => {
 
 	self.postMessage({ id, phase: 'ready' });
 
+	// Which of the two programs failed: the reader's code, or the check that runs after it.
+	let stage = 'run';
+
 	try {
 		const dict = py.globals.get('dict');
 		namespace = dict();
@@ -74,13 +80,14 @@ self.onmessage = async (event) => {
 		py.setStdout({ batched: () => {} });
 		py.setStderr({ batched: () => {} });
 
-		await py.runPythonAsync(`${prelude(labels)}\n${check}\nNone`, { globals: namespace, filename: file });
+		stage = 'check';
+		await py.runPythonAsync(`${prelude(labels)}\n${check}\nNone`, { globals: namespace, filename: CHECK_FILE });
 
 		self.postMessage({ id, phase: 'done', ok: true, stdout: stdout.join('') });
 	} catch (error) {
 		const extra = stderr.join('');
 		const message = extra ? `${extra}\n${error}` : String(error);
-		self.postMessage({ id, phase: 'done', ok: false, stdout: stdout.join(''), error: message });
+		self.postMessage({ id, phase: 'done', ok: false, stage, stdout: stdout.join(''), error: message });
 	} finally {
 		namespace?.destroy();
 	}

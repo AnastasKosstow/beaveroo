@@ -224,6 +224,16 @@ export default defineConfig({
           translations: { en: 'Unit 1. Types and data' },
           slug: 'python-for-dotnet/unit-1/types-and-data',
         },
+        {
+          label: 'Unit 2. Класове и protocols',
+          translations: { en: 'Unit 2. Classes and protocols' },
+          slug: 'python-for-dotnet/unit-2/classes-and-protocols',
+        },
+        {
+          label: 'Unit 3. От LINQ към comprehensions',
+          translations: { en: 'Unit 3. From LINQ to comprehensions' },
+          slug: 'python-for-dotnet/unit-3/linq-to-comprehensions',
+        },
       ],
     }),
   ],

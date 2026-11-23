@@ -37,12 +37,14 @@ An unofficial adaptation of the [Hugging Face Agents Course](https://huggingface
 
 ### Python for .NET Developers
 
-Python for people who already program in C#. It does not explain what a variable or a loop is. Every topic starts from C# code, shows the same code in Python next to it, explains only the differences, and ends with a self-check question. The course will have nine lessons. One is published.
+Python for people who already program in C#. It does not explain what a variable or a loop is. Every topic starts from C# code, shows the same code in Python next to it, explains only the differences, and ends with a self-check question. The course will have nine lessons. Three are published. Each one ends with three tasks that the reader runs and checks in the browser.
 
 | Unit | What it covers |
 | --- | --- |
 | [WELCOME TO THE COURSE](https://beaveroo.tech/python-for-dotnet/unit-0/introduction/) | What the course is, the learning path with the reader's progress, and what you need installed (Python 3.12 or newer). |
-| [FROM C# TO PYTHON](https://beaveroo.tech/python-for-dotnet/unit-1/types-and-data/) | Lesson 01, Types and data: names instead of typed variables, numbers and text, the built-in collections, `None`, truthiness, shared references and type hints. |
+| [TYPES AND DATA](https://beaveroo.tech/python-for-dotnet/unit-1/types-and-data/) | Lesson 01: names instead of typed variables, numbers and text, the built-in collections, `None`, truthiness, shared references and type hints. |
+| [CLASSES AND PROTOCOLS](https://beaveroo.tech/python-for-dotnet/unit-2/classes-and-protocols/) | Lesson 02: `__init__` and `self`, properties, class attributes, special methods, a dataclass in place of a `record`, inheritance, duck typing and `Protocol`. |
+| [FROM LINQ TO COMPREHENSIONS](https://beaveroo.tech/python-for-dotnet/unit-3/linq-to-comprehensions/) | Lesson 03: list, dict and set comprehensions, generator expressions, the aggregates with `key`, sorting and grouping. |
 
 Each lesson shows the reader's progress in percent. It is kept in the browser's `localStorage`, so there are no accounts. See [Track progress](#track-progress).
 

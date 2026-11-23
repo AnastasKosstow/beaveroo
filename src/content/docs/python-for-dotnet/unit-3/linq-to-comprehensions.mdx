@@ -1,0 +1,911 @@
+---
+title: От LINQ към comprehensions
+description: Третият урок от Python за .NET програмисти - list, dict и set comprehensions на мястото на Where, Select и ToList, generator expressions и отложено изпълнение, sum, any, max, sorted и групиране, сравнени с LINQ.
+---
+
+import Compare from '../../../../components/Compare.astro';
+import LessonProgress from '../../../../components/LessonProgress.astro';
+import Question from '../../../../components/Question.astro';
+import Try from '../../../../components/Try.astro';
+
+<LessonProgress number={3} of={9} minutes={50} topics={6} />
+
+В C# работата с колекции минава през LINQ: `Where`, `Select`, `OrderBy`, `ToList`. В Python няма LINQ и няма extension methods. На тяхно място стоят **comprehensions**, които са част от синтаксиса на езика, и няколко вградени функции като `sum`, `any` и `sorted`.
+
+Почти всяка LINQ заявка има пряк превод. Темите са шест. Всяка започва с код на C# и същия код на Python, а завършва с един въпрос. Накрая те чакат три задачи.
+
+Примерите работят с едни и същи данни. Запиши ги във файл, ако искаш да пробваш всеки от тях:
+
+```python title="orders.py"
+from dataclasses import dataclass
+
+@dataclass
+class Order:
+    id: int
+    customer: str
+    total: float
+    paid: bool
+
+
+orders = [
+    Order(1, "Ana", 120.0, True),
+    Order(2, "Boris", 35.5, False),
+    Order(3, "Ana", 80.0, True),
+    Order(4, "Vera", 210.0, True),
+]
+```
+
+## List comprehension: `Where` и `Select` в един израз
+
+<Compare>
+
+```csharp title="C#"
+var names = orders
+    .Where(o => o.Paid)
+    .Select(o => o.Customer)
+    .ToList();
+// ["Ana", "Ana", "Vera"]
+```
+
+```python title="Python"
+names = [
+    o.customer
+    for o in orders
+    if o.paid
+]
+# ['Ana', 'Ana', 'Vera']
+```
+
+</Compare>
+
+List comprehension има три части и те стоят винаги в този ред:
+
+1. **Какво взимаш** от всеки елемент: `o.customer`. Това е `Select`.
+2. **Откъде**: `for o in orders`.
+3. **Кои елементи**: `if o.paid`. Това е `Where` и може да липсва.
+
+Квадратните скоби наоколо казват, че резултатът е нов `list`. Те са твоят `ToList()`.
+
+В началото редът обърква, защото резултатът стои преди източника. Чети от `for`: за всяка поръчка, ако е платена, вземи клиента. Къс comprehension се пише на един ред:
+
+```python
+names = [o.customer for o in orders if o.paid]
+```
+
+Това е следният цикъл, записан като израз:
+
+```python
+names = []
+for o in orders:
+    if o.paid:
+        names.append(o.customer)
+```
+
+Двете части могат да стоят и поотделно. `[o.total for o in orders]` е само `Select`, а `[o for o in orders if o.total > 100]` е само `Where`. Първата част е задължителна дори когато е самият елемент.
+
+За разлика от LINQ заявката, list comprehension се изпълнява веднага и докрай. Отложеният вариант е четвъртата тема.
+
+### `if` на две места
+
+`if` в края филтрира. Когато всеки елемент трябва да даде резултат, но различен според условие, в първата част слагаш тернарния израз от първия урок:
+
+```python
+labels = ["paid" if o.paid else "open" for o in orders]
+# ['paid', 'open', 'paid', 'paid']
+```
+
+В C# това е `Select(o => o.Paid ? "paid" : "open")`. Двете форми лесно се бъркат. `if` с `else` стои пред `for` и избира стойност. `if` без `else` стои след `for` и маха елементи.
+
+Ще срещнеш и функциите `map()` и `filter()`, които правят същото с подадена функция. Работят, но обичайният запис е comprehension. Той е за създаване на нова колекция. Когато искаш действие за всеки елемент, например `print`, пиши обикновен `for`.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+nums = [1, 2, 3, 4]
+print([n if n % 2 == 0 else 0 for n in nums])
+```
+
+<Question
+  id="list-comprehension"
+  choices={[
+    {
+      text: '[2, 4]',
+      explain: 'Така щеше да е с if след for: [n for n in nums if n % 2 == 0]. Тук if е пред for и не маха нищо.',
+    },
+    {
+      text: '[0, 2, 0, 4]',
+      explain: 'if с else избира стойност за всеки елемент: четните остават, а нечетните стават 0.',
+      correct: true,
+    },
+    {
+      text: 'Грешка в синтаксиса.',
+      explain: 'Записът е валиден. Грешка е обратното: else към if, който стои след for.',
+    },
+  ]}
+/>
+
+## dict и set comprehensions
+
+<Compare>
+
+```csharp title="C#"
+var totals = orders.ToDictionary(
+    o => o.Id,
+    o => o.Total);
+
+var customers = orders
+    .Select(o => o.Customer)
+    .ToHashSet();
+```
+
+```python title="Python"
+totals = {
+    o.id: o.total
+    for o in orders
+}
+
+customers = {
+    o.customer
+    for o in orders
+}
+```
+
+</Compare>
+
+Формата решава типа, както при литералите от първия урок. Къдрави скоби с `ключ: стойност` дават `dict`, а къдрави скоби с една стойност дават `set`:
+
+```python
+print(totals)      # {1: 120.0, 2: 35.5, 3: 80.0, 4: 210.0}
+print(customers)   # {'Ana', 'Boris', 'Vera'}, in some order
+```
+
+Set comprehension е и твоят `Distinct()`: Ana има две поръчки, но в резултата е веднъж. Редът в един `set` не е гарантиран. Когато ти трябва подреден списък без повторения, напиши `sorted(customers)`.
+
+**Повтарящ се ключ не е грешка.** `ToDictionary` хвърля `ArgumentException` при втори еднакъв ключ. Dict comprehension мълчаливо оставя последната стойност:
+
+```python
+by_customer = {o.customer: o.total for o in orders}
+# {'Ana': 80.0, 'Boris': 35.5, 'Vera': 210.0}
+```
+
+Поръчката на Ana за 120 изчезна без никакво съобщение. Когато ключовете могат да се повтарят, ти трябва групиране, а то е в последната тема.
+
+Съществуващ `dict` се обхожда с `.items()`, което дава двойките ключ и стойност:
+
+```python
+stock = {"tea": 12, "milk": 0, "jam": 3}
+
+available = {name: count for name, count in stock.items() if count > 0}
+# {'tea': 12, 'jam': 3}
+```
+
+Comprehension за tuple няма. Същият запис в кръгли скоби е нещо друго и за него е четвъртата тема.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+pairs = [("a", 1), ("b", 2), ("a", 3)]
+lookup = {key: value for key, value in pairs}
+print(lookup)
+```
+
+<Question
+  id="dict-set"
+  choices={[
+    {
+      text: "{'a': 1, 'b': 2}",
+      explain: 'Печели последната стойност за ключа, а не първата.',
+    },
+    {
+      text: "{'a': 3, 'b': 2}",
+      explain: 'Второто „a“ презаписва стойността на първото. Ключът пази мястото си от първото добавяне, затова остава отпред.',
+      correct: true,
+    },
+    {
+      text: 'Грешка за повтарящ се ключ.',
+      explain: 'Така работи ToDictionary в C#. dict в Python презаписва стойността.',
+    },
+  ]}
+/>
+
+## Няколко източника: `SelectMany`, `Zip` и индекси
+
+<Compare>
+
+```csharp title="C#"
+List<List<string>> baskets = [
+    ["tea", "milk"],
+    ["bread"],
+];
+
+var items = baskets
+    .SelectMany(b => b)
+    .ToList();
+// ["tea", "milk", "bread"]
+```
+
+```python title="Python"
+baskets = [
+    ["tea", "milk"],
+    ["bread"],
+]
+
+items = [
+    item
+    for basket in baskets
+    for item in basket
+]
+# ['tea', 'milk', 'bread']
+```
+
+</Compare>
+
+Comprehension може да има повече от един `for`. Те се пишат в реда, в който биха стояли вложените цикли: външният е първи.
+
+```python
+items = []
+for basket in baskets:
+    for item in basket:
+        items.append(item)
+```
+
+Обърнеш ли ги, `basket` се ползва, преди да е получил стойност, и Python спира с `NameError`. Два `for`-а още се четат. При три, или при два с условия, обикновеният цикъл е по-ясен.
+
+Източникът може да е и нещо повече от една колекция. Две вградени функции покриват случаите, за които LINQ има отделни методи:
+
+```python
+names = ["Ana", "Boris", "Vera"]
+scores = [91, 78, 85]
+
+results = [f"{name}: {score}" for name, score in zip(names, scores)]
+# ['Ana: 91', 'Boris: 78', 'Vera: 85']
+
+ranked = [f"{place}. {name}" for place, name in enumerate(names, start=1)]
+# ['1. Ana', '2. Boris', '3. Vera']
+```
+
+- **`zip(a, b)`** върви по двете колекции едновременно и дава двойки, както `Zip`. Спира при по-късата.
+- **`enumerate(items)`** дава двойки от индекс и елемент. Това е `Select((item, index) => ...)`, само че индексът е първи. Броенето започва от 0, освен ако не подадеш `start`.
+
+И двете работят и в обикновен `for`. Класическият `for (int i = 0; i < n; i++)` в Python е `for i in range(n)`. Когато обаче индексът ти трябва само за да стигнеш до елемента, `enumerate` е по-краткият запис.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+rows = [[1, 2], [3], [4, 5]]
+print([n for row in rows for n in row if n % 2 == 1])
+```
+
+<Question
+  id="sources"
+  choices={[
+    {
+      text: '[1, 3, 5]',
+      explain: 'Двата for-а минават през всички числа по ред, а if оставя нечетните. Резултатът е един плосък list.',
+      correct: true,
+    },
+    {
+      text: '[[1], [3], [5]]',
+      explain: 'Първата част е n, а не list. Затова резултатът е плосък.',
+    },
+    {
+      text: '[1, 2, 3, 4, 5]',
+      explain: 'Това е резултатът без условието в края.',
+    },
+  ]}
+/>
+
+## Generator expressions: отложеното изпълнение
+
+<Compare>
+
+```csharp title="C#"
+var totals = orders
+    .Where(o => o.Paid)
+    .Select(o => o.Total);
+// nothing has run yet
+
+var revenue = totals.Sum();  // 410
+```
+
+```python title="Python"
+totals = (
+    o.total
+    for o in orders
+    if o.paid
+)
+# nothing has run yet
+
+revenue = sum(totals)  # 410.0
+```
+
+</Compare>
+
+Същият запис в кръгли скоби е **generator expression**. Той не създава списък. Връща обект, който смята елементите един по един, когато някой ги поиска: LINQ заявка без `ToList()`.
+
+Най-често ще го подаваш направо на функция, която изчерпва елементите. Тогава вторият чифт скоби отпада:
+
+```python
+revenue = sum(o.total for o in orders if o.paid)
+```
+
+Междинен списък не се създава, а това има значение при милион реда или при голям файл.
+
+Тук е и разликата, в която се спъват хората, дошли от LINQ. Заявката в C# е `IEnumerable` и се изпълнява отново при всяко обхождане. Generator се изчерпва след първото:
+
+```python
+totals = (o.total for o in orders if o.paid)
+
+print(sum(totals))   # 410.0
+print(sum(totals))   # 0
+```
+
+Вторият ред не дава грешка, а нула. Generator прилича повече на `IEnumerator`: върви само напред и не се връща в началото. По същата причина няма дължина и индекси, и `len(totals)` хвърля `TypeError`.
+
+Изборът между двата вида скоби е прост:
+
+- **`[...]`**, когато резултатът ти трябва повече от веднъж, или ти трябват `len()` и индекси.
+- **`(...)`**, когато резултатът отива веднага в `sum`, `max`, `sorted`, `join` или в един `for`.
+
+Как се пишат собствени generators с `yield`, е темата на следващия урок.
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+squares = (n * n for n in [1, 2, 3])
+
+print(list(squares))
+print(list(squares))
+```
+
+<Question
+  id="generators"
+  choices={[
+    {
+      text: '[1, 4, 9] и после пак [1, 4, 9]',
+      explain: 'Така се държи IEnumerable в C#, който изпълнява заявката отново. Generator се обхожда само веднъж.',
+    },
+    {
+      text: '[1, 4, 9] и после []',
+      explain: 'Първият list() изчерпва generator-а. За втория не остава нищо и това не е грешка.',
+      correct: true,
+    },
+    {
+      text: '[1, 4, 9] и после грешка',
+      explain: 'Изчерпан generator не хвърля грешка. Той не дава повече елементи.',
+    },
+  ]}
+/>
+
+## Агрегати: `sum`, `any`, `max` и параметърът `key`
+
+<Compare>
+
+```csharp title="C#"
+var revenue = orders
+    .Sum(o => o.Total);
+
+var hasDebt = orders
+    .Any(o => !o.Paid);
+
+var biggest = orders
+    .MaxBy(o => o.Total);
+```
+
+```python title="Python"
+revenue = sum(
+    o.total for o in orders
+)
+
+has_debt = any(
+    not o.paid for o in orders
+)
+
+biggest = max(
+    orders, key=lambda o: o.total
+)
+```
+
+</Compare>
+
+В LINQ всеки агрегат е метод, който приема lambda. В Python агрегатите са обикновени функции, които приемат нещо за обхождане. Проекцията и филтърът влизат в generator expression-а, който им подаваш, така че моделът е един: `функция(израз for x in xs if условие)`.
+
+`max`, `min` и `sorted` имат и параметър `key`. Той е функция, която се вика за всеки елемент, а резултатът ѝ се използва за сравнението. `lambda o: o.total` е `o => o.Total`: един израз, без `return`. Когато логиката не се събира в един израз, пишеш обикновена функция с `def` и подаваш името ѝ без скоби: `key=order_weight`.
+
+Внимавай какво връща `max`. `max(orders, key=lambda o: o.total)` връща **поръчката**, както `MaxBy`. `max(o.total for o in orders)` връща **числото**, както `Max`.
+
+Ето превода на методите, които ще ти трябват най-често:
+
+| LINQ | Python |
+| --- | --- |
+| `xs.Count()` | `len(xs)` |
+| `xs.Count(x => x.Paid)` | `sum(1 for x in xs if x.paid)` |
+| `xs.Sum(x => x.Total)` | `sum(x.total for x in xs)` |
+| `xs.Average(x => x.Total)` | `mean(x.total for x in xs)` |
+| `xs.Min()`, `xs.Max()` | `min(xs)`, `max(xs)` |
+| `xs.MinBy(x => x.Total)` | `min(xs, key=lambda x: x.total)` |
+| `xs.Any(x => x.Paid)` | `any(x.paid for x in xs)` |
+| `xs.All(x => x.Paid)` | `all(x.paid for x in xs)` |
+| `xs.Any()` | `if xs:` |
+| `xs.Contains(value)` | `value in xs` |
+| `xs.First(x => x.Paid)` | `next(x for x in xs if x.paid)` |
+| `xs.FirstOrDefault(x => x.Paid)` | `next((x for x in xs if x.paid), None)` |
+| `xs.Take(3)`, `xs.Skip(3)` | `xs[:3]`, `xs[3:]` |
+| `xs.Concat(ys)` | `xs + ys` |
+| `xs.Distinct()` | `set(xs)`, а със запазен ред `list(dict.fromkeys(xs))` |
+| `string.Join(", ", xs)` | `", ".join(xs)` |
+
+Няколко бележки към таблицата:
+
+- **`mean`** идва от стандартната библиотека: `from statistics import mean`.
+- **`next(...)`** взима първия елемент на generator. Вторият аргумент е стойността, когато няма нито един. Без него празният резултат хвърля `StopIteration`, както `First()` хвърля `InvalidOperationException`.
+- **`max` и `min` от празна колекция** хвърлят `ValueError`. `max(xs, default=0)` връща стойност вместо това.
+- **`join`** е метод на разделителя, а не на списъка, и приема само низове. За числа: `", ".join(str(n) for n in numbers)`.
+- **`if xs:`, `len(xs)` и `xs[:3]`** работят за `list`. Generator няма дължина и индекси, затова първо го превърни с `list(...)`.
+
+**Провери се.** Какво връща този израз за данните от началото на урока?
+
+```python
+max(orders, key=lambda o: o.total).customer
+```
+
+<Question
+  id="aggregates"
+  choices={[
+    {
+      text: "'Vera'",
+      explain: 'max с key връща самата поръчка с най-голям total, тази на Vera за 210. От нея се чете customer.',
+      correct: true,
+    },
+    {
+      text: '210.0',
+      explain: 'Числото връща max(o.total for o in orders). С key резултатът е елементът, а не ключът му.',
+    },
+    {
+      text: 'Грешка, защото числото 210.0 няма customer.',
+      explain: 'max с key не връща число. Връща елемента от orders, за който key е най-голям.',
+    },
+  ]}
+/>
+
+## Подреждане и групиране
+
+<Compare>
+
+```csharp title="C#"
+var ranked = orders
+    .OrderByDescending(o => o.Total)
+    .ToList();
+```
+
+```python title="Python"
+ranked = sorted(
+    orders,
+    key=lambda o: o.total,
+    reverse=True,
+)
+```
+
+</Compare>
+
+`sorted` приема каквото и да е за обхождане и връща нов, подреден `list`. Оригиналът остава непипнат. Редът се задава със същия `key` като при `max`, а `reverse=True` го обръща.
+
+Списъците имат и метод `sort()`. Той подрежда на място, както `List<T>.Sort()`, и връща `None`. Оттам идва една позната грешка: `orders = orders.sort()` оставя в `orders` стойността `None`.
+
+За `ThenBy` ключът става tuple. Tuples се сравняват елемент по елемент, така че първото поле води, а второто решава при равенство:
+
+```python
+ranked = sorted(orders, key=lambda o: (o.customer, -o.total))
+# Ana 120.0, Ana 80.0, Boris 35.5, Vera 210.0
+```
+
+Минусът пред числото обръща посоката само за него: клиентите са по азбучен ред, а поръчките на всеки са от най-голямата към най-малката. За текст минус няма. Тогава подреждаш два пъти, първо по второстепенния ключ, защото `sorted` пази реда на равните елементи.
+
+### Групиране
+
+Готов `GroupBy` няма. Групите се събират в `dict`, в който ключът е това, по което групираш, а стойността е списък. `defaultdict` от модула `collections` спестява проверката дали ключът вече съществува:
+
+```python
+from collections import defaultdict
+
+groups = defaultdict(list)
+
+for o in orders:
+    groups[o.customer].append(o)
+
+spent = {
+    customer: sum(o.total for o in group)
+    for customer, group in groups.items()
+}
+# {'Ana': 200.0, 'Boris': 35.5, 'Vera': 210.0}
+```
+
+`defaultdict(list)` е `dict`, който при липсващ ключ сам създава стойността, като вика подадената функция. `list()` връща празен списък, така че `append` работи още първия път. С `defaultdict(float)` липсващият ключ започва от `0.0`, което стига за суми.
+
+За самото броене има и по-кратък път:
+
+```python
+from collections import Counter
+
+counts = Counter(o.customer for o in orders)
+
+print(counts["Ana"])           # 2
+print(counts.most_common(1))   # [('Ana', 2)]
+```
+
+:::caution[itertools.groupby не е GroupBy]
+В стандартната библиотека има функция `itertools.groupby`, но тя групира само **съседни** елементи. Ако данните не са подредени по същия ключ, получаваш по няколко групи за една стойност. За `GroupBy` от LINQ ползвай `dict`.
+:::
+
+**Провери се.** Какво отпечатва този код?
+
+```python
+scores = [30, 10, 20]
+result = scores.sort()
+
+print(result)
+```
+
+<Question
+  id="sorting"
+  choices={[
+    {
+      text: '[10, 20, 30]',
+      explain: 'Подреден е самият scores. Методът sort() не връща списъка. Нов подреден list дава sorted(scores).',
+    },
+    {
+      text: 'None',
+      explain: 'sort() подрежда списъка на място и връща None. Резултатът е в scores, а не в result.',
+      correct: true,
+    },
+    {
+      text: '[30, 10, 20]',
+      explain: 'sort() променя списъка, така че scores вече е [10, 20, 30]. В result обаче попада това, което методът връща.',
+    },
+  ]}
+/>
+
+## Твой ред
+
+Три задачи. Всяка се решава с няколко реда, ако ползваш comprehensions и функциите от урока. Напиши кода в екрана под условието, на мястото на `# TODO`, и натисни **Пусни**. Проверката вика функцията с примера и с още данни. Решението е скрито под екрана.
+
+### Чисти имейли
+
+От формуляр за записване идват имейли, въведени на ръка: с интервали, с главни букви и по няколко пъти.
+
+```python title="emails.py"
+raw = [
+    "  Ana@Mail.com ",
+    "boris@mail.com",
+    "",
+    "VERA@mail.com",
+    "ana@mail.com",
+    "   ",
+]
+```
+
+Напиши функция `clean_emails(raw: list[str]) -> list[str]`, която:
+
+1. маха интервалите в двата края на всеки ред и прави буквите малки;
+2. пропуска редовете, в които не остава нищо;
+3. маха повторенията;
+4. връща имейлите като `list`, подреден по азбучен ред.
+
+После ги отпечатай на един ред, разделени със запетая и интервал. Очакваният изход е:
+
+```text
+ana@mail.com, boris@mail.com, vera@mail.com
+```
+
+Няколко подсказки:
+
+- `" Ana ".strip()` е `"Ana"`, а `"Ana".lower()` е `"ana"`. Ред само от интервали става празен низ след `strip()`, а празният низ е falsy.
+- Set comprehension маха повторенията, но няма ред. `sorted()` приема `set` и връща подреден `list`.
+- `", ".join(emails)` слепва списъка в един низ.
+
+<Try
+  file="emails.py"
+  starter={`
+|raw = [
+|    "  Ana@Mail.com ",
+|    "boris@mail.com",
+|    "",
+|    "VERA@mail.com",
+|    "ana@mail.com",
+|    "   ",
+|]
+|
+|def clean_emails(raw: list[str]) -> list[str]:
+|    # TODO
+|    return []
+|
+|
+|emails = clean_emails(raw)
+|# TODO
+`}
+  check={`
+|_eq(
+|    clean_emails(["  Ana@Mail.com ", "boris@mail.com", "", "VERA@mail.com", "ana@mail.com", "   "]),
+|    ["ana@mail.com", "boris@mail.com", "vera@mail.com"],
+|    "Примерът от задачата.",
+|)
+|_eq(
+|    clean_emails(["b@x.io", " A@x.io", "a@x.io ", " ", "C@x.io"]),
+|    ["a@x.io", "b@x.io", "c@x.io"],
+|    "Втори пример.",
+|)
+|_eq(clean_emails([]), [], "Празен списък.")
+|_out("ana@mail.com, boris@mail.com, vera@mail.com", "Отпечатаният текст.")
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="emails.py"
+def clean_emails(raw: list[str]) -> list[str]:
+    cleaned = {line.strip().lower() for line in raw if line.strip()}
+    return sorted(cleaned)
+
+
+raw = [
+    "  Ana@Mail.com ",
+    "boris@mail.com",
+    "",
+    "VERA@mail.com",
+    "ana@mail.com",
+    "   ",
+]
+
+emails = clean_emails(raw)
+print(", ".join(emails))
+```
+
+Един set comprehension свърши работата на `Select`, `Where` и `Distinct`. `sorted` е `OrderBy` и `ToList` накуп.
+
+</details>
+
+---
+
+### Средни оценки
+
+Имаш оценките на няколко ученици. Някои още нямат нито една.
+
+```python title="grades.py"
+grades = {
+    "Ana": [6, 5, 6],
+    "Boris": [4, 3],
+    "Vera": [],
+    "Dimo": [5, 6],
+}
+```
+
+Напиши функция `averages(grades: dict[str, list[int]]) -> dict[str, float]`, която:
+
+1. връща нов `dict` със средната оценка на всеки ученик;
+2. пропуска учениците без оценки.
+
+После намери ученика с най-висока средна оценка и го отпечатай с оценката до две цифри след десетичната точка. Очакваният изход е:
+
+```text
+Ana: 5.67
+```
+
+Няколко подсказки:
+
+- Средната оценка е `sum(marks) / len(marks)`. Празният списък е falsy, така че `if marks` го пропуска и пази от деление на нула.
+- `grades.items()` дава двойките име и оценки. Можеш да ги разопаковаш направо във `for`-а.
+- `max(result.items(), key=...)` връща цялата двойка. Оценката е вторият ѝ елемент, `pair[1]`.
+
+<Try
+  file="grades.py"
+  starter={`
+|grades = {
+|    "Ana": [6, 5, 6],
+|    "Boris": [4, 3],
+|    "Vera": [],
+|    "Dimo": [5, 6],
+|}
+|
+|def averages(grades: dict[str, list[int]]) -> dict[str, float]:
+|    # TODO
+|    return {}
+|
+|
+|result = averages(grades)
+|# TODO
+`}
+  check={`
+|def rounded(result):
+|    _eq(isinstance(result, dict), True, "averages трябва да върне dict.")
+|    return {name: round(value, 2) for name, value in result.items()}
+|
+|_eq(
+|    rounded(averages({"Ana": [6, 5, 6], "Boris": [4, 3], "Vera": [], "Dimo": [5, 6]})),
+|    {"Ana": 5.67, "Boris": 3.5, "Dimo": 5.5},
+|    "Примерът от задачата.",
+|)
+|_eq(
+|    rounded(averages({"x": [10], "y": [], "z": [1, 2]})),
+|    {"x": 10.0, "z": 1.5},
+|    "Втори пример.",
+|)
+|_eq(averages({}), {}, "Празен dict.")
+|
+|source = {"a": [2, 4]}
+|averages(source)
+|_eq(source, {"a": [2, 4]}, "Подаденият dict трябва да остане непроменен.")
+|_out("Ana: 5.67", "Отпечатаният текст.")
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="grades.py"
+def averages(grades: dict[str, list[int]]) -> dict[str, float]:
+    return {
+        name: sum(marks) / len(marks)
+        for name, marks in grades.items()
+        if marks
+    }
+
+
+grades = {
+    "Ana": [6, 5, 6],
+    "Boris": [4, 3],
+    "Vera": [],
+    "Dimo": [5, 6],
+}
+
+result = averages(grades)
+name, average = max(result.items(), key=lambda pair: pair[1])
+
+print(f"{name}: {average:.2f}")
+```
+
+Dict comprehension-ът смята и филтрира наведнъж. `max` с `key` връща цялата двойка, затова тя се разопакова в две имена.
+
+</details>
+
+---
+
+### Продажби по град
+
+Всеки ред е град и сумата на една продажба.
+
+```python title="sales.py"
+sales = [
+    ("Sofia", 120.0),
+    ("Plovdiv", 80.0),
+    ("Sofia", 45.5),
+    ("Varna", 150.0),
+    ("Plovdiv", 30.0),
+    ("Burgas", 60.0),
+]
+```
+
+Напиши функция `top_cities(sales, count)`, която:
+
+1. събира продажбите за всеки град;
+2. подрежда градовете от най-големия оборот към най-малкия;
+3. връща първите `count` като `list` от двойки `(град, оборот)`.
+
+После отпечатай двата най-силни града, всеки на отделен ред. Очакваният изход е:
+
+```text
+Sofia: 165.50
+Varna: 150.00
+```
+
+Няколко подсказки:
+
+- `defaultdict(float)` започва всеки нов град от `0.0`, така че `totals[city] += amount` работи още първия път.
+- `totals.items()` дава двойките град и оборот. `sorted` с `key=lambda pair: pair[1]` и `reverse=True` ги подрежда по оборота.
+- Първите `count` елемента на един `list` са `ranked[:count]`.
+
+<Try
+  file="sales.py"
+  starter={`
+|sales = [
+|    ("Sofia", 120.0),
+|    ("Plovdiv", 80.0),
+|    ("Sofia", 45.5),
+|    ("Varna", 150.0),
+|    ("Plovdiv", 30.0),
+|    ("Burgas", 60.0),
+|]
+|
+|def top_cities(
+|    sales: list[tuple[str, float]],
+|    count: int,
+|) -> list[tuple[str, float]]:
+|    # TODO
+|    return []
+|
+|
+|best = top_cities(sales, 2)
+|# TODO
+`}
+  check={`
+|def pairs(result):
+|    _eq(isinstance(result, list), True, "top_cities трябва да върне list.")
+|    return [(city, round(total, 2)) for city, total in result]
+|
+|sample = [
+|    ("Sofia", 120.0),
+|    ("Plovdiv", 80.0),
+|    ("Sofia", 45.5),
+|    ("Varna", 150.0),
+|    ("Plovdiv", 30.0),
+|    ("Burgas", 60.0),
+|]
+|_eq(pairs(top_cities(sample, 2)), [("Sofia", 165.5), ("Varna", 150.0)], "Примерът от задачата.")
+|_eq(
+|    pairs(top_cities(sample, 10)),
+|    [("Sofia", 165.5), ("Varna", 150.0), ("Plovdiv", 110.0), ("Burgas", 60.0)],
+|    "count е по-голям от броя на градовете.",
+|)
+|_eq(
+|    pairs(top_cities([("A", 1.0), ("B", 5.0), ("A", 2.5), ("C", 3.0)], 3)),
+|    [("B", 5.0), ("A", 3.5), ("C", 3.0)],
+|    "Втори пример.",
+|)
+|_eq(top_cities([], 3), [], "Празен списък.")
+|_out(
+|    """Sofia: 165.50
+|Varna: 150.00""",
+|    "Отпечатаният текст.",
+|)
+`}
+/>
+
+<details>
+<summary>Виж решението</summary>
+
+```python title="sales.py"
+from collections import defaultdict
+
+
+def top_cities(
+    sales: list[tuple[str, float]],
+    count: int,
+) -> list[tuple[str, float]]:
+    totals: defaultdict[str, float] = defaultdict(float)
+
+    for city, amount in sales:
+        totals[city] += amount
+
+    ranked = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+    return ranked[:count]
+
+
+sales = [
+    ("Sofia", 120.0),
+    ("Plovdiv", 80.0),
+    ("Sofia", 45.5),
+    ("Varna", 150.0),
+    ("Plovdiv", 30.0),
+    ("Burgas", 60.0),
+]
+
+for city, total in top_cities(sales, 2):
+    print(f"{city}: {total:.2f}")
+```
+
+Това е `GroupBy`, `OrderByDescending` и `Take` от LINQ. Групирането е цикъл с `dict`, а подреждането и отрязването са по един израз.
+
+</details>
+
+## Обобщение
+
+- `[израз for x in xs if условие]` е `Select`, `Where` и `ToList` в едно. `if` с `else` пред `for` избира стойност, а `if` след `for` филтрира.
+- Къдравите скоби дават `dict` или `set`. При повтарящ се ключ остава последната стойност, без грешка.
+- Няколко `for`-а в един comprehension са `SelectMany`. `zip` и `enumerate` дават двойки и индекси.
+- Кръглите скоби дават **generator expression**: отложено изпълнение, но само за едно обхождане.
+- `sum`, `any`, `all`, `min` и `max` приемат generator expression, а `key` казва по какво да се сравнява.
+- `sorted()` връща нов списък, а `sort()` подрежда на място и връща `None`. Групирането става с `dict`, `defaultdict` или `Counter`.
+
+Следващият урок е за iterators и generators: какво стои зад `for` и как `yield return` от C# се превръща в `yield`. Той се подготвя в момента.
+
+<LessonProgress summary />

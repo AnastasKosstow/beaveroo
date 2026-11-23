@@ -31,6 +31,8 @@ interface DoneMessage {
 	id: string;
 	phase: 'ready' | 'done';
 	ok?: boolean;
+	/** Which program failed: the reader's code, or the hidden check that runs after it. */
+	stage?: 'run' | 'check';
 	stdout?: string;
 	error?: string;
 }
@@ -48,20 +50,46 @@ function killWorker(): void {
 	worker = null;
 }
 
-function shorten(error: string): string {
-	const lines = error.split('\n');
-	const start = lines.findIndex((line) => line.includes('File "'));
-	const sliced = start === -1 ? lines : lines.slice(start);
-	return sliced.slice(-12).join('\n').trim();
+const TRACEBACK = 'Traceback (most recent call last):';
+
+/**
+ * Keeps the part of a Python traceback that is about the reader's file: its frames and the error itself.
+ * The frames of the runtime and of the hidden check are dropped.
+ */
+function trimTraceback(error: string, file: string): string {
+	const at = error.lastIndexOf(TRACEBACK);
+	if (at === -1) return error.trim();
+
+	const before = error
+		.slice(0, at)
+		.replace(/PythonError:\s*$/, '')
+		.trim();
+	const kept: string[] = [];
+	let inFrames = true;
+	let keep = false;
+
+	for (const line of error.slice(at + TRACEBACK.length).split('\n')) {
+		if (inFrames) {
+			const frame = /^\s+File "([^"]*)", line \d+/.exec(line);
+			if (frame) keep = frame[1] === file;
+			else if (line.trim() && !/^\s/.test(line)) inFrames = false;
+		}
+		// The error itself starts at the first line that is not indented. Everything after it is kept.
+		if (!inFrames) kept.push(line);
+		else if (keep) kept.push(line.replace(/^ {2}/, ''));
+	}
+
+	return [before, kept.join('\n').trim()].filter(Boolean).join('\n\n');
 }
 
-function classify(stdout: string, error: string): Result {
+function classify(stdout: string, error: string, stage: DoneMessage['stage'], file: string): Result {
+	if (stage !== 'check') return { ok: false, kind: 'error', stdout, message: trimTraceback(error, file) };
+
+	// The reader's code ran. An assertion carries the check's own message; any other error is shown as it is.
 	const marker = 'AssertionError:';
 	const at = error.lastIndexOf(marker);
-	if (at !== -1) {
-		return { ok: false, kind: 'wrong', stdout, message: error.slice(at + marker.length).trim() };
-	}
-	return { ok: false, kind: 'error', stdout, message: shorten(error) };
+	const message = at === -1 ? trimTraceback(error, file) : error.slice(at + marker.length).trim();
+	return { ok: false, kind: 'wrong', stdout, message };
 }
 
 function execute(code: string, check: string, file: string, labels: Labels, onReady: () => void): Promise<Result> {
@@ -103,7 +131,7 @@ function execute(code: string, check: string, file: string, labels: Labels, onRe
 			}
 
 			if (data.ok) finish({ ok: true, stdout: data.stdout ?? '' });
-			else finish(classify(data.stdout ?? '', data.error ?? ''));
+			else finish(classify(data.stdout ?? '', data.error ?? '', data.stage, file));
 		};
 
 		current.onerror = () => {

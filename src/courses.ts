@@ -25,7 +25,11 @@ export const courses: Course[] = [
 		title: 'python.title',
 		progress: {
 			planned: 9,
-			lessons: ['python-for-dotnet/unit-1/types-and-data'],
+			lessons: [
+				'python-for-dotnet/unit-1/types-and-data',
+				'python-for-dotnet/unit-2/classes-and-protocols',
+				'python-for-dotnet/unit-3/linq-to-comprehensions',
+			],
 		},
 	},
 ];

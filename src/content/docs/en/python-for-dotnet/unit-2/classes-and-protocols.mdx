@@ -1,0 +1,1019 @@
+---
+title: Classes and protocols
+description: The second lesson of Python for .NET Developers - class, __init__ and self, properties, class attributes, special methods, a dataclass in place of a record, inheritance, and Protocol in place of interfaces, compared with C#.
+---
+
+import Compare from '../../../../../components/Compare.astro';
+import LessonProgress from '../../../../../components/LessonProgress.astro';
+import Question from '../../../../../components/Question.astro';
+import Try from '../../../../../components/Try.astro';
+
+<LessonProgress number={2} of={9} minutes={55} topics={7} />
+
+In C# almost all code lives in classes. In Python the first lesson got by without a single one: functions and the built-in collections were enough. You write a class when some data and the code that works with it have to travel together.
+
+The syntax will look familiar from the first line. The rules underneath it are different: fields are not declared, there is no `private`, and an interface is optional.
+
+There are seven topics. Each one starts with C# code and the same code in Python, and ends with one question. Three tasks are waiting at the end.
+
+## A class, `__init__` and `self`
+
+<Compare>
+
+```csharp title="C#"
+class Playlist
+{
+    public string Name;
+    public List<string> Tracks = [];
+
+    public Playlist(string name)
+    {
+        Name = name;
+    }
+
+    public void Add(string track)
+    {
+        Tracks.Add(track);
+    }
+}
+
+var mix = new Playlist("Road trip");
+mix.Add("Intro");
+```
+
+```python title="Python"
+class Playlist:
+    def __init__(self, name):
+        self.name = name
+        self.tracks = []
+
+    def add(self, track):
+        self.tracks.append(track)
+
+
+mix = Playlist("Road trip")
+mix.add("Intro")
+```
+
+</Compare>
+
+There are four differences:
+
+- **There is no `new`.** You create an object by calling the class like a function: `Playlist("Road trip")`.
+- **`__init__` does the constructor's job.** Python calls it on its own, as soon as it has created the object. Names with two underscores on each side are reserved for methods the language calls for you. You will meet a few more in this lesson.
+- **`self` is `this`, but you write it out.** It is the first parameter of every method, and it is the only way to reach the object's data: `self.tracks`. Without `self.` the name is a local variable, and it is gone when the method ends.
+- **Fields are not declared.** An attribute appears when you assign to it, usually in `__init__`. There is no list of fields at the top of the class.
+
+When you call `mix.add("Intro")`, Python passes `mix` in place of `self`. The call is short for `Playlist.add(mix, "Intro")`. This is where the most common mistake of the first days comes from: leave `self` out of the definition, and the method receives one argument more than it expects.
+
+Because attributes are created by assignment, nothing stops that from happening outside the class too. `mix.owner = "Ana"` works. So does a typo: `mix.trakcs = []` creates a new attribute and leaves the real one untouched. So create every attribute in `__init__`. Their list is then in one place, and a type checker catches an assignment to a name that is not there.
+
+**Check yourself.** What happens when you run this code?
+
+```python
+class Greeter:
+    def hello():
+        return "hi"
+
+print(Greeter().hello())
+```
+
+<Question
+  id="self"
+  choices={[
+    {
+      text: 'It prints hi.',
+      explain: 'Python passes the object as the first argument of every method. Here there is no parameter to receive it.',
+    },
+    {
+      text: 'The program stops with a TypeError.',
+      explain: 'The message is "Greeter.hello() takes 0 positional arguments but 1 was given". The one argument is the object itself, and the definition has no self.',
+      correct: true,
+    },
+    {
+      text: 'Python refuses to define a method without self.',
+      explain: 'The definition goes through. self is an ordinary parameter with a conventional name, and nobody checks for it until you call the method.',
+    },
+  ]}
+/>
+
+## No `private`: the underscore and `@property`
+
+<Compare>
+
+```csharp title="C#"
+class Account
+{
+    private int balance;
+
+    public int Balance => balance;
+
+    public void Deposit(int amount)
+    {
+        balance += amount;
+    }
+}
+```
+
+```python title="Python"
+class Account:
+    def __init__(self):
+        self._balance = 0
+
+    @property
+    def balance(self):
+        return self._balance
+
+    def deposit(self, amount):
+        self._balance += amount
+```
+
+</Compare>
+
+Python has no `public`, `private`, `protected` or `internal`. Every attribute and every method can be reached from outside.
+
+In place of `private` there is a convention: a name that starts with an underscore is internal to the class. `_balance` tells everyone who reads the code not to touch it from outside. Python does not enforce it, and `account._balance = -500` goes through without an error. Your colleagues enforce it, and so does a type checker if you turn that check on.
+
+You will also meet names with two leading underscores, such as `__balance`. Python renames them internally to `_Account__balance`, so they do not clash with the same name in a subclass. That is still not `private`, and you rarely need it.
+
+`@property` turns a method into a property. `account.balance` is read without parentheses, and `account.balance = 5` raises an `AttributeError`, because the property has no setter. The line with `@` above the method is called a **decorator**: a function that receives the method and replaces it with something else. It looks like a C# attribute, but an attribute only describes the method, while a decorator changes it.
+
+When the property has to be writable too, you add a setter with the same name:
+
+```python
+class Product:
+    def __init__(self, price):
+        self.price = price    # runs the setter below
+
+    @property
+    def price(self):
+        return self._price
+
+    @price.setter
+    def price(self, value):
+        if value < 0:
+            raise ValueError("price cannot be negative")
+        self._price = value
+```
+
+`raise` is `throw`. The assignment in `__init__` goes through the setter as well, so `Product(-1)` raises the error too.
+
+In C# you write `{ get; set; }` from day one, because a field that becomes a property later breaks the already compiled code that uses it. In Python that reason does not exist. A plain attribute and a property are read and written the same way, `product.price`. So start with an attribute, and turn it into a property on the day you need a check. The code that uses it does not change.
+
+**Check yourself.** What does this code print?
+
+```python
+class Account:
+    def __init__(self):
+        self._balance = 0
+
+account = Account()
+account._balance = -500
+print(account._balance)
+```
+
+<Question
+  id="private"
+  choices={[
+    {
+      text: '-500',
+      explain: 'The underscore is a convention between programmers. Python runs the assignment like any other.',
+      correct: true,
+    },
+    {
+      text: 'An AttributeError, because _balance is private.',
+      explain: 'Python has no private. The underscore says "do not touch", but it does not enforce it.',
+    },
+    {
+      text: '0, because an assignment from outside is ignored.',
+      explain: 'Python does not ignore assignments. The attribute gets the new value.',
+    },
+  ]}
+/>
+
+## Class attributes: `static` in Python
+
+<Compare>
+
+```csharp title="C#"
+class Ticket
+{
+    public static int Issued;
+
+    public int Number;
+
+    public Ticket()
+    {
+        Issued++;
+        Number = Issued;
+    }
+}
+```
+
+```python title="Python"
+class Ticket:
+    issued = 0
+
+    def __init__(self):
+        Ticket.issued += 1
+        self.number = Ticket.issued
+```
+
+</Compare>
+
+A name you assign to directly in the class body belongs to the class itself. There is one value and every object sees it, which makes it `static`. You reach it through the class name: `Ticket.issued`.
+
+This is where the habit from C# misleads you. A line at the top of the class looks like a field declaration, but in Python it creates a shared attribute:
+
+```python
+class Playlist:
+    tracks = []    # one list, shared by every playlist
+
+    def add(self, track):
+        self.tracks.append(track)
+
+
+rock = Playlist()
+jazz = Playlist()
+rock.add("Thunderstruck")
+
+print(jazz.tracks)   # ['Thunderstruck']
+```
+
+`self.tracks` looks for the attribute in the object first. The object has none, so Python takes the one on the class, and that one is the same for `rock` and for `jazz`. You saw the same sharing with default values in the first lesson, and the cure is the same: create the list in `__init__`, with `self.tracks = []`.
+
+Reading through `self` reaches the class attribute, but assigning through `self` creates a new attribute on the object. That is why the counter in the example is increased with `Ticket.issued += 1`. `self.issued += 1` would have left the shared counter at zero.
+
+### Static methods and a second constructor
+
+A method that does not use the object is, in Python, most often a plain function in the file. You do not need a `static class Helpers` to give it a home. If you still want it inside the class, put `@staticmethod` on it and write it without `self`.
+
+There are no overloads. A second `__init__` in the same class replaces the first. When an object can be created in several ways, you have two options. One is a parameter with a default value, as in C#: `def __init__(self, name, public=False)`. The other is a `@classmethod`:
+
+```python
+from typing import Self
+
+class Playlist:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.tracks: list[str] = []
+
+    @classmethod
+    def from_text(cls, text: str) -> Self:
+        parts = text.split(";")
+        playlist = cls(parts[0])
+        playlist.tracks = parts[1:]
+        return playlist
+
+
+mix = Playlist.from_text("Road trip;Intro;Highway")
+print(mix.tracks)   # ['Intro', 'Highway']
+```
+
+A class method receives the class itself as its first parameter, which by convention is called `cls`. `cls(...)` creates an object exactly as `Playlist(...)` does. This is the static factory method from C#, `Playlist.FromText(...)`. `Self` in the annotation means "an object of this class".
+
+**Check yourself.** What does this code print?
+
+```python
+class Basket:
+    items = []
+
+first = Basket()
+second = Basket()
+first.items.append("tea")
+
+print(len(second.items))
+```
+
+<Question
+  id="class-attributes"
+  choices={[
+    {
+      text: '0',
+      explain: 'That is what you would get if the list were created in __init__. Here items is a class attribute, one for all baskets.',
+    },
+    {
+      text: '1',
+      explain: 'first.items and second.items reach one and the same list, the one on the Basket class.',
+      correct: true,
+    },
+    {
+      text: 'An AttributeError, because second has no items.',
+      explain: 'The object has no items of its own, but Python goes on to look in the class and finds it there.',
+    },
+  ]}
+/>
+
+## Special methods: `__repr__` and `__eq__`
+
+<Compare>
+
+```csharp title="C#"
+class Point(int x, int y)
+{
+    public override string ToString()
+    {
+        return $"({x}, {y})";
+    }
+}
+
+var start = new Point(2, 5);
+Console.WriteLine(start);  // (2, 5)
+```
+
+```python title="Python"
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return f"({self.x}, {self.y})"
+
+
+start = Point(2, 5)
+print(start)  # (2, 5)
+```
+
+</Compare>
+
+`__init__` is not the only method Python calls on its own. `print(start)` looks for `__repr__`, `a == b` looks for `__eq__`, and `len(x)` looks for `__len__`. These are the **special methods**. In C# their place is taken by `override`, operators, and interfaces such as `IComparable`.
+
+| You write | Python calls | In C# |
+| --- | --- | --- |
+| `print(p)`, `str(p)`, an f-string | `__str__`, or `__repr__` if there is none | `ToString()` |
+| `a == b` | `__eq__` | `Equals`, `operator ==` |
+| `a < b`, `sorted(items)` | `__lt__` | `IComparable<T>` |
+| `a + b` | `__add__` | `operator +` |
+| `len(x)` | `__len__` | `Count` |
+| `item in x` | `__contains__` | `Contains` |
+| `x[key]` | `__getitem__` | an indexer |
+
+Without `__repr__` an object prints as `<__main__.Point object at 0x7f3a2c1b4d10>`. That makes it the first special method worth writing: it shows up in the console, in the debugger, and when you print a `list` of such objects. You add `__str__` only if you want a separate text for the user.
+
+A class with `__len__` also works in `if cart:` from the first lesson. An object of length zero is falsy.
+
+### Equality
+
+In the first lesson `==` compared the contents of two lists. That is because `list` has an `__eq__`. A class without its own `__eq__` is compared by identity, like a reference type in C#, and `Point(2, 5) == Point(2, 5)` is `False`. To make it compare the values, you add:
+
+```python
+    def __eq__(self, other):
+        if not isinstance(other, Point):
+            return False
+        return (self.x, self.y) == (other.x, other.y)
+```
+
+`isinstance(other, Point)` is `other is Point` from C#. The two tuples are compared by contents, so one line covers all the fields.
+
+There is also the same catch as with `Equals` without `GetHashCode`. A class with its own `__eq__` stops being hashable: its objects cannot be keys in a `dict` or items in a `set` until you write `__hash__` as well.
+
+In C# a `record` saves you this writing. In Python a dataclass does, and it is the next topic.
+
+**Check yourself.** What does this code print?
+
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+print(Point(1, 2) == Point(1, 2))
+```
+
+<Question
+  id="special-methods"
+  choices={[
+    {
+      text: 'True, because == compares contents.',
+      explain: 'That holds for list and dict, because they have __eq__. This class has none.',
+    },
+    {
+      text: 'False',
+      explain: 'Without __eq__ two objects are equal only if they are the same object. Here two were created.',
+      correct: true,
+    },
+    {
+      text: 'A TypeError, because the class has no __eq__.',
+      explain: 'Comparison works for every object. When there is no __eq__, Python compares by identity.',
+    },
+  ]}
+/>
+
+## A dataclass in place of a record
+
+<Compare>
+
+```csharp title="C#"
+record Point(int X, int Y);
+
+var a = new Point(2, 5);
+var b = new Point(2, 5);
+
+Console.WriteLine(a == b);  // True
+Console.WriteLine(a);
+// Point { X = 2, Y = 5 }
+```
+
+```python title="Python"
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+a = Point(2, 5)
+b = Point(2, 5)
+
+print(a == b)  # True
+print(a)       # Point(x=2, y=5)
+```
+
+</Compare>
+
+`@dataclass` reads the annotated names in the class body and writes `__init__`, `__repr__` and `__eq__` from them, the three methods from the previous topics. Here the lines at the top of the class really are fields, because the decorator turns them into constructor parameters.
+
+The annotation is required: a name without a type does not become a field. The types themselves are still not checked while the program runs, and `Point("a", None)` creates an object without complaint.
+
+In every other way this is an ordinary class, and you can give it methods and properties. Here is what you will use most often:
+
+```python
+from dataclasses import dataclass, field, replace
+
+@dataclass
+class Playlist:
+    name: str
+    tracks: list[str] = field(default_factory=list)
+    public: bool = False
+
+
+@dataclass(frozen=True)
+class Point:
+    x: int
+    y: int
+
+
+start = Point(2, 5)
+start.x = 10                    # FrozenInstanceError
+moved = replace(start, x=10)    # Point(x=10, y=5)
+```
+
+- **A default value** goes after the type: `public: bool = False`. Fields with a default come after the ones without, like optional parameters.
+- **A mutable default value** is given with `field(default_factory=list)`. `default_factory` is a function the dataclass calls for every new object, so every playlist gets its own list. If you write `tracks: list[str] = []`, the dataclass refuses as soon as the class is defined. It is the trap from the first lesson, caught in time for once.
+- **`frozen=True`** makes the object immutable: assigning to a field raises a `FrozenInstanceError`. A frozen dataclass is hashable too, so it can be a key in a `dict`.
+- **`replace(start, x=10)`** returns a copy with one field changed. In C# this is `start with { X = 10 }`.
+- **`order=True`** adds `<`, `>` and the other comparisons. The fields are compared in the order they are written, as with a tuple.
+
+`x=10` is an argument passed by name. You can call the constructor that way too: `Point(x=2, y=5)`, which in C# is `new Point(X: 2, Y: 5)`.
+
+The difference from C# is in what you get without asking for it. A `record` is immutable, and a dataclass is not. When you need a `record`, write `@dataclass(frozen=True)`.
+
+**Check yourself.** What happens with this class?
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Team:
+    name: str
+    members: list[str] = []
+```
+
+<Question
+  id="dataclass"
+  choices={[
+    {
+      text: 'All teams share one and the same list.',
+      explain: 'That is what would happen in an ordinary class or with a function parameter. A dataclass does not get that far, because it stops earlier.',
+    },
+    {
+      text: 'Python raises a ValueError as soon as the class is defined.',
+      explain: 'A dataclass does not accept a mutable default value, and the message itself suggests the fix: default_factory.',
+      correct: true,
+    },
+    {
+      text: 'Every team gets its own empty list.',
+      explain: 'For that you need field(default_factory=list). The literal [] is created only once.',
+    },
+  ]}
+/>
+
+## Inheritance
+
+<Compare>
+
+```csharp title="C#"
+class Parcel(double kg)
+{
+    public double Kg = kg;
+
+    public virtual double Price()
+    {
+        return Kg * 2;
+    }
+}
+
+class Express(double kg, double fee)
+    : Parcel(kg)
+{
+    public override double Price()
+    {
+        return base.Price() + fee;
+    }
+}
+```
+
+```python title="Python"
+class Parcel:
+    def __init__(self, kg):
+        self.kg = kg
+
+    def price(self):
+        return self.kg * 2
+
+
+class Express(Parcel):
+    def __init__(self, kg, fee):
+        super().__init__(kg)
+        self.fee = fee
+
+    def price(self):
+        base = super().price()
+        return base + self.fee
+```
+
+</Compare>
+
+The base class goes in parentheses after the name, and `super()` is `base`. Three rules differ from C#:
+
+- **The base `__init__` is not called for you.** Once the subclass has its own `__init__`, it has to call `super().__init__(...)`. Leave that out and `self.kg` is never created, and the error comes later, from the first method that reads it. A subclass without its own `__init__` uses the one from the base class.
+- **Every method is `virtual`.** A method with the same name in the subclass replaces the base one, with no `virtual` and no `override`. Nobody checks that you really are replacing something, so `def pirce(self)` is a new method, not an error. Since Python 3.12 you can put `@override` from `typing` above the method, and the type checker complains if the base class has no such method.
+- **`abstract` is not a keyword.** An abstract class is made with the `abc` module:
+
+```python
+from abc import ABC, abstractmethod
+
+class Shipment(ABC):
+    @abstractmethod
+    def price(self) -> float: ...
+
+
+Shipment()   # TypeError: Can't instantiate abstract class Shipment
+```
+
+The three dots are valid Python and stand in for an empty body. The word `pass` does the same job. A class that inherits from `Shipment` can be created only once it has its own `price`.
+
+`isinstance(box, Parcel)` is `box is Parcel`, and it is true for subclasses too. Python also allows several base classes at once, `class C(A, B)`, but you will meet that in libraries more often than you will write it.
+
+Inheritance is written less often in Python than in C#. Much of it in C# exists so that one method can accept different objects. Here you do not need a common base class for that, and the last topic shows why.
+
+**Check yourself.** What happens when you run this code?
+
+```python
+class Parcel:
+    def __init__(self, kg):
+        self.kg = kg
+
+class Express(Parcel):
+    def __init__(self, kg, fee):
+        self.fee = fee
+
+box = Express(2, 5)
+print(box.kg)
+```
+
+<Question
+  id="inheritance"
+  choices={[
+    {
+      text: 'It prints 2.',
+      explain: 'That is what you would get if Express.__init__ called super().__init__(kg). Python does not do it for you.',
+    },
+    {
+      text: 'It prints None.',
+      explain: 'An attribute that was never created does not have the value None. It does not exist.',
+    },
+    {
+      text: 'The program stops with an AttributeError.',
+      explain: 'Parcel.__init__ was not called, so self.kg was not created. The error comes when it is read, not when the object is created.',
+      correct: true,
+    },
+  ]}
+/>
+
+## Duck typing and `Protocol`
+
+<Compare>
+
+```csharp title="C#"
+interface INotifier
+{
+    void Send(string text);
+}
+
+class EmailNotifier : INotifier
+{
+    public void Send(string text)
+        => Console.WriteLine(text);
+}
+
+void Alert(INotifier notifier)
+{
+    notifier.Send("Disk is full");
+}
+
+Alert(new EmailNotifier());
+```
+
+```python title="Python"
+class EmailNotifier:
+    def send(self, text):
+        print(text)
+
+
+def alert(notifier):
+    notifier.send("Disk is full")
+
+
+alert(EmailNotifier())
+```
+
+</Compare>
+
+The Python code has no interface, and it works all the same. `alert` does not ask what type `notifier` is. It calls `send`, and if the object has such a method, all is well. This is called **duck typing**, after the saying: if it walks like a duck and quacks like a duck, it is a duck. What matters is what the object can do, not what it inherits from.
+
+You are already using it. `len()` works with anything that has `__len__`, and `for` walks over anything that can be walked over.
+
+The price is that `def alert(notifier)` says nothing, either to the person reading the code or to the editor. A wrong object is found only when the program reaches `send` and raises an `AttributeError`. That is what `Protocol` is for: an interface meant for the type checker.
+
+```python
+from typing import Protocol
+
+class Notifier(Protocol):
+    def send(self, text: str) -> None: ...
+
+
+class EmailNotifier:
+    def send(self, text: str) -> None:
+        print(f"mail: {text}")
+
+
+class SmsNotifier:
+    def send(self, text: str) -> None:
+        print(f"sms: {text}")
+
+
+def alert(notifier: Notifier) -> None:
+    notifier.send("Disk is full")
+
+
+alert(EmailNotifier())
+alert(SmsNotifier())
+```
+
+Neither `EmailNotifier` nor `SmsNotifier` mentions `Notifier`. A class satisfies a protocol when it has the protocol's methods with the same parameters. It does not have to inherit from it, or even know that it exists. In C# the class has to name its interface. If you have written TypeScript, the rule is familiar: interfaces work the same way there.
+
+Two conveniences follow from this. With a protocol you can describe a class that is not yours, from a third-party library for example, without touching it. And in tests the fake `Notifier` is a three-line class with one method, with no mocking library.
+
+The checking is still the type checker's job. While the program runs, `alert(42)` still reaches `send` and still raises an `AttributeError`. The C# habit of asking `obj is INotifier` does not work either: `isinstance(obj, Notifier)` raises a `TypeError`, unless the protocol is marked with `@runtime_checkable`.
+
+A `Protocol` is enough when all you need is "an object with these methods". You choose an abstract class with `ABC` when the subclasses should also get shared code.
+
+**Check yourself.** `Door` does not inherit from `Closer`. What happens with this code?
+
+```python
+from typing import Protocol
+
+class Closer(Protocol):
+    def close(self) -> None: ...
+
+class Door:
+    def close(self) -> None:
+        print("closed")
+
+def shut(thing: Closer) -> None:
+    thing.close()
+
+shut(Door())
+```
+
+<Question
+  id="protocol"
+  choices={[
+    {
+      text: 'The type checker rejects it, because Door is not declared as a Closer.',
+      explain: 'That is how interfaces work in C#. A Protocol looks at the methods of the class, not at its base classes.',
+    },
+    {
+      text: 'The type checker accepts it, and the program prints closed.',
+      explain: 'Door has close with the same signature, and that is enough to satisfy Closer.',
+      correct: true,
+    },
+    {
+      text: 'Python raises a TypeError when shut is called.',
+      explain: 'Python does not check annotations while the program runs. It only calls close, and Door has it.',
+    },
+  ]}
+/>
+
+## Your turn
+
+Three tasks. Each one gathers several topics from the lesson into one or two small classes. Write the code in the panel under the task, in place of `# TODO`, and press **Run**. The check creates objects of your classes and tries them with other data too. The solution is hidden under the panel.
+
+### Cart
+
+Write a class `Cart` for a shopping cart:
+
+1. every cart keeps its lines in a list of its own;
+2. `add(name, price, qty=1)` adds a line;
+3. `total` is a property and returns the sum of price times quantity over all the lines;
+4. `len(cart)` returns the number of lines.
+
+Then print the number of lines and the total. The expected output is:
+
+```text
+2 items, 11.00
+```
+
+A few hints:
+
+- The list is created in `__init__`. Write it in the class body and all the carts will share it.
+- A line can be a tuple: `(name, price, qty)`.
+- `cart.total` is read without parentheses, so it needs `@property`. `len(cart)` calls `__len__`.
+
+<Try
+  file="cart.py"
+  starter={`
+|class Cart:
+|    pass  # TODO
+|
+|
+|cart = Cart()
+|cart.add("pen", 1.50, 2)
+|cart.add("mug", 8.00)
+|# TODO
+`}
+  check={`
+|first = Cart()
+|second = Cart()
+|first.add("pen", 1.5, 2)
+|first.add("mug", 8.0)
+|_eq(len(second), 0, "Every cart must have a list of its own.")
+|_eq(len(first), 2, "len(cart) is the number of lines.")
+|_eq(isinstance(getattr(Cart, "total", None), property), True, "total must be a property, not a method.")
+|_eq(round(first.total, 2), 11.0, "The total of the cart from the task.")
+|_eq(round(second.total, 2), 0, "The total of an empty cart.")
+|
+|third = Cart()
+|third.add("tea", 2.25, 4)
+|third.add("jam", 3.1)
+|_eq(round(third.total, 2), 12.1, "A second sample.")
+|_out("2 items, 11.00", "The printed text.")
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="cart.py"
+class Cart:
+    def __init__(self) -> None:
+        self._lines: list[tuple[str, float, int]] = []
+
+    def add(self, name: str, price: float, qty: int = 1) -> None:
+        self._lines.append((name, price, qty))
+
+    @property
+    def total(self) -> float:
+        total = 0.0
+        for _, price, qty in self._lines:
+            total += price * qty
+        return total
+
+    def __len__(self) -> int:
+        return len(self._lines)
+
+
+cart = Cart()
+cart.add("pen", 1.50, 2)
+cart.add("mug", 8.00)
+
+print(f"{len(cart)} items, {cart.total:.2f}")
+```
+
+The list is created in `__init__`, so every cart has its own. `total` is a property because it is a value you read, not an action. The name `_` in the loop is for a value you do not need, like a discard in C#.
+
+</details>
+
+---
+
+### Versions
+
+Write a dataclass `Version` for a version number such as `3.12.1`:
+
+1. it has three whole numbers: `major`, `minor` and `patch`. The last two are `0` when they are not given;
+2. the object is immutable, and versions are compared with `<` and `>` number by number;
+3. the class method `parse` creates a version from text with three numbers: `Version.parse("3.12.1")`;
+4. `print(version)` prints the three numbers with dots between them.
+
+Then print the installed version, and whether it satisfies the required one. The expected output is:
+
+```text
+3.12.1
+True
+```
+
+A few hints:
+
+- `@dataclass(frozen=True, order=True)` gives you both: an immutable object, and comparisons in the order of the fields.
+- `text.split(".")` returns three strings. Convert them with `int()`. As text, `"9"` is greater than `"12"`, because strings are compared character by character.
+- `print` looks for `__str__`. Without it a dataclass prints `Version(major=3, minor=12, patch=1)`.
+
+<Try
+  file="version.py"
+  starter={`
+|from dataclasses import dataclass
+|
+|# TODO: Version
+|
+|
+|installed = Version.parse("3.12.1")
+|required = Version(3, 12)
+|# TODO
+`}
+  check={`
+|short = Version(3, 12)
+|_eq((short.major, short.minor, short.patch), (3, 12, 0), "minor and patch are 0 when they are not given.")
+|_eq(Version(3, 12, 1) == Version(3, 12, 1), True, "Two versions with the same numbers are equal.")
+|
+|parsed = Version.parse("3.12.1")
+|_eq((parsed.major, parsed.minor, parsed.patch), (3, 12, 1), "parse returns the three numbers as int.")
+|_eq(Version.parse("3.9.0") < Version.parse("3.12.0"), True, "3.9.0 comes before 3.12.0.")
+|_eq(Version(4) > Version(3, 99, 99), True, "major is compared first.")
+|_eq(str(Version(3, 12)), "3.12.0", "str(version) gives the three numbers with dots.")
+|
+|try:
+|    Version(1, 2, 3).major = 9
+|    changed = True
+|except Exception:
+|    changed = False
+|_eq(changed, False, "Version must be immutable.")
+|_out(
+|    """3.12.1
+|True""",
+|    "The printed text.",
+|)
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="version.py"
+from dataclasses import dataclass
+from typing import Self
+
+
+@dataclass(frozen=True, order=True)
+class Version:
+    major: int
+    minor: int = 0
+    patch: int = 0
+
+    @classmethod
+    def parse(cls, text: str) -> Self:
+        major, minor, patch = text.split(".")
+        return cls(int(major), int(minor), int(patch))
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
+
+
+installed = Version.parse("3.12.1")
+required = Version(3, 12)
+
+print(installed)
+print(installed >= required)
+```
+
+The decorator wrote `__init__`, `__eq__` and the comparisons. What was left for you are the two things it has no way of knowing: how a version is read from text, and how it is printed.
+
+</details>
+
+---
+
+### Discounts
+
+A shop applies its discounts one after another. Every discount is an object with a method `apply(amount)` that receives a price and returns the new one.
+
+Write:
+
+1. a protocol `Discount` with the method `apply(self, amount: float) -> float`;
+2. a class `Percent(percent)` that takes the given percentage off the price;
+3. a class `Capped(percent, limit)` that inherits from `Percent` and takes the same percentage off, but no more than `limit`;
+4. a function `final_price(amount, discounts)` that applies the discounts in order and returns the final price.
+
+For 80 with `Percent(25)` and then `Capped(50, 10)`, the price becomes 60 and then 50: half of 60 is 30, but the limit is 10. Print it with two digits after the decimal point. The expected output is:
+
+```text
+50.00
+```
+
+A few hints:
+
+- `Capped.__init__` has to call `super().__init__(percent)`. Otherwise the percentage is not stored.
+- In `Capped.apply`, take the price from `super().apply(amount)`. It must not drop below `amount - self.limit`, and `max(a, b)` gives the greater of two numbers.
+- `final_price` must not ask what class a discount is. The check also passes it a rule of its own, which inherits nothing from your code.
+
+<Try
+  file="discounts.py"
+  starter={`
+|from typing import Protocol
+|
+|# TODO: Discount, Percent, Capped
+|
+|
+|def final_price(amount: float, discounts: list[Discount]) -> float:
+|    # TODO
+|    return amount
+|
+|
+|price = final_price(80, [Percent(25), Capped(50, 10)])
+|# TODO
+`}
+  check={`
+|from typing import is_protocol
+|
+|_eq(is_protocol(Discount), True, "Discount must be a Protocol.")
+|_eq(round(Percent(25).apply(80), 2), 60.0, "Percent(25) on 80.")
+|_eq(isinstance(Capped(50, 10), Percent), True, "Capped must inherit from Percent.")
+|_eq(round(Capped(50, 10).apply(80), 2), 70.0, "Capped(50, 10) on 80: the discount stops at 10.")
+|_eq(round(Capped(10, 50).apply(80), 2), 72.0, "Capped(10, 50) on 80: the limit is not reached.")
+|
+|class Half:
+|    def apply(self, amount):
+|        return amount / 2
+|
+|_eq(round(final_price(80, [Half(), Percent(25)]), 2), 30.0, "final_price must work with any object that has apply.")
+|_eq(round(final_price(80, []), 2), 80, "With no discounts the price stays the same.")
+|_out("50.00", "The printed text.")
+`}
+/>
+
+<details>
+<summary>See the solution</summary>
+
+```python title="discounts.py"
+from typing import Protocol
+
+
+class Discount(Protocol):
+    def apply(self, amount: float) -> float: ...
+
+
+class Percent:
+    def __init__(self, percent: float) -> None:
+        self.percent = percent
+
+    def apply(self, amount: float) -> float:
+        return amount * (1 - self.percent / 100)
+
+
+class Capped(Percent):
+    def __init__(self, percent: float, limit: float) -> None:
+        super().__init__(percent)
+        self.limit = limit
+
+    def apply(self, amount: float) -> float:
+        return max(super().apply(amount), amount - self.limit)
+
+
+def final_price(amount: float, discounts: list[Discount]) -> float:
+    for discount in discounts:
+        amount = discount.apply(amount)
+    return amount
+
+
+price = final_price(80, [Percent(25), Capped(50, 10)])
+print(f"{price:.2f}")
+```
+
+`Capped` takes the percentage and the arithmetic from `Percent` and adds only the limit. `final_price` knows about neither of the two classes, it only calls `apply`. That is why it also works with the rule from the check, which was written somewhere else.
+
+</details>
+
+## Summary
+
+- An object is created without `new`. `__init__` does the constructor's job, and `self` is written in every method.
+- There is no `private`. The underscore is a convention, and `@property` turns a method into a property when you need logic.
+- A name in the class body is a **class attribute**, shared by all objects. The object's own data is created in `__init__`.
+- Special methods such as `__repr__`, `__eq__` and `__len__` connect a class to `print`, `==` and `len()`.
+- **`@dataclass`** writes `__init__`, `__repr__` and `__eq__` for you. With `frozen=True` it is the closest thing to a `record`.
+- With inheritance the base `__init__` is called explicitly through `super()`, and every method can be replaced.
+- With **duck typing** what matters is which methods an object has. A **`Protocol`** describes those methods for the type checker, without the classes inheriting from it.
+
+The next lesson is [From LINQ to comprehensions](/en/python-for-dotnet/unit-3/linq-to-comprehensions/): how `Where`, `Select` and `ToList` fold into a single expression.
+
+<LessonProgress summary />

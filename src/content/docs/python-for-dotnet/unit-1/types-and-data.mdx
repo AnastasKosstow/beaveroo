@@ -911,7 +911,7 @@ mug: 8.00
 |    totals: dict[str, float] = {}
 |
 |    for name, price, qty in rows:
-|        // 
+|        // TODO
 |        pass
 |
 |    return totals
@@ -986,6 +986,6 @@ for name, total in item_totals(rows).items():
 - **Присвояването никога не копира.** Копие се иска изрично, а стойността по подразбиране не бива да е mutable.
 - **Type hints** описват типовете, но ги проверява type checker, а не Python.
 
-Следващият урок е за класовете: `class`, dataclass на мястото на `record` и защо в Python рядко ти трябва интерфейс. Той се подготвя в момента.
+Следващият урок е [Класове и protocols](/python-for-dotnet/unit-2/classes-and-protocols/): `class`, dataclass на мястото на `record` и защо в Python рядко ти трябва интерфейс.
 
 <LessonProgress summary />
