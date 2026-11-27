@@ -1,0 +1,100 @@
+---
+title: Въведение в Agentic RAG
+description: Unit 3 е първият use case в курса - Alfred посреща гостите на гала вечер в Wayne Manor и се учи да отговаря по данни, които моделът никога не е виждал. Какво ще изградиш, през кои теми минава модулът и какво ти трябва.
+---
+
+Добре дошъл в Unit 3. Дотук учи как работи един Agent и как се изгражда с Microsoft Agent Framework. Сега ще приложиш наученото върху **реален use case**: Agent, който отговаря по твои собствени данни.
+
+Техниката се казва **RAG** (Retrieval-Augmented Generation). Когато търсенето в данните се управлява от Agent, говорим за **Agentic RAG**. Това е най-честото приложение на LLMs в практиката: чат с документацията на продукт, асистент върху вътрешната wiki на фирмата, търсене в договори и фактури. Идеята навсякъде е една и съща. Моделът не познава твоите данни, затова му намираш нужното парче и му го подаваш точно когато му потрябва.
+
+## Гала вечер в Wayne Manor
+
+В Unit 2.1 Alfred подготви партито: тема, меню, кетъринг, музика и покани. Тази вечер гостите пристигат и той е домакинът.
+
+Добрият домакин знае кой кой е. Той помни откъде познаваш всеки гост, с какво се занимава, какво обича и за какво е най-добре да го заговориш. Освен това следи времето, за да пусне фойерверките в подходящия момент, и е достатъчно в час със света, за да поддържа разговор с всеки.
+
+За Alfred това означава четири неща:
+
+- да намира **бележките за гостите**: име, връзка с домакина, описание и имейл;
+- да отговаря на въпроси като „кой би могъл да посвири тази вечер?“, без някой да му казва къде да търси;
+- да проверява **времето навън** в реално време;
+- да намира **обща информация** по тема, за която ще стане дума на масата.
+
+Нищо от това не е в модела. Списъкът с гости е твой и нито един LLM не е обучаван върху него. Времето се сменя всеки час. Точно тук идва RAG.
+
+## Какво ще изградиш
+
+В края на модула ще имаш чат с Alfred, който изглежда така:
+
+```text wrap
+You: I want to talk to Dr. Nikola Tesla about wireless energy. Look him up, find some background on wireless power transfer and suggest two conversation starters.
+  Action: SearchGuests({"query":"Dr. Nikola Tesla"})
+  Action: SearchWikipedia({"query":"wireless power transfer"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+  Observation: Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is ...
+Alfred: Dr. Nikola Tesla is an old friend from your university days who has recently patented a new wireless energy transmission system. He would be delighted to discuss it with you.
+
+Here are two conversation starters:
+1. "I heard about your recent patent for wireless energy transmission. How does it work?"
+2. "I've always been fascinated by your work on pigeons. Do you still keep them?"
+```
+
+Моделът не знае, че Tesla е твой стар приятел от университета, нито че обича гълъби. Alfred **търси** в списъка с гости и в Wikipedia, **прочита** намереното и чак тогава отговаря. До този резултат ще стигнем стъпка по стъпка, като първо направим всичко на ръка.
+
+## Съдържание
+
+### 1️⃣ Какво е RAG?
+
+Ще видиш как моделът си измисля отговор за гост, когото не познава, и как същият въпрос получава верен отговор, щом сложиш нужната бележка в prompt-а. Това е цялата идея на RAG.
+
+### 2️⃣ Първият ти retriever
+
+Някой трябва да намери правилната бележка. Ще заредиш списъка с гости от файл и ще напишеш търсене по думи с двадесетина реда C#. После ще видиш къде то се проваля.
+
+### 3️⃣ Embeddings: търсене по смисъл
+
+Embedding моделът превръща текст в числа така, че близките по смисъл текстове да получат близки числа. С него Alfred ще намери пианиста, когато го попитат за музика.
+
+### 4️⃣ Vector store
+
+Embeddings трябва да се пазят някъде. Ще ги преместим във vector store през `Microsoft.Extensions.VectorData`: същият код работи с база в паметта, със SQLite или с Qdrant.
+
+### 5️⃣ RAG в Agent Framework
+
+`TextSearchProvider` добавя търсенето към Agent-а с няколко реда. Ще видиш точно какво получава моделът и защо „търси при всеки въпрос“ невинаги е добра идея.
+
+### 6️⃣ Agentic RAG
+
+Търсенето става tool. Alfred сам решава кога да търси, какво да търси и колко пъти. Ще сравним двата подхода с едни и същи въпроси.
+
+### 7️⃣ Още източници
+
+Не всичко е в списъка с гости. Ще добавим три tools, които питат истински услуги в интернет: за времето, за Wikipedia и за NuGet.
+
+### 8️⃣ Alfred на гала вечерта
+
+Накрая сглобяваме всичко в един Agent с памет и го изпробваме с въпросите, които един домакин получава за една вечер.
+
+Между уроците има два кратки quiz-а, а накрая те очаква финален quiz за целия модул.
+
+## Какво ти трябва
+
+Почти всичко вече го имаш:
+
+- [.NET SDK](https://dotnet.microsoft.com/download) от [Unit 0](/ai-agents/unit-0/introduction/).
+- [Ollama](https://ollama.com/download) и моделът `qwen3.5:9b` от Unit 1.
+- Един нов, малък модел за embeddings: `nomic-embed-text` (274 MB). Ще го изтеглиш в урока за embeddings.
+
+Първите шест урока работят изцяло на твоя компютър. В последните два Alfred пита публични услуги в интернет, затова ще ти трябва връзка. Акаунти и API ключове пак не са нужни.
+
+:::tip[Един проект за целия модул]
+Както в Unit 2.1, работим в един проект, този път `GalaHost`, и го надграждаме във всеки урок. Минавай уроците по ред.
+:::
+
+## Ресурси
+
+- [RAG в Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/agents/rag) - официалната документация за `TextSearchProvider`.
+- [Vector databases за .NET AI приложения](https://learn.microsoft.com/dotnet/ai/vector-stores/overview) - въведение в `Microsoft.Extensions.VectorData`.
+- [Embedding модели в Ollama](https://ollama.com/search?c=embedding) - списък с моделите, които можеш да пуснеш локално.
+
+Готов ли си? Да започнем с въпроса какво точно не знае един LLM. 🚀

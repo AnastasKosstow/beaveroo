@@ -1,0 +1,341 @@
+---
+title: "Embeddings: Searching by Meaning"
+description: What an embedding is and why texts with similar meaning get similar numbers. We run a local embedding model through IEmbeddingGenerator, compare sentences with cosine similarity and write a semantic search that finds Mozart when we ask about music.
+---
+
+Keyword search did not find Mozart, because the question said `music` and the note said `piano`. To a person the link between the two is obvious. To code that compares letters it does not exist.
+
+We need a way to compare texts **by meaning**. That is what embeddings do.
+
+## What is an embedding?
+
+An **embedding** is a list of numbers that describes the meaning of a text. You get it from an *embedding model*: you give it a sentence, it gives you back a few hundred numbers. Such a list is also called a **vector**.
+
+The numbers themselves are not interesting. What is interesting is their property: **texts with similar meaning get similar vectors**.
+
+Think of geographic coordinates. Two numbers describe where a city is. From them you can work out that Sofia is closer to Plovdiv than to Lisbon, without knowing anything else about those cities. An embedding is the same thing for text: coordinates in the "space of meaning". The difference is that there are not two dimensions but hundreds. In that space `music` and `piano` turn out to be neighbors, while `piano` and `vegetarian` are far apart.
+
+### You have met this before
+
+In Unit 1, in the lesson [What are LLMs?](/en/ai-agents/unit-1/what-are-llms/), you saw that there are several kinds of Transformer models. The LLM we have been talking to so far is a *decoder*: it writes text token by token. An embedding model is an *encoder*: it writes nothing. It reads the text and returns its representation as numbers.
+
+| | Chat model | Embedding model |
+| --- | --- | --- |
+| Example | `qwen3.5:9b` | `nomic-embed-text` |
+| Input | Text | Text |
+| Output | Text | A vector of numbers |
+| What it is for | Answering. | Comparing. |
+| Interface in .NET | `IChatClient` | `IEmbeddingGenerator` |
+
+Since it generates no text, an embedding model is small and fast. Ours is 274 MB against 6.6 GB for the chat model, and it answers in hundredths of a second.
+
+## Setup
+
+### 1. Pull an embedding model
+
+Open a terminal and run:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+`nomic-embed-text` is the most used embedding model in Ollama. It is pulled once and stays on your computer, next to `qwen3.5:9b`. With `ollama list` you can check that both are there.
+
+### 2. Add it to LocalModel
+
+Open `LocalModel.cs` and add a constant and a method to the class:
+
+```csharp title="LocalModel.cs"
+private const string EmbeddingModel = "nomic-embed-text";
+
+public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator() =>
+    new OllamaApiClient(new Uri("http://localhost:11434"), EmbeddingModel);
+```
+
+The type looks long, but it reads easily: a generator that takes a `string` and returns an `Embedding<float>`, that is, a vector of numbers of type `float`.
+
+`IEmbeddingGenerator` comes from `Microsoft.Extensions.AI` and plays the same role as `IChatClient`. Your code works with the interface, and behind it there can be Ollama, OpenAI or Azure. The same `OllamaApiClient` class implements both interfaces, so we don't need a new package.
+
+## Your first embedding
+
+### 3. Turn a sentence into numbers
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Extensions.AI;
+
+IEmbeddingGenerator<string, Embedding<float>> embedder = LocalModel.CreateEmbeddingGenerator();
+
+ReadOnlyMemory<float> vector = await embedder.GenerateVectorAsync(
+    "He has offered to play the piano after dinner.");
+
+Console.WriteLine($"Numbers in the vector: {vector.Length}");
+Console.WriteLine($"The first five: {string.Join("  ", vector.ToArray().Take(5).Select(number => number.ToString("F3")))}");
+```
+
+`GenerateVectorAsync` sends the sentence to the model and returns the vector. We print how many numbers it has, and the first five. Run `dotnet run`:
+
+```text
+Numbers in the vector: 768
+The first five: 0.001  0.053  -0.159  -0.024  -0.039
+```
+
+One sentence became 768 numbers. Don't look for meaning in a single number. There is no "dimension for music" or "dimension for food" you can point a finger at. A vector means something only when you compare it with another vector.
+
+### 4. Compare sentences
+
+How close two vectors are is measured with **cosine similarity**. It shows whether the two vectors point in the same direction:
+
+- close to `1`: the texts mean almost the same;
+- a lower value: the texts have less and less in common.
+
+You don't have to write the formula yourself. The `TensorPrimitives.CosineSimilarity` method is in the `System.Numerics.Tensors` package, which is already in the project because Agent Framework brings it along.
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using System.Numerics.Tensors;
+using Microsoft.Extensions.AI;
+
+IEmbeddingGenerator<string, Embedding<float>> embedder = LocalModel.CreateEmbeddingGenerator();
+
+const string Query = "Who could entertain the guests with music?";
+
+string[] sentences =
+[
+    "Who could play some songs for the visitors?",
+    "He has offered to play the piano after dinner.",
+    "He is a strict vegetarian.",
+    "She always has a story about a daring landing.",
+];
+
+ReadOnlyMemory<float> queryVector = await embedder.GenerateVectorAsync(Query);
+
+Console.WriteLine($"Query: {Query}");
+
+foreach (string sentence in sentences)
+{
+    ReadOnlyMemory<float> sentenceVector = await embedder.GenerateVectorAsync(sentence);
+
+    float similarity = TensorPrimitives.CosineSimilarity(queryVector.Span, sentenceVector.Span);
+
+    Console.WriteLine($"  {similarity:F2}  {sentence}");
+}
+```
+
+We turn the question about music into a vector, then each of the four sentences, and print how close each one is to the question. Run `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.86  Who could play some songs for the visitors?
+  0.59  He has offered to play the piano after dinner.
+  0.38  He is a strict vegetarian.
+  0.37  She always has a story about a daring landing.
+```
+
+Read the result line by line:
+
+1. The first sentence says the same as the question, but in other words: `play some songs` instead of `entertain with music`, `visitors` instead of `guests`. The score is 0.86.
+2. The second is the sentence from the note about Mozart. It is not a question and does not contain the word `music`, but it is on the same topic: 0.59.
+3. The last two have nothing to do with music and stay below 0.40.
+
+This is exactly what keyword search could not do.
+
+Notice something else too: the unrelated sentences do not get zero, they get around 0.37. With this model even texts that have nothing in common rarely drop much lower. So the score is useful for **ranking** (which one is closer), not as an absolute grade.
+
+## Searching by meaning
+
+Now we have everything for a new retriever. It will do the same as `KeywordSearch`, but it will compare vectors instead of words.
+
+### 5. Write the semantic search
+
+Create a file `SemanticSearch.cs`:
+
+```csharp title="SemanticSearch.cs"
+using System.Numerics.Tensors;
+using Microsoft.Extensions.AI;
+
+public class SemanticSearch
+{
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embedder;
+    private readonly List<(Guest Guest, ReadOnlyMemory<float> Vector)> _documents = [];
+
+    private SemanticSearch(IEmbeddingGenerator<string, Embedding<float>> embedder) => _embedder = embedder;
+
+    public static async Task<SemanticSearch> CreateAsync(
+        IEnumerable<Guest> guests,
+        IEmbeddingGenerator<string, Embedding<float>> embedder)
+    {
+        SemanticSearch search = new(embedder);
+
+        foreach (Guest guest in guests)
+        {
+            ReadOnlyMemory<float> vector = await embedder.GenerateVectorAsync(guest.Text);
+            search._documents.Add((guest, vector));
+        }
+
+        return search;
+    }
+
+    public async Task<List<(Guest Guest, float Score)>> SearchAsync(string query, int top = 3)
+    {
+        ReadOnlyMemory<float> queryVector = await _embedder.GenerateVectorAsync(query);
+
+        return _documents
+            .Select(document => (document.Guest, Score: TensorPrimitives.CosineSimilarity(queryVector.Span, document.Vector.Span)))
+            .OrderByDescending(result => result.Score)
+            .Take(top)
+            .ToList();
+    }
+}
+```
+
+Compare it with `KeywordSearch` from the previous lesson. The two classes have the same shape:
+
+| | `KeywordSearch` | `SemanticSearch` |
+| --- | --- | --- |
+| Index | A set of words for every guest. | A vector for every guest. |
+| When it is built | In the constructor. | In `CreateAsync`. |
+| How it compares | The sum of the weights of the common words. | Cosine similarity between two vectors. |
+| Does it need a model | No. | Yes, an embedding model. |
+
+Two things deserve attention:
+
+- **`CreateAsync`** turns the note of every guest into a vector and keeps it. This is done **once**, at startup. Calling a model is asynchronous, and a constructor cannot be `async`, so the object is created through a static method.
+- **`SearchAsync`** turns only the question into a vector. Then it compares it with the twelve stored vectors, sorts them and returns the first `top`.
+
+### 6. Try it
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+SemanticSearch search = await SemanticSearch.CreateAsync(
+    Guest.LoadAll(),
+    LocalModel.CreateEmbeddingGenerator());
+
+string[] queries =
+[
+    "Who could entertain the guests with music?",
+    "Is there an athlete among the guests?",
+];
+
+foreach (string query in queries)
+{
+    Console.WriteLine($"Query: {query}");
+
+    foreach ((Guest guest, float score) in await search.SearchAsync(query))
+    {
+        Console.WriteLine($"  {score:F2}  {guest.Name}");
+    }
+
+    Console.WriteLine();
+}
+```
+
+These are the two questions keyword search failed on. Run `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.56  Wolfgang Amadeus Mozart
+  0.49  Hedy Lamarr
+  0.48  Frida Kahlo
+
+Query: Is there an athlete among the guests?
+  0.65  Jesse Owens
+  0.59  Alan Turing
+  0.59  Albert Einstein
+```
+
+Mozart is in first place, even though his note has neither `music` nor `entertain`. For the second question, first place goes to Jesse Owens, who was missing altogether before, and right after him is Alan Turing, the other runner on the list.
+
+### 7. Connect it to the model
+
+The pipeline from the previous lesson stays the same. Only the retriever changes. Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+SemanticSearch search = await SemanticSearch.CreateAsync(
+    Guest.LoadAll(),
+    LocalModel.CreateEmbeddingGenerator());
+
+const string Question = "Who could entertain the guests with music?";
+
+List<Guest> found = (await search.SearchAsync(Question)).Select(result => result.Guest).ToList();
+
+string prompt = RagPrompt.Build(Question, found);
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"Retrieved: {string.Join(", ", found.Select(guest => guest.Name))}");
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Compared with the previous lesson, two lines changed: the one that creates `search` and the one that calls it. `RagPrompt` and Alfred do not know that the search behind them is a different one. Run `dotnet run`:
+
+```text wrap
+Retrieved: Wolfgang Amadeus Mozart, Hedy Lamarr, Frida Kahlo
+Alfred: Wolfgang Amadeus Mozart could entertain the guests with music, as he has offered to play the piano after dinner.
+  [261 input tokens]
+```
+
+Change the question to `Is there an athlete among the guests?` and run again:
+
+```text wrap
+Retrieved: Jesse Owens, Alan Turing, Albert Einstein
+Alfred: Yes, Mr. Jesse Owens is an athlete; he is a sprinter who won four gold medals at the 1936 Olympic Games. Additionally, Mr. Alan Turing is also described as a serious long-distance runner.
+  [248 input tokens]
+```
+
+Last time Alfred mentioned only Turing. Now the answer is complete, because both notes reached the model.
+
+## What embeddings cannot do
+
+Semantic search is not a magic wand. There are four things worth knowing from the start.
+
+**It always returns something.** Keyword search returns an empty list when nothing matches. Semantic search always has three "closest" notes, even if the question has nothing to do with the guests. Remember this, because it will cause us trouble in the lesson on `TextSearchProvider`.
+
+**It does not understand logic.** Change the question to `Which guest does not eat meat?` and run the program:
+
+```text wrap
+Retrieved: Frida Kahlo, Leonardo da Vinci, Marie Curie
+Alfred: Leonardo da Vinci does not eat meat.
+  [258 input tokens]
+```
+
+First place goes to Frida Kahlo, because her note talks about food. The embedding captures the **topic** (eating), but not the negation (`does not`). The vegetarian, Leonardo da Vinci, is only second. The answer is still correct, because his note is among the three and the model read it. That is why we return several results, not one.
+
+**It is weak on exact strings.** An order number, an error code or a rare surname is found more reliably with keyword search. That is why many systems combine the two approaches. This is called *hybrid search*.
+
+**The question and the documents go through the same model.** Vectors from two different models cannot be compared. If you change the embedding model, you have to compute the vectors of all documents again.
+
+:::tip[Text in other languages]
+`nomic-embed-text` was trained mainly on English text. If your documents are in another language, choose a multilingual model, for example `bge-m3`, which also runs through Ollama.
+:::
+
+## Your turn
+
+**Add your own sentences.** Go back to the code from step 4 and put a few more sentences in `sentences`. Try to guess the score before you run the program.
+
+**Ask something unrelated to the guests.** Search for `Good evening, Alfred.` with the code from step 6. You will get three guests with a score of around 0.5. From the number alone there is no way to tell that the question is not about them.
+
+**Ask in another language.** In the pipeline from step 7 change the question to `Кой гост обича гълъби?`, the Bulgarian question from the previous lesson. Back then keyword search found nothing. In our run semantic search returned Tesla in second place and Alfred answered correctly, in Bulgarian, even though the embedding model was trained mainly on English text.
+
+## Summary
+
+- An **embedding** is a vector of numbers that describes the meaning of a text. Similar meaning means similar vectors.
+- An embedding model is an **encoder**: it reads text and returns numbers. In .NET you use it through **`IEmbeddingGenerator`**.
+- **Cosine similarity** measures how close two vectors are. Use it for ranking, not as an absolute grade.
+- **Semantic search** turns every document into a vector once, and for a question it turns only the question into a vector and returns the closest documents.
+- It finds by meaning, but it always returns something, does not understand negation and is weak on exact strings.
+
+Our `SemanticSearch` keeps the vectors in a plain list and computes them on every startup. Before we move on to a more serious solution, a short quiz is waiting for you.

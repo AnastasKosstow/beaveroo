@@ -1,0 +1,164 @@
+---
+title: Quick Quiz 1
+description: A short ungraded quiz on the basics of RAG - what an LLM does not know, the three steps Retrieve, Augment and Generate, keyword search and embeddings.
+---
+
+import Question from '../../../../../components/Question.astro';
+
+A short **ungraded quiz** to check whether the basics of RAG have fallen into place. Tick the answer you think is correct and press "Submit".
+
+### Q1: Why did Alfred make up an answer when you asked him about the vegetarians among the guests?
+
+<Question
+  choices={[
+    {
+      text: 'Because the instructions did not forbid him to make things up.',
+      explain: 'A ban in the instructions does not give the model the data. It still has no way of knowing who the guests are.',
+    },
+    {
+      text: 'Because the guest list is not in the data it was trained on, and the model always continues the text with something plausible.',
+      explain: 'An LLM does not know your data. When it does not know, it does not stay silent, it writes text that sounds right.',
+      correct: true,
+    },
+    {
+      text: 'Because thinking was turned off in LocalModel.cs.',
+      explain: 'With more thinking the model still would not know who the guests are. It lacks the data, not the time.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What does RAG change?
+
+<Question
+  choices={[
+    {
+      text: 'The prompt: before the question we put the texts that are related to it.',
+      explain: 'The model, its parameters and the instructions stay the same. Only what the model has in front of it changes.',
+      correct: true,
+    },
+    {
+      text: 'The model: it is trained further on our documents.',
+      explain: 'That is fine-tuning. With RAG the model is not trained and does not change.',
+    },
+    {
+      text: 'The temperature: a lower value makes the answers more accurate.',
+      explain: 'The temperature affects how the next token is chosen. It does not give the model new knowledge.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: Which of the three steps of RAG is carried out by the LLM?
+
+<Question
+  choices={[
+    {
+      text: 'Retrieval: the model searches the documents and picks the right ones.',
+      explain: 'The search is your code. In our example that was KeywordSearch and SemanticSearch.',
+    },
+    {
+      text: 'Augmented: the model adds the documents to the prompt on its own.',
+      explain: 'The prompt is assembled by your code, in our case the RagPrompt.Build method.',
+    },
+    {
+      text: 'Generation: the model writes the answer while reading the supplied context.',
+      explain: 'The first two steps are ordinary code. The LLM joins in only at the end.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q4: Why don't we always put all the documents in the prompt?
+
+<Question
+  choices={[
+    {
+      text: 'Because the model refuses to read more than three documents.',
+      explain: 'There is no such limit. For twelve guests it even worked well.',
+    },
+    {
+      text: 'Because as the data grows the prompt exceeds the context length, every question becomes slow and expensive, and the important part gets lost among the unneeded text.',
+      explain: 'For a small amount of data the approach is perfectly reasonable. The problems come when the documents number in the thousands.',
+      correct: true,
+    },
+    {
+      text: 'Because the model then starts training on them.',
+      explain: 'The model is not trained by the prompt. It only reads it.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: Why did keyword search not find Mozart for the question about music?
+
+<Question
+  choices={[
+    {
+      text: 'Because the question and the note have no words in common: one says music, the other says piano and composer.',
+      explain: 'Keyword search compares letters, not meaning. Without a common word the score is zero.',
+      correct: true,
+    },
+    {
+      text: 'Because the note about Mozart is too long.',
+      explain: 'Length is not the reason. The note simply lacks the words from the question.',
+    },
+    {
+      text: 'Because we returned only three results.',
+      explain: 'Even with more results Mozart would be far down, because he matched only on words like the.',
+    },
+  ]}
+/>
+
+---
+
+### Q6: What is an embedding?
+
+<Question
+  choices={[
+    {
+      text: 'A short summary of the text, written by an LLM.',
+      explain: 'An embedding model does not write text. It returns numbers.',
+    },
+    {
+      text: 'A list of the keywords in the text.',
+      explain: 'That is closer to the index of KeywordSearch.',
+    },
+    {
+      text: 'A vector of numbers that describes the meaning of a text. Texts with similar meaning get similar vectors.',
+      explain: 'That is why the question about music turned out to be close to the note that talks about a piano.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q7: For the question `Which guest does not eat meat?` the vegetarian came out second, yet Alfred still answered correctly. Why?
+
+<Question
+  choices={[
+    {
+      text: 'Because the model knows from its training who is a vegetarian.',
+      explain: 'The model answered from the notes we gave it. Without them it was making things up.',
+    },
+    {
+      text: 'Because the retriever returned three notes, the right one was among them and the model read it.',
+      explain: 'We do not ask the retriever to be perfect. We ask that the document we need is among the few it returns.',
+      correct: true,
+    },
+    {
+      text: 'Because cosine similarity understands the negation does not.',
+      explain: 'Quite the opposite. The embedding captured the topic of food, but not the negation.',
+    },
+  ]}
+/>
+
+---
+
+How did it go? Great! You now know how the right text is found. In the next lesson we will give the vectors a real home: a **vector store**.

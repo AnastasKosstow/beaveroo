@@ -1,0 +1,232 @@
+---
+title: Unit 3 Final Quiz
+description: The final quiz for Unit 3 - check your understanding of RAG, retrievers, embeddings, vector stores, TextSearchProvider and Agentic RAG with several sources.
+---
+
+import Question from '../../../../../components/Question.astro';
+
+Well done on getting this far! It's time to check whether the main ideas of RAG are clear to you.
+
+The quiz covers the whole module and is for self-assessment only. Take it as many times as you like.
+
+### Q1: What is RAG?
+
+<Question
+  choices={[
+    {
+      text: 'A way to train the model on your documents so that it memorizes them.',
+      explain: 'That is fine-tuning. With RAG the model is not trained.',
+    },
+    {
+      text: 'A technique in which you find the texts related to the question and add them to the prompt, so the model answers from them.',
+      explain: 'Retrieval finds, Augmented adds, Generation answers. The model stays the same.',
+      correct: true,
+    },
+    {
+      text: 'A bigger model that knows more facts.',
+      explain: 'Even the biggest model does not know your guest list or the weather outside.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What does the rule "the answer is never better than what was found" mean?
+
+<Question
+  choices={[
+    {
+      text: 'The model reads only the supplied context. If the retriever misses the document that is needed, the model has no way of using it.',
+      explain: 'That is how Alfred mentioned only Turing as an athlete: the note about Jesse Owens did not reach him.',
+      correct: true,
+    },
+    {
+      text: 'The model always copies the retrieved text word for word.',
+      explain: 'The model retells in its own words. The rule is about what reaches it at all.',
+    },
+    {
+      text: 'The retriever has to return exactly one document.',
+      explain: 'The opposite: we return several so that the one we need is among them, even if it is not in first place.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: For which question is keyword search a safer choice than semantic search?
+
+<Question
+  choices={[
+    {
+      text: '"Who could entertain the guests?"',
+      explain: 'There is no word in common with the notes here. It needs a search by meaning.',
+    },
+    {
+      text: '"Is there an athlete among the guests?"',
+      explain: 'The note says sprinter, not athlete. Keyword search missed Jesse Owens.',
+    },
+    {
+      text: '"What is the status of order ORD-48213?"',
+      explain: 'An exact string such as an order number is found most reliably by matching characters. This is exactly where embeddings are weak.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q4: Why do the question and the documents have to go through the same embedding model?
+
+<Question
+  choices={[
+    {
+      text: 'Because Ollama can keep only one model loaded.',
+      explain: 'Ollama keeps several models loaded. The reason is in the vectors themselves.',
+    },
+    {
+      text: 'Because every model has its own "space of meaning", and vectors from two different models cannot be compared.',
+      explain: 'That is why, when you change the embedding model, the vectors of all documents are computed again.',
+      correct: true,
+    },
+    {
+      text: 'Because that makes the answer of the chat model shorter.',
+      explain: 'The embedding model takes part only in the search, not in writing the answer.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: Which phase of RAG runs on every question?
+
+<Question
+  choices={[
+    {
+      text: 'Indexing: all the documents are turned into vectors again.',
+      explain: 'Indexing is done once, and then only when the data changes. Otherwise every question would wait for minutes.',
+    },
+    {
+      text: 'Both, always together.',
+      explain: 'In our case they are in one program only because the store is in memory. With a real database they are separated.',
+    },
+    {
+      text: 'Retrieval: the question is turned into a vector and the closest records are searched for.',
+      explain: 'In our code that is SearchAsync, and indexing is UpsertAsync.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q6: Why are long documents cut into chunks?
+
+<Question
+  choices={[
+    {
+      text: 'Because one vector for many topics does not resemble any of them well, and in the prompt we want only the part that answers the question.',
+      explain: 'A good chunk contains one complete thought and keeps where it came from.',
+      correct: true,
+    },
+    {
+      text: 'Because a vector store cannot keep records over 100 characters.',
+      explain: 'There is no such limit. The reason is the quality of the search and the size of the prompt.',
+    },
+    {
+      text: 'So that the model trains faster.',
+      explain: 'With RAG the model is not trained.',
+    },
+  ]}
+/>
+
+---
+
+### Q7: What does `TextSearchProvider` add to what the model receives?
+
+<Question
+  choices={[
+    {
+      text: 'A new system prompt that replaces the instructions.',
+      explain: 'The instructions stay the same. You saw it in the printed prompt.',
+    },
+    {
+      text: 'An extra message with the retrieved documents, the name of the source of each one and a request for citations.',
+      explain: 'It is the same augmented prompt that RagPrompt assembled before, only the framework writes it.',
+      correct: true,
+    },
+    {
+      text: 'Nothing. It only writes the questions to a file.',
+      explain: 'It is a context provider: its job is to add context before every call to the model.',
+    },
+  ]}
+/>
+
+---
+
+### Q8: Which decisions move from your code to the model with Agentic RAG?
+
+<Question
+  choices={[
+    {
+      text: 'Which embedding model to use.',
+      explain: 'You choose that, in LocalModel.cs.',
+    },
+    {
+      text: 'How many dimensions the vector has.',
+      explain: 'That is determined by the embedding model and written in the VectorStoreVector attribute.',
+    },
+    {
+      text: 'Whether to search, with what query and how many times.',
+      explain: 'That is why Alfred does not search on a greeting, wrote musician instead of the whole question and made two searches for a two-part question.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q9: With four tools Alfred looked up Ada Lovelace in Wikipedia instead of in the guest list. Why?
+
+<Question
+  choices={[
+    {
+      text: 'Because the model does not know who is invited. To it the question was about a famous person, and the description of SearchWikipedia promised exactly that kind of knowledge.',
+      explain: 'With several sources you have to tell the model which one comes first. In our case one sentence in the instructions helped.',
+      correct: true,
+    },
+    {
+      text: 'Because the vector store was empty.',
+      explain: 'The guests were stored. Alfred simply did not ask it.',
+    },
+    {
+      text: 'Because Wikipedia answers faster than the vector store.',
+      explain: 'The model does not know which is faster. It chooses by the descriptions of the tools and by the instructions.',
+    },
+  ]}
+/>
+
+---
+
+### Q10: You need a tool that tells the availability of a product by its code. What is the most sensible way for it to find the data?
+
+<Question
+  choices={[
+    {
+      text: 'With embeddings: you turn all products into vectors and search for the one closest to the code.',
+      explain: 'The code is an exact key. Semantic search may return a "similar" product, which here is a mistake.',
+    },
+    {
+      text: 'With an ordinary lookup by key in the database or through an API.',
+      explain: 'Retrieval is not only vector search. When the data has an exact key, a direct lookup is simpler, faster and more accurate.',
+      correct: true,
+    },
+    {
+      text: 'By putting the whole catalog in the instructions.',
+      explain: 'The catalog does not fit in the prompt and changes all the time.',
+    },
+  ]}
+/>
+
+---
+
+With that you have completed Unit 3! 🎉 All that is left is to sum up what you learned.

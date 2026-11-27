@@ -1,0 +1,430 @@
+---
+title: Първият ти retriever
+description: Зареждаме списъка с гости от JSON файл, пробваме да сложим всичко в prompt-а и пишем първия си retriever - търсене по думи с двадесетина реда C#. Свързваме Retrieve, Augment и Generate в един pipeline и виждаме къде търсенето по думи се проваля.
+---
+
+В предишния урок търсачката беше ти: сам избра коя бележка да сложиш в prompt-а. Сега ще я напишем като код.
+
+Ще минем по същия път, по който мина в Unit 1 с [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/): първо на ръка, с обикновен C#, за да видиш, че в търсенето няма нищо загадъчно. Готовите библиотеки идват в следващите уроци.
+
+## Данните: списъкът с гости
+
+Продължаваме в проекта `GalaHost`. Файлът `LocalModel.cs` остава без промяна.
+
+### 1. Създай файла с гостите
+
+В папката на проекта създай файл `guests.json`:
+
+```json title="guests.json" wrap
+[
+  {
+    "name": "Ada Lovelace",
+    "relation": "best friend",
+    "description": "Lady Ada Lovelace is your best friend. She is an esteemed mathematician, celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine.",
+    "email": "ada.lovelace@example.com"
+  },
+  {
+    "name": "Dr. Nikola Tesla",
+    "relation": "old friend from university days",
+    "description": "Dr. Nikola Tesla is an old friend from your university days. He has recently patented a new wireless energy transmission system and would be delighted to discuss it with you. He is passionate about pigeons, so that makes for good small talk.",
+    "email": "nikola.tesla@example.com"
+  },
+  {
+    "name": "Marie Curie",
+    "relation": "no relation",
+    "description": "Marie Curie is a groundbreaking physicist and chemist, famous for her research on radioactivity. She is the only person to win Nobel Prizes in two different sciences.",
+    "email": "marie.curie@example.com"
+  },
+  {
+    "name": "Alan Turing",
+    "relation": "former colleague",
+    "description": "Alan Turing is a mathematician and codebreaker who laid the foundations of computer science and artificial intelligence. He is also a serious long-distance runner and loves to talk about his marathon times.",
+    "email": "alan.turing@example.com"
+  },
+  {
+    "name": "Grace Hopper",
+    "relation": "mentor",
+    "description": "Rear Admiral Grace Hopper wrote one of the first compilers and helped create the COBOL language. Ask her about the moth that was once found inside her computer, the original 'bug'.",
+    "email": "grace.hopper@example.com"
+  },
+  {
+    "name": "Leonardo da Vinci",
+    "relation": "family friend",
+    "description": "Leonardo da Vinci is a painter, engineer and inventor who fills his notebooks with designs for flying machines. He is a strict vegetarian, so the kitchen has to prepare a separate plate for him.",
+    "email": "leonardo.davinci@example.com"
+  },
+  {
+    "name": "Amelia Earhart",
+    "relation": "godmother",
+    "description": "Amelia Earhart is an aviation pioneer and the first woman to fly solo across the Atlantic Ocean. She always has a story about a daring landing.",
+    "email": "amelia.earhart@example.com"
+  },
+  {
+    "name": "Wolfgang Amadeus Mozart",
+    "relation": "neighbor",
+    "description": "Wolfgang Amadeus Mozart is a composer who wrote his first symphony at the age of eight. He has offered to play the piano after dinner and never says no to a game of billiards.",
+    "email": "wolfgang.mozart@example.com"
+  },
+  {
+    "name": "Frida Kahlo",
+    "relation": "no relation",
+    "description": "Frida Kahlo is a Mexican painter known for her vivid self-portraits. She loves bright colors and spicy food, and she dislikes long formal speeches.",
+    "email": "frida.kahlo@example.com"
+  },
+  {
+    "name": "Albert Einstein",
+    "relation": "business partner",
+    "description": "Albert Einstein is a theoretical physicist who developed the theory of relativity. He relaxes by playing the violin and sailing, and he never wears socks.",
+    "email": "albert.einstein@example.com"
+  },
+  {
+    "name": "Jesse Owens",
+    "relation": "cousin",
+    "description": "Jesse Owens is a sprinter who won four gold medals at the 1936 Olympic Games. He is happy to share training tips with anyone who asks.",
+    "email": "jesse.owens@example.com"
+  },
+  {
+    "name": "Hedy Lamarr",
+    "relation": "no relation",
+    "description": "Hedy Lamarr is a film star and inventor. She co-invented a frequency-hopping radio system that later became the basis for Wi-Fi and Bluetooth.",
+    "email": "hedy.lamarr@example.com"
+  }
+]
+```
+
+Дванадесет гости, всеки с четири полета: име, връзка с домакина, кратко описание и имейл. Това са бележките, които един домакин би си водил. В реално приложение на тяхно място стоят страниците на документацията, записите в базата или файловете в една папка.
+
+### 2. Зареди гостите
+
+Създай файл `Guest.cs`:
+
+```csharp title="Guest.cs"
+using System.Text.Json;
+
+public class Guest
+{
+    public string Name { get; set; } = "";
+
+    public string Relation { get; set; } = "";
+
+    public string Description { get; set; } = "";
+
+    public string Email { get; set; } = "";
+
+    public string Text =>
+        $"""
+        Name: {Name}
+        Relation: {Relation}
+        Description: {Description}
+        Email: {Email}
+        """;
+
+    public static List<Guest> LoadAll() =>
+        JsonSerializer.Deserialize<List<Guest>>(File.ReadAllText("guests.json"), JsonSerializerOptions.Web)!;
+}
+```
+
+Класът има три части:
+
+- **Четирите свойства** отговарят на полетата в JSON файла.
+- **`Text`** събира госта в един текст, същия като бележката, която написа на ръка в предишния урок. Това е нашият *document*: текстът, в който ще търсим и който ще слагаме в prompt-а.
+- **`LoadAll`** чете файла и връща списък с гости. `JsonSerializerOptions.Web` се грижи `name` от файла да попадне в `Name`.
+
+Файлът се търси в папката, от която стартираш програмата. С `dotnet run` това е папката на проекта, затова `guests.json` трябва да е до `Program.cs`.
+
+## Най-простото решение: всичко в prompt-а
+
+Преди да пишем търсачка, да пробваме очевидното: да подадем на модела всички бележки наведнъж.
+
+### 3. Подай всички гости
+
+Сглобяването на prompt-а ще ни трябва няколко пъти, затова го отделяме в свой файл. Създай `RagPrompt.cs`:
+
+```csharp title="RagPrompt.cs"
+public static class RagPrompt
+{
+    public static string Build(string question, IEnumerable<Guest> guests) =>
+        $"""
+        Answer the question using only the guest notes below.
+        If the notes do not contain the answer, say that you do not know.
+
+        Guest notes:
+        {string.Join("\n\n", guests.Select(guest => guest.Text))}
+
+        Question: {question}
+        """;
+}
+```
+
+Това е стъпката **Augment** от предишния урок, превърната в метод: правило, бележки, въпрос. Добавихме и второ правило, което казва на модела какво да направи, когато отговорът го няма в бележките.
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+List<Guest> guests = Guest.LoadAll();
+
+const string Question = "Which guest is passionate about pigeons, and what is their email address?";
+
+AgentResponse response = await alfred.RunAsync(RagPrompt.Build(Question, guests));
+
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Последният ред отпечатва колко tokens е прочел моделът. Числото идва от `response.Usage`, което използва и в [урока за middleware](/ai-agents/unit-2/agent-framework/middleware/). Изпълни `dotnet run`:
+
+```text wrap
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons. His email address is nikola.tesla@example.com.
+  [800 input tokens]
+```
+
+Работи. Отговорът е верен, а имейлът е точен до последната буква, защото моделът го преписа от бележката.
+
+### Защо не правим винаги така
+
+За дванадесет гости това е напълно разумно решение. Ако данните ти се побират в prompt-а, не ти трябва нищо повече. Проблемът е в числото на втория ред: моделът прочете 800 tokens, за да отговори на въпрос, за който му трябваше една бележка. С растежа на данните това число расте заедно с тях:
+
+| Данни | Tokens при всеки въпрос |
+| --- | --- |
+| 12 гости | около 800 |
+| 1 000 гости | около 60 000 |
+| Документацията на един продукт | милиони |
+
+Това води до три проблема:
+
+- **Не се побира.** Всеки модел има context length, максимален брой tokens, които може да прочете наведнъж. Над него текстът просто се отрязва.
+- **Бавно и скъпо е.** Моделът чете целия prompt при всеки въпрос. При локален модел плащаш с време, при облачен с пари.
+- **Вдига шум.** Колкото повече ненужен текст има в prompt-а, толкова по-лесно моделът пропуска важното изречение.
+
+Затова ни трябва нещо, което да избере няколкото бележки, които имат връзка с въпроса.
+
+## Retriever: търсене по думи
+
+*Retriever* е функция с прост договор: получава въпрос и връща няколко documents, които най-вероятно съдържат отговора.
+
+Най-простият начин да я напишеш е да броиш общите думи. Ако въпросът съдържа „pigeons“ и една бележка съдържа „pigeons“, вероятно тя ни трябва.
+
+Има една тънкост: не всички думи казват еднакво много. Думата `the` я има в почти всяка бележка и не различава нищо. Думата `pigeons` я има само в една. Затова ще дадем на всяка дума тежест: **колкото по-рядка е една дума, толкова повече тежи**.
+
+### 4. Напиши търсенето
+
+Създай файл `KeywordSearch.cs`:
+
+```csharp title="KeywordSearch.cs"
+using System.Text.RegularExpressions;
+
+public class KeywordSearch
+{
+    private readonly List<(Guest Guest, HashSet<string> Words)> _documents;
+
+    public KeywordSearch(IEnumerable<Guest> guests) =>
+        _documents = guests.Select(guest => (guest, WordsIn(guest.Text))).ToList();
+
+    public List<(Guest Guest, double Score)> Search(string query, int top = 3) =>
+        _documents
+            .Select(document => (document.Guest, Score: WordsIn(query).Where(document.Words.Contains).Sum(Weight)))
+            .Where(result => result.Score > 0)
+            .OrderByDescending(result => result.Score)
+            .Take(top)
+            .ToList();
+
+    private double Weight(string word) =>
+        Math.Log((double)_documents.Count / _documents.Count(document => document.Words.Contains(word)));
+
+    private static HashSet<string> WordsIn(string text) =>
+        Regex.Matches(text.ToLowerInvariant(), "[a-z]{3,}").Select(match => match.Value).ToHashSet();
+}
+```
+
+Класът е кратък, но в него са всички части на една търсачка:
+
+- **`WordsIn`** превръща текст в множество от думи. Прави буквите малки и взима само думите с поне три букви, за да отпаднат `a`, `is`, `to` и подобни.
+- **Конструкторът** прави това веднъж за бележката на всеки гост и запазва резултата. Това е нашият **index**: подготвени данни, в които после се търси бързо.
+- **`Search`** минава през гостите. За всеки събира тежестите на думите от въпроса, които се срещат в неговата бележка. После маха гостите без нито едно съвпадение, подрежда останалите по резултат и връща първите `top`.
+- **`Weight`** изчислява тежестта на една дума: логаритъм от броя на всички бележки, разделен на броя на бележките, които я съдържат. Дума, която е във всичките дванадесет, получава `log(12/12) = 0` и не влияе. Дума, която е само в една, получава `log(12/1) ≈ 2.48`.
+
+### 5. Изпробвай го
+
+Първо ще пуснем търсенето само, без модел. Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+KeywordSearch search = new(Guest.LoadAll());
+
+string[] queries =
+[
+    "Tell me about Ada Lovelace.",
+    "Which guest is passionate about pigeons?",
+];
+
+foreach (string query in queries)
+{
+    Console.WriteLine($"Query: {query}");
+
+    foreach ((Guest guest, double score) in search.Search(query))
+    {
+        Console.WriteLine($"  {score:F2}  {guest.Name}");
+    }
+
+    Console.WriteLine();
+}
+```
+
+Изпълни `dotnet run`. Отговорът идва мигновено, защото тук няма модел:
+
+```text
+Query: Tell me about Ada Lovelace.
+  4.97  Ada Lovelace
+  1.10  Dr. Nikola Tesla
+  1.10  Alan Turing
+
+Query: Which guest is passionate about pigeons?
+  6.07  Dr. Nikola Tesla
+  1.10  Alan Turing
+  1.10  Grace Hopper
+```
+
+И двата пъти верният гост е на първо място, с голяма разлика пред останалите. Числата могат да се проследят на ръка. Думите `ada` и `lovelace` са само в една бележка, затова носят по 2.48 и заедно дават 4.97. Tesla и Turing получават по 1.10 заради думата `about`, която се среща в четири бележки.
+
+:::note[Десетична запетая]
+Ако Windows е настроен на български, ще видиш `4,97` вместо `4.97`. Числата са същите, различава се само начинът, по който .NET ги изписва.
+:::
+
+## Целият pipeline
+
+Имаме и трите части: търсене, сглобяване на prompt-а и модел. Остава да ги свържем.
+
+### 6. Retrieve, Augment, Generate
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+KeywordSearch search = new(Guest.LoadAll());
+
+const string Question = "Which guest is passionate about pigeons, and what is their email address?";
+
+List<Guest> found = search.Search(Question).Select(result => result.Guest).ToList();
+
+string prompt = RagPrompt.Build(Question, found);
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"Retrieved: {string.Join(", ", found.Select(guest => guest.Name))}");
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Трите реда в средата са трите букви на RAG:
+
+1. **Retrieve.** `search.Search(Question)` връща тримата гости с най-висок резултат.
+2. **Augment.** `RagPrompt.Build` слага техните бележки в prompt-а заедно с въпроса.
+3. **Generate.** `alfred.RunAsync(prompt)` изпраща готовия prompt на модела.
+
+Изпълни `dotnet run`:
+
+```text wrap
+Retrieved: Dr. Nikola Tesla, Alan Turing, Grace Hopper
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons; his email address is nikola.tesla@example.com.
+  [283 input tokens]
+```
+
+Отговорът е същият като преди, но моделът прочете 283 tokens вместо 800. И това число вече няма да расте: дори гостите да станат хиляда, в prompt-а пак ще влизат само три бележки.
+
+Виж и реда `Retrieved`. Две от трите бележки, тези за Turing и Hopper, нямат нищо общо с въпроса. Това не пречи. Моделът прочита и трите и използва тази, която му трябва. От retriever-а не искаме да е съвършен. Искаме **нужната бележка да е сред няколкото, които връща**.
+
+## Къде се чупи
+
+Дотук питахме с думи, които ги има в бележките. Гостите на едно парти обаче не са длъжни да ги знаят.
+
+### 7. Попитай за музика
+
+В `Program.cs` смени въпроса:
+
+```csharp
+const string Question = "Who could entertain the guests with music?";
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Retrieved: Leonardo da Vinci, Jesse Owens, Dr. Nikola Tesla
+Alfred: I do not know who could entertain the guests with music based on the provided guest notes.
+  [277 input tokens]
+```
+
+В списъка има композитор, който е обещал да свири на пиано след вечеря. Търсенето обаче не го намери. Причината е проста: във въпроса пише `music` и `entertain`, а в бележката за Mozart пише `composer`, `symphony` и `piano`. Нито една обща дума, значи резултат нула. Тримата, които се върнаха, съвпадат само по думи като `who` и `with`.
+
+Има и добра новина. Alfred не си измисли отговор, а каза, че не знае. Това е заслуга на второто правило в `RagPrompt`. Когато търсенето се провали, „не знам“ е най-добрият възможен отговор.
+
+### 8. Попитай за спортист
+
+Смени въпроса още веднъж:
+
+```csharp
+const string Question = "Is there an athlete among the guests?";
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Retrieved: Ada Lovelace, Marie Curie, Alan Turing
+Alfred: Yes, Mr. Alan Turing is an athlete; he is a serious long-distance runner who enjoys discussing his marathon times.
+  [257 input tokens]
+```
+
+Този отговор е по-коварен от предишния. Той е верен, но е непълен. Сред гостите е Jesse Owens, спринтьор с четири златни олимпийски медала, а Alfred изобщо не го споменава. В бележката му пише `sprinter`, а не `athlete`, затова търсенето го подмина. Turing попадна в резултата по случайност: и трите върнати бележки съвпадат с въпроса само по думата `the`.
+
+Потребителят няма как да разбере, че нещо липсва. Това е най-важното правило в RAG:
+
+**Отговорът никога не е по-добър от това, което retriever-ът е намерил.**
+
+Моделът чете само подаденото. Ако нужната бележка не е там, и най-добрият модел не може да я използва.
+
+## Силата и слабостта на търсенето по думи
+
+| Работи добре за | Не работи за |
+| --- | --- |
+| Имена: `Ada Lovelace`. | Синоними: `music` срещу `piano`. |
+| Точни низове: имейл, номер на поръчка, код на грешка. | Перифрази: `athlete` срещу `sprinter`. |
+| Редки термини, които потребителят знае. | Въпроси на друг език. |
+
+Освен това е мигновено, не му трябва модел и винаги можеш да обясниш защо един резултат е излязъл пръв.
+
+:::note[BM25]
+В истинските системи търсенето по думи се прави с алгоритъма **BM25**. Идеята е същата като в нашия `KeywordSearch`, редките думи тежат повече, с две подобрения: брои се колко пъти думата се среща в документа и се отчита дължината му. BM25 стои зад Lucene, Elasticsearch и Azure AI Search.
+:::
+
+## Твой ред
+
+**Попитай за точен детайл.** Смени въпроса на `What is Marie Curie's email address?`. Името е в бележката, затова търсенето по думи се справя отлично.
+
+**Върни само един резултат.** Подай `top: 1` на `search.Search` и пусни въпроса за гълъбите. Tokens намаляват още. Помисли какво рискуваш: ако нужната бележка се окаже на второ място, моделът изобщо няма да я види.
+
+**Попитай на български.** Опитай с `Кой гост обича гълъби?`. Нашият `WordsIn` разпознава само латински букви, така че не намира нито една дума. Търсенето връща празен списък и Alfred отговаря, че не знае.
+
+## Обобщение
+
+- **Retriever** получава въпрос и връща няколкото documents, които най-вероятно съдържат отговора.
+- RAG pipeline има три стъпки: **Retrieve** намира бележките, **Augment** ги слага в prompt-а, **Generate** дава отговора.
+- С retriever моделът чете само това, което му трябва: 283 tokens вместо 800, независимо колко са гостите.
+- Търсенето по думи намира **думи, а не смисъл**. Справя се с имена и точни низове и се проваля при синоними.
+- **Отговорът никога не е по-добър от намереното.** Ако retriever-ът пропусне бележка, моделът не може да я използва.
+
+В следващия урок ще научим Alfred да търси по смисъл, така че `music` да намери `piano`.

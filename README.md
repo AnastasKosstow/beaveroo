@@ -34,6 +34,7 @@ An unofficial adaptation of the [Hugging Face Agents Course](https://huggingface
 | [INTRODUCTION TO AGENTS](https://beaveroo.tech/ai-agents/unit-1/introduction/) | Agents, LLMs, messages, chat templates, tools, and the thought, action, observation loop. Ends with a small agent written in C#. |
 | [FRAMEWORKS](https://beaveroo.tech/ai-agents/unit-2/introduction/) | When an agentic framework is worth using, and what it has to provide. |
 | &emsp;[ - Microsoft Agent Framework](https://beaveroo.tech/ai-agents/unit-2/agent-framework/introduction/) | Tools, memory, and multi-agent workflows in .NET, on top of `Microsoft.Extensions.AI`. |
+| [AGENTIC RAG](https://beaveroo.tech/ai-agents/unit-3/introduction/) | An agent that answers from your own data. Keyword search, embeddings, vector stores with `Microsoft.Extensions.VectorData`, `TextSearchProvider`, and retrieval as a tool. |
 
 ### Python for .NET Developers
 

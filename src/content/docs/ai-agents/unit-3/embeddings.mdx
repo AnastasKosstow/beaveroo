@@ -1,0 +1,341 @@
+---
+title: "Embeddings: търсене по смисъл"
+description: Какво е embedding и защо близките по смисъл текстове получават близки числа. Пускаме локален embedding модел през IEmbeddingGenerator, сравняваме изречения с cosine similarity и пишем семантично търсене, което намира Mozart, когато питаме за музика.
+---
+
+Търсенето по думи не намери Mozart, защото във въпроса пишеше `music`, а в бележката `piano`. За човек връзката между двете е очевидна. За код, който сравнява букви, тя не съществува.
+
+Трябва ни начин да сравняваме текстове **по смисъл**. Това правят embeddings.
+
+## Какво е embedding?
+
+**Embedding** е списък от числа, който описва смисъла на един текст. Получаваш го от *embedding модел*: подаваш му изречение, той ти връща няколкостотин числа. Такъв списък се нарича още **вектор**.
+
+Самите числа не са интересни. Интересно е свойството им: **текстове с близък смисъл получават близки вектори**.
+
+Помисли за географските координати. Две числа описват къде се намира един град. По тях можеш да сметнеш, че София е по-близо до Пловдив, отколкото до Лисабон, без да знаеш нищо друго за тези градове. Embedding-ът е същото нещо за текст: координати в „пространството на смисъла“. Разликата е, че измеренията не са две, а стотици. В това пространство `music` и `piano` се оказват съседи, а `piano` и `vegetarian` са далеч едно от друго.
+
+### Това вече си го срещал
+
+В Unit 1, в урока [Какво са LLMs?](/ai-agents/unit-1/what-are-llms/), видя, че има няколко вида Transformer модели. LLM-ът, с който говорим досега, е *decoder*: той пише текст token по token. Embedding моделът е *encoder*: той не пише нищо. Чете текста и връща неговото представяне като числа.
+
+| | Chat модел | Embedding модел |
+| --- | --- | --- |
+| Пример | `qwen3.5:9b` | `nomic-embed-text` |
+| Вход | Текст | Текст |
+| Изход | Текст | Вектор от числа |
+| За какво служи | Да отговаря. | Да сравнява. |
+| Интерфейс в .NET | `IChatClient` | `IEmbeddingGenerator` |
+
+Понеже не генерира текст, embedding моделът е малък и бърз. Нашият е 274 MB срещу 6.6 GB за chat модела и отговаря за стотни от секундата.
+
+## Подготовка
+
+### 1. Изтегли embedding модел
+
+Отвори терминал и изпълни:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+`nomic-embed-text` е най-използваният embedding модел в Ollama. Тегли се веднъж и остава на компютъра ти, до `qwen3.5:9b`. С `ollama list` можеш да провериш, че и двата са там.
+
+### 2. Добави го в LocalModel
+
+Отвори `LocalModel.cs` и добави в класа една константа и един метод:
+
+```csharp title="LocalModel.cs"
+private const string EmbeddingModel = "nomic-embed-text";
+
+public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator() =>
+    new OllamaApiClient(new Uri("http://localhost:11434"), EmbeddingModel);
+```
+
+Типът изглежда дълъг, но се чете лесно: генератор, който приема `string` и връща `Embedding<float>`, тоест вектор от числа от тип `float`.
+
+`IEmbeddingGenerator` идва от `Microsoft.Extensions.AI` и играе същата роля като `IChatClient`. Твоят код работи с интерфейса, а зад него може да стои Ollama, OpenAI или Azure. Същият клас `OllamaApiClient` реализира и двата интерфейса, затова не ни трябва нов пакет.
+
+## Първият ти embedding
+
+### 3. Превърни изречение в числа
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Extensions.AI;
+
+IEmbeddingGenerator<string, Embedding<float>> embedder = LocalModel.CreateEmbeddingGenerator();
+
+ReadOnlyMemory<float> vector = await embedder.GenerateVectorAsync(
+    "He has offered to play the piano after dinner.");
+
+Console.WriteLine($"Numbers in the vector: {vector.Length}");
+Console.WriteLine($"The first five: {string.Join("  ", vector.ToArray().Take(5).Select(number => number.ToString("F3")))}");
+```
+
+`GenerateVectorAsync` изпраща изречението на модела и връща вектора. Отпечатваме колко числа има в него и първите пет. Изпълни `dotnet run`:
+
+```text
+Numbers in the vector: 768
+The first five: 0.001  0.053  -0.159  -0.024  -0.039
+```
+
+Едно изречение се превърна в 768 числа. Не търси смисъл в отделното число. Няма „измерение за музика“ или „измерение за храна“, които можеш да посочиш с пръст. Векторът означава нещо само когато го сравниш с друг вектор.
+
+### 4. Сравни изречения
+
+Колко близки са два вектора, се мери с **cosine similarity**. Тя показва дали двата вектора сочат в една и съща посока:
+
+- близо до `1`: текстовете значат почти едно и също;
+- по-ниска стойност: текстовете имат все по-малко общо.
+
+Формулата не се налага да пишеш сам. Методът `TensorPrimitives.CosineSimilarity` е в пакета `System.Numerics.Tensors`, който вече е в проекта, защото Agent Framework го носи със себе си.
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using System.Numerics.Tensors;
+using Microsoft.Extensions.AI;
+
+IEmbeddingGenerator<string, Embedding<float>> embedder = LocalModel.CreateEmbeddingGenerator();
+
+const string Query = "Who could entertain the guests with music?";
+
+string[] sentences =
+[
+    "Who could play some songs for the visitors?",
+    "He has offered to play the piano after dinner.",
+    "He is a strict vegetarian.",
+    "She always has a story about a daring landing.",
+];
+
+ReadOnlyMemory<float> queryVector = await embedder.GenerateVectorAsync(Query);
+
+Console.WriteLine($"Query: {Query}");
+
+foreach (string sentence in sentences)
+{
+    ReadOnlyMemory<float> sentenceVector = await embedder.GenerateVectorAsync(sentence);
+
+    float similarity = TensorPrimitives.CosineSimilarity(queryVector.Span, sentenceVector.Span);
+
+    Console.WriteLine($"  {similarity:F2}  {sentence}");
+}
+```
+
+Превръщаме във вектор въпроса за музиката, а после всяко от четирите изречения, и отпечатваме колко близо е то до въпроса. Изпълни `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.86  Who could play some songs for the visitors?
+  0.59  He has offered to play the piano after dinner.
+  0.38  He is a strict vegetarian.
+  0.37  She always has a story about a daring landing.
+```
+
+Прочети резултата ред по ред:
+
+1. Първото изречение казва същото като въпроса, но с други думи: `play some songs` вместо `entertain with music`, `visitors` вместо `guests`. Резултатът е 0.86.
+2. Второто е изречението от бележката за Mozart. То не е въпрос и не съдържа думата `music`, но е на същата тема: 0.59.
+3. Последните две нямат нищо общо с музика и остават под 0.40.
+
+Точно това не можеше търсенето по думи.
+
+Обърни внимание и на нещо друго: несвързаните изречения не получават нула, а около 0.37. При този модел дори текстове без нищо общо рядко падат много по-ниско. Затова резултатът е полезен за **подреждане** (кое е по-близо), а не като абсолютна оценка.
+
+## Търсене по смисъл
+
+Сега имаме всичко за нов retriever. Той ще прави същото като `KeywordSearch`, но ще сравнява вектори вместо думи.
+
+### 5. Напиши семантичното търсене
+
+Създай файл `SemanticSearch.cs`:
+
+```csharp title="SemanticSearch.cs"
+using System.Numerics.Tensors;
+using Microsoft.Extensions.AI;
+
+public class SemanticSearch
+{
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embedder;
+    private readonly List<(Guest Guest, ReadOnlyMemory<float> Vector)> _documents = [];
+
+    private SemanticSearch(IEmbeddingGenerator<string, Embedding<float>> embedder) => _embedder = embedder;
+
+    public static async Task<SemanticSearch> CreateAsync(
+        IEnumerable<Guest> guests,
+        IEmbeddingGenerator<string, Embedding<float>> embedder)
+    {
+        SemanticSearch search = new(embedder);
+
+        foreach (Guest guest in guests)
+        {
+            ReadOnlyMemory<float> vector = await embedder.GenerateVectorAsync(guest.Text);
+            search._documents.Add((guest, vector));
+        }
+
+        return search;
+    }
+
+    public async Task<List<(Guest Guest, float Score)>> SearchAsync(string query, int top = 3)
+    {
+        ReadOnlyMemory<float> queryVector = await _embedder.GenerateVectorAsync(query);
+
+        return _documents
+            .Select(document => (document.Guest, Score: TensorPrimitives.CosineSimilarity(queryVector.Span, document.Vector.Span)))
+            .OrderByDescending(result => result.Score)
+            .Take(top)
+            .ToList();
+    }
+}
+```
+
+Сравни го с `KeywordSearch` от предишния урок. Двата класа имат една и съща форма:
+
+| | `KeywordSearch` | `SemanticSearch` |
+| --- | --- | --- |
+| Index | Множество от думи за всеки гост. | Вектор за всеки гост. |
+| Кога се строи | В конструктора. | В `CreateAsync`. |
+| Как сравнява | Сбор от тежестите на общите думи. | Cosine similarity между два вектора. |
+| Нужен ли е модел | Не. | Да, embedding модел. |
+
+Две неща заслужават внимание:
+
+- **`CreateAsync`** превръща бележката на всеки гост във вектор и го запазва. Това се прави **веднъж**, при стартиране. Извикването на модел е асинхронно, а конструктор не може да бъде `async`, затова обектът се създава през статичен метод.
+- **`SearchAsync`** превръща във вектор само въпроса. После го сравнява с дванадесетте запазени вектора, подрежда ги и връща първите `top`.
+
+### 6. Изпробвай го
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+SemanticSearch search = await SemanticSearch.CreateAsync(
+    Guest.LoadAll(),
+    LocalModel.CreateEmbeddingGenerator());
+
+string[] queries =
+[
+    "Who could entertain the guests with music?",
+    "Is there an athlete among the guests?",
+];
+
+foreach (string query in queries)
+{
+    Console.WriteLine($"Query: {query}");
+
+    foreach ((Guest guest, float score) in await search.SearchAsync(query))
+    {
+        Console.WriteLine($"  {score:F2}  {guest.Name}");
+    }
+
+    Console.WriteLine();
+}
+```
+
+Това са двата въпроса, на които търсенето по думи се провали. Изпълни `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.56  Wolfgang Amadeus Mozart
+  0.49  Hedy Lamarr
+  0.48  Frida Kahlo
+
+Query: Is there an athlete among the guests?
+  0.65  Jesse Owens
+  0.59  Alan Turing
+  0.59  Albert Einstein
+```
+
+Mozart е на първо място, въпреки че в бележката му няма нито `music`, нито `entertain`. При втория въпрос на първо място е Jesse Owens, който преди изобщо липсваше, а веднага след него е Alan Turing, другият бегач в списъка.
+
+### 7. Свържи го с модела
+
+Pipeline-ът от предишния урок остава същият. Сменя се само retriever-ът. Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+SemanticSearch search = await SemanticSearch.CreateAsync(
+    Guest.LoadAll(),
+    LocalModel.CreateEmbeddingGenerator());
+
+const string Question = "Who could entertain the guests with music?";
+
+List<Guest> found = (await search.SearchAsync(Question)).Select(result => result.Guest).ToList();
+
+string prompt = RagPrompt.Build(Question, found);
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"Retrieved: {string.Join(", ", found.Select(guest => guest.Name))}");
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Спрямо предишния урок се промениха два реда: този, който създава `search`, и този, който го извиква. `RagPrompt` и Alfred не знаят, че търсенето зад тях е друго. Изпълни `dotnet run`:
+
+```text wrap
+Retrieved: Wolfgang Amadeus Mozart, Hedy Lamarr, Frida Kahlo
+Alfred: Wolfgang Amadeus Mozart could entertain the guests with music, as he has offered to play the piano after dinner.
+  [261 input tokens]
+```
+
+Смени въпроса на `Is there an athlete among the guests?` и изпълни отново:
+
+```text wrap
+Retrieved: Jesse Owens, Alan Turing, Albert Einstein
+Alfred: Yes, Mr. Jesse Owens is an athlete; he is a sprinter who won four gold medals at the 1936 Olympic Games. Additionally, Mr. Alan Turing is also described as a serious long-distance runner.
+  [248 input tokens]
+```
+
+Миналия път Alfred спомена само Turing. Сега отговорът е пълен, защото и двете бележки стигнаха до модела.
+
+## Какво embeddings не могат
+
+Семантичното търсене не е вълшебна пръчка. Има четири неща, които е добре да знаеш отсега.
+
+**Винаги връща нещо.** Търсенето по думи връща празен списък, когато няма съвпадение. Семантичното винаги има „най-близки“ три бележки, дори въпросът да няма нищо общо с гостите. Запомни това, защото ще ни създаде проблем в урока за `TextSearchProvider`.
+
+**Не разбира логика.** Смени въпроса на `Which guest does not eat meat?` и изпълни програмата:
+
+```text wrap
+Retrieved: Frida Kahlo, Leonardo da Vinci, Marie Curie
+Alfred: Leonardo da Vinci does not eat meat.
+  [258 input tokens]
+```
+
+На първо място е Frida Kahlo, защото в бележката ѝ става дума за храна. Embedding-ът улавя **темата** (ядене), но не и отрицанието (`does not`). Вегетарианецът Leonardo da Vinci е чак втори. Отговорът все пак е верен, защото бележката му е сред трите и моделът я прочете. Затова връщаме няколко резултата, а не един.
+
+**Слаб е при точни низове.** Номер на поръчка, код на грешка или рядко фамилно име се намират по-сигурно с търсене по думи. Затова много системи комбинират двата подхода. Това се нарича *hybrid search*.
+
+**Въпросът и документите минават през един и същ модел.** Вектори от два различни модела не могат да се сравняват. Ако смениш embedding модела, трябва да изчислиш наново векторите на всички documents.
+
+:::tip[Текст на български]
+`nomic-embed-text` е обучаван основно върху английски текст. Ако твоите документи са на български, избери многоезичен модел, например `bge-m3`, който също се пуска през Ollama.
+:::
+
+## Твой ред
+
+**Добави свои изречения.** Върни се към кода от стъпка 4 и сложи в `sentences` още няколко изречения. Опитай да познаеш резултата, преди да пуснеш програмата.
+
+**Попитай без връзка с гостите.** Потърси `Good evening, Alfred.` с кода от стъпка 6. Ще получиш трима гости с резултат около 0.5. Няма как да разбереш само по числото, че въпросът не е за тях.
+
+**Попитай на български.** В pipeline-а от стъпка 7 смени въпроса на `Кой гост обича гълъби?`. В предишния урок търсенето по думи не намери нищо. При нас семантичното върна Tesla на второ място и Alfred отговори вярно, на български, макар че embedding моделът е обучаван основно върху английски текст.
+
+## Обобщение
+
+- **Embedding** е вектор от числа, който описва смисъла на текст. Близък смисъл означава близки вектори.
+- Embedding моделът е **encoder**: чете текст и връща числа. В .NET се използва през **`IEmbeddingGenerator`**.
+- **Cosine similarity** мери колко близки са два вектора. Използвай я за подреждане, а не като абсолютна оценка.
+- **Семантичното търсене** превръща всеки document във вектор веднъж, а при въпрос превръща във вектор само него и връща най-близките documents.
+- То намира по смисъл, но винаги връща нещо, не разбира отрицание и е слабо при точни низове.
+
+Нашият `SemanticSearch` пази векторите в обикновен списък и ги изчислява при всяко стартиране. Преди да продължим към по-сериозно решение, те очаква кратък quiz.

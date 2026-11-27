@@ -1,0 +1,71 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner-console\\partyplanner\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner-console\\partyplanner\\agents\\createteam.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\agents\\createteam.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner-console\\partyplanner\\agents\\teamtrace.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B788D8A6-5878-4B6E-9C0B-44521F3CBD51}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\agents\\teamtrace.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "TeamTrace.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Agents\\TeamTrace.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Agents\\TeamTrace.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Agents\\TeamTrace.cs",
+              "RelativeToolTip": "PartyPlanner\\Agents\\TeamTrace.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T13:04:58.984Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CreateTeam.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Agents\\CreateTeam.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Agents\\CreateTeam.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Agents\\CreateTeam.cs",
+              "RelativeToolTip": "PartyPlanner\\Agents\\CreateTeam.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T12:53:56.894Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Program.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Program.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner-console\\PartyPlanner\\Program.cs",
+              "RelativeToolTip": "PartyPlanner\\Program.cs",
+              "ViewState": "AgIAADMAAAAAAAAAAAAAAAEAAAAeAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T08:13:56.715Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

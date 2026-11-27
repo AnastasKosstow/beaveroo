@@ -1,0 +1,55 @@
+---
+title: Conclusion
+description: Congratulations on finishing Unit 3 - you can now build an Agent that answers from your own data with RAG and Agentic RAG in .NET.
+---
+
+Congratulations on finishing Unit 3 🥳
+
+At the start Alfred confidently told stories about guests he had never seen. At the end he searches the list, checks the weather, reads Wikipedia and remembers who you were talking about a moment ago.
+
+## What you learned
+
+- **RAG** does not change the model, it changes the prompt: you find the text that is needed, add it to the question, and the model answers from it.
+- A **retriever** receives a question and returns a few documents. Keyword search finds exact strings, and search by meaning finds synonyms and paraphrases.
+- An **embedding** is a vector that describes the meaning of a text. In .NET you get it through `IEmbeddingGenerator`.
+- A **vector store** keeps the records with their vectors. `Microsoft.Extensions.VectorData` gives you the same code for memory, SQLite, Qdrant and PostgreSQL.
+- **`TextSearchProvider`** does classic RAG in Agent Framework: it searches before every call to the model and adds what it found to the prompt.
+- In **Agentic RAG** the search is a tool. The model decides whether, what and how many times to search.
+- **Retrieval is more than vector search.** Every tool that brings facts into the prompt is a source of knowledge.
+
+Before you reach for embeddings, ask **where the fact should come from**. If there is little data, put it in the prompt. If it has an exact key, look it up by that key. If you don't know what words you will be asked with, you need a search by meaning. And if there are several sources, let the Agent choose and tell it clearly which one comes first.
+
+## The whole project
+
+Here are the files you collected in `GalaHost` over the course of the module:
+
+| File | What it contains | Which lesson it is from |
+| --- | --- | --- |
+| `LocalModel.cs` | The connection to the chat model and to the embedding model. | [What is RAG?](/en/ai-agents/unit-3/what-is-rag/) and [Embeddings](/en/ai-agents/unit-3/embeddings/) |
+| `guests.json` | The notes about the twelve guests. | [Your First Retriever](/en/ai-agents/unit-3/retrieval/) |
+| `Guest.cs` | One guest, described for the vector store. | [Your First Retriever](/en/ai-agents/unit-3/retrieval/) and [Vector Stores](/en/ai-agents/unit-3/vector-store/) |
+| `RagPrompt.cs` | Assembles the augmented prompt by hand. | [Your First Retriever](/en/ai-agents/unit-3/retrieval/) |
+| `KeywordSearch.cs` | Keyword search. | [Your First Retriever](/en/ai-agents/unit-3/retrieval/) |
+| `SemanticSearch.cs` | Search by meaning, by hand. | [Embeddings](/en/ai-agents/unit-3/embeddings/) |
+| `GuestBook.cs` | The vector store with the guests and the `SearchGuests` tool. | [Vector Stores](/en/ai-agents/unit-3/vector-store/) and [Agentic RAG](/en/ai-agents/unit-3/agentic-rag/) |
+| `ModelLog.cs` | Shows the exact prompt that reaches the model. | [RAG in Agent Framework](/en/ai-agents/unit-3/rag-in-agent-framework/) |
+| `AgentLog.cs` | Prints the steps of a response. | [Agentic RAG](/en/ai-agents/unit-3/agentic-rag/) |
+| `WorldTools.cs` | Tools for the weather, Wikipedia and NuGet. | [More Sources](/en/ai-agents/unit-3/tools/) |
+
+The best way to make it stick is to change the data. Put something of your own in `guests.json`: notes from your recent projects, a list of books or recipes, and see how Alfred behaves.
+
+## What's next
+
+It is normal if some things are still not completely clear. Go back to the lessons, change the examples and see what happens.
+
+What you built is a working prototype. On the way to a real application you will run into a few topics we did not cover:
+
+- [Data ingestion](https://learn.microsoft.com/dotnet/ai/conceptual/data-ingestion) - reading PDF and Markdown files, cutting them into chunks and writing them to a vector store.
+- [Vector store providers](https://learn.microsoft.com/dotnet/ai/vector-stores/overview) - how to move the data from memory to SQLite, Qdrant or PostgreSQL.
+- [Evaluation](https://learn.microsoft.com/dotnet/ai/evaluation/libraries) - how to measure with numbers whether the retriever finds the right documents and whether the answers rest on them.
+- [Context providers](https://learn.microsoft.com/agent-framework/agents/conversations/context-providers) - memory that the Agent carries across different conversations, built on the same vector stores.
+- *Hybrid search* and *reranking* - combining keyword search with search by meaning, and reordering the results with a second model.
+
+In the next Unit the final assignment of the course is waiting for you.
+
+### Keep Learning, stay awesome 🤗

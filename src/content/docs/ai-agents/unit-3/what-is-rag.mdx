@@ -1,0 +1,236 @@
+---
+title: Какво е RAG?
+description: Защо един LLM не знае нищо за твоите данни, как си измисля отговор и как го поправяме с Retrieval-Augmented Generation - намираме нужния текст и го слагаме в prompt-а. Първият опит е на ръка.
+---
+
+Alfred е домакин на гала вечерта. Попитай го за гостите и той ще ти отговори учтиво и уверено. Има само един проблем: няма откъде да знае кои са те.
+
+В този урок първо ще видиш проблема с очите си, а после ще го поправиш по най-простия възможен начин, на ръка. Това решение има име: **RAG**, Retrieval-Augmented Generation.
+
+## Какво знае един LLM
+
+От [Unit 1](/ai-agents/unit-1/what-are-llms/) помниш, че един LLM се обучава върху огромно количество текст. Когато обучението приключи, знанието му остава замръзнало в параметрите. Три неща винаги са извън него:
+
+| Какво липсва | Пример |
+| --- | --- |
+| **Твоите данни** | Списъкът с гости, вътрешната документация на фирмата, имейлите ти. Моделът никога не ги е виждал. |
+| **Всичко ново** | Времето навън, вчерашните новини, версия на библиотека, излязла след обучението. |
+| **Точните детайли** | Имейл адрес, номер на поръчка, цена. Моделът помни шаблони в езика, а не таблици с факти. |
+
+Лошото е, че когато не знае, моделът не мълчи. Единствената му работа е да предскаже следващия token, затова пише текст, който **звучи** правилно. Вече го видя в [Dummy Agent Library](/ai-agents/unit-1/dummy-agent-library/), където моделът сам си измисли времето в Лондон. Това се нарича **hallucination**.
+
+## Подготовка
+
+За този модул ни трябва нов проект. Ollama и моделът `qwen3.5:9b` са същите като досега. Увери се, че Ollama работи, преди да започнеш.
+
+### 1. Създай проекта
+
+Отвори терминал и изпълни:
+
+```bash
+dotnet new console -n GalaHost
+cd GalaHost
+dotnet add package Microsoft.Agents.AI
+dotnet add package OllamaSharp
+```
+
+Това са същите два пакета от Unit 2.1: Agent Framework и клиентът за Ollama. Отвори папката `GalaHost` в редактора си.
+
+:::note[Версии]
+Примерите в този модул са изпълнени с `Microsoft.Agents.AI` 1.28 и `OllamaSharp` 5.5, същите версии като в Unit 2.1.
+:::
+
+### 2. Свържи се с модела
+
+Създай файл `LocalModel.cs`. Той е същият като в [Unit 2.1](/ai-agents/unit-2/agent-framework/first-agent/). Ако още пазиш проекта `PartyPlanner`, просто копирай файла оттам.
+
+```csharp title="LocalModel.cs"
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+using OllamaSharp.Models;
+
+public static class LocalModel
+{
+    private const string Model = "qwen3.5:9b";
+
+    public static IChatClient Create()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromMinutes(5),
+        };
+
+        return new ChatClientBuilder(new OllamaApiClient(http, Model))
+            .ConfigureOptions(options =>
+            {
+                options.Temperature = 0;
+                options.AddOllamaOption(OllamaOption.Think, false);
+            })
+            .Build();
+    }
+}
+```
+
+Нищо ново: връзка с локалния модел, по-дълъг timeout, `Temperature = 0` за повторяеми отговори и изключен thinking, за да не чакаш с минути.
+
+## Виж проблема
+
+### 3. Попитай Alfred за гостите
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+string[] questions =
+[
+    "Which of tonight's guests is passionate about pigeons?",
+    "Is anyone on tonight's guest list a vegetarian?",
+];
+
+foreach (string question in questions)
+{
+    AgentResponse response = await alfred.RunAsync(question);
+
+    Console.WriteLine($"You: {question}");
+    Console.WriteLine($"Alfred: {response.Text}");
+    Console.WriteLine();
+}
+```
+
+Alfred е най-простият възможен Agent: модел и `instructions`, без tools. Задаваме му два въпроса за гостите. Изпълни `dotnet run`:
+
+```text wrap
+You: Which of tonight's guests is passionate about pigeons?
+Alfred: Good evening. That would be Mr. Wayne himself. He has a particular fondness for them, though I must remind you to keep the conversation civil; he does not appreciate being called names while feeding the birds. Shall I bring him some seeds?
+
+You: Is anyone on tonight's guest list a vegetarian?
+Alfred: Good evening. I have reviewed the guest list; yes, there are several vegetarians among our attendees. The kitchen has prepared a selection of plant-based dishes to ensure their comfort. Would you like me to direct them to the dining area immediately?
+```
+
+При теб думите може да са други, но и двата отговора ще са измислени. Никой не е давал на Alfred списък с гости, а той твърди, че го е „прегледал“. Историята с гълъбите също я няма никъде.
+
+Обърни внимание, че **нищо в отговора не издава проблема**. Тонът е учтив, изреченията са гладки и подробностите звучат убедително. Ако не знаеш истината, няма как да разбереш, че е измислица. Затова hallucinations са опасни.
+
+## Идеята: изпит с отворен учебник
+
+Представи си студент на изпит, който не е чел темата. Ако учебникът е затворен, му остава да гадае. Ако му позволят да го отвори, намира страницата, прочита я и отговаря вярно. Знанията му не са се променили. Променило се е това, което има пред очите си.
+
+RAG прави същото с модела. Преди да му зададем въпроса, намираме текстовете, които са свързани с него, и ги слагаме в prompt-а. Името описва трите стъпки:
+
+| Стъпка | Какво се случва | Кой го прави |
+| --- | --- | --- |
+| **R**etrieval | Намираме текстовете, които са свързани с въпроса. | Твой код |
+| **A**ugmented | Добавяме ги към prompt-а, преди въпроса. | Твой код |
+| **G**eneration | Моделът пише отговора, като чете добавеното. | LLM |
+
+```text
+въпрос ──▶ Retrieve ──▶ Augment ──▶ Generate ──▶ отговор
+              │            │
+         твоите данни    prompt
+```
+
+Най-важното в тази схема е какво **липсва**: моделът не се обучава и не се променя. От Unit 1 знаеш, че един LLM чете и пише само текст и че всичко, което знае за текущата ситуация, е в prompt-а: `instructions`, разговорът, резултатите от tools. RAG добавя там още едно нещо, твоите документи.
+
+## Augment на ръка
+
+Да пробваме идеята без нито един нов ред „инфраструктура“. Ние ще изиграем ролята на търсачката: знаем коя бележка трябва на модела и ще я сложим в prompt-а сами.
+
+### 4. Сложи бележката в prompt-а
+
+В `Program.cs` замени всичко под създаването на `alfred` със следното:
+
+```csharp title="Program.cs" wrap
+const string Question = "Is anyone on tonight's guest list a vegetarian?";
+
+const string GuestNotes = """
+    Name: Leonardo da Vinci
+    Relation: family friend
+    Description: Leonardo da Vinci is a painter, engineer and inventor who fills his notebooks with designs for flying machines. He is a strict vegetarian, so the kitchen has to prepare a separate plate for him.
+    Email: leonardo.davinci@example.com
+    """;
+
+string prompt = $"""
+    Answer the question using only the guest notes below.
+
+    Guest notes:
+    {GuestNotes}
+
+    Question: {Question}
+    """;
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"You: {Question}");
+Console.WriteLine($"Alfred: {response.Text}");
+```
+
+Кодът има три части:
+
+1. **`Question`** е същият въпрос за вегетарианците.
+2. **`GuestNotes`** е бележката за един гост. Това е нашият „учебник“.
+3. **`prompt`** сглобява двете в един текст: първо правило, после бележката и накрая въпросът.
+
+Изпълни `dotnet run`:
+
+```text wrap
+You: Is anyone on tonight's guest list a vegetarian?
+Alfred: Yes, Mr. Leonardo da Vinci is a strict vegetarian.
+```
+
+Моделът е същият. `instructions` са същите. Въпросът е същият. Променихме само prompt-а и вместо измислица получихме верен отговор.
+
+Първото изречение на prompt-а също има роля. `using only the guest notes below` казва на модела да стъпи върху подадения текст, а не върху паметта си. Отговор, който се опира на подаден текст, се нарича **grounded**.
+
+## Какво точно направихме
+
+Това вече е RAG, но със сериозна уговорка: стъпката Retrieval я изиграхме ние. Знаехме предварително, че за този въпрос трябва бележката за Leonardo da Vinci.
+
+В истинско приложение не знаеш какво ще попита потребителят. Имаш два изхода:
+
+1. **Слагаш всички бележки в prompt-а при всеки въпрос.** За дванадесет гости това работи. В следващия урок ще го пробваме и ще видим кога спира да работи.
+2. **Намираш подходящите бележки автоматично.** Това е работата на *retriever-а* и с него ще се занимаваме до края на модула.
+
+## RAG или fine-tuning?
+
+Често задаван въпрос е защо просто не „научим“ модела на нашите данни. Това се нарича *fine-tuning*: допълнително обучение върху твои примери. Двете техники решават различни задачи:
+
+| | RAG | Fine-tuning |
+| --- | --- | --- |
+| Какво се променя | Prompt-ът. | Самият модел. |
+| Нови или променени данни | Променяш данните и готово. | Обучаваш отново. |
+| Точни факти | Моделът ги чете от подадения текст. | Моделът пак може да ги обърка. |
+| Източник на отговора | Знаеш от кой документ идва. | Не може да се проследи. |
+| Подходящ за | Знания: факти, документи, данни. | Поведение: стил, формат, тесен език. |
+
+За знания почти винаги се започва с RAG. Списъкът с гости може да се смени утре и никой не иска да обучава модел заради една нова покана.
+
+## Думи, които ще срещаш
+
+Оттук нататък ще използваме няколко термина. Ето ги на едно място:
+
+| Термин | Значение |
+| --- | --- |
+| **Document** | Един текст от твоите данни. При нас това е бележката за един гост. |
+| **Retriever** | Кодът, който по даден въпрос намира подходящите documents. |
+| **Context** | Намерените текстове, сложени в prompt-а. |
+| **Top-k** | Колко documents връща retriever-ът. При нас ще са три. |
+| **Grounding** | Отговорът стъпва върху подадения context, а не върху паметта на модела. |
+| **Hallucination** | Правдоподобен, но измислен отговор. |
+
+## Обобщение
+
+- Един LLM не знае **твоите данни**, **новите неща** и **точните детайли**. Когато не знае, си измисля.
+- **RAG** не променя модела. Променя prompt-а: намираш подходящия текст (**Retrieval**), добавяш го към въпроса (**Augmented**) и моделът отговаря по него (**Generation**).
+- Правило като `using only the notes below` кара модела да стъпи върху подадения текст.
+- Засега ние избрахме коя бележка да подадем. Истинската работа е това да става автоматично.
+
+В следващия урок ще заредим всичките дванадесет гости и ще напишем първия си retriever.

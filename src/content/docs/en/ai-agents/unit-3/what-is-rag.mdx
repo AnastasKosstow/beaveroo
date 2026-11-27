@@ -1,0 +1,236 @@
+---
+title: What is RAG?
+description: Why an LLM knows nothing about your data, how it makes up an answer, and how we fix that with Retrieval-Augmented Generation - we find the text it needs and put it in the prompt. The first attempt is by hand.
+---
+
+Alfred is hosting the gala. Ask him about the guests and he will answer politely and with confidence. There is just one problem: he has no way of knowing who they are.
+
+In this lesson you will first see the problem with your own eyes, and then fix it in the simplest possible way, by hand. That fix has a name: **RAG**, Retrieval-Augmented Generation.
+
+## What an LLM knows
+
+You remember from [Unit 1](/en/ai-agents/unit-1/what-are-llms/) that an LLM is trained on an enormous amount of text. Once training ends, its knowledge is frozen in its parameters. Three things are always outside it:
+
+| What is missing | Example |
+| --- | --- |
+| **Your data** | The guest list, the company's internal documentation, your emails. The model has never seen them. |
+| **Anything new** | The weather outside, yesterday's news, a library version released after training. |
+| **Exact details** | An email address, an order number, a price. The model remembers patterns in language, not tables of facts. |
+
+The bad part is that when the model does not know, it does not stay silent. Its only job is to predict the next token, so it writes text that **sounds** right. You already saw this in the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/), where the model invented the weather in London on its own. This is called a **hallucination**.
+
+## Setup
+
+We need a new project for this module. Ollama and the `qwen3.5:9b` model are the same as before. Make sure Ollama is running before you start.
+
+### 1. Create the project
+
+Open a terminal and run:
+
+```bash
+dotnet new console -n GalaHost
+cd GalaHost
+dotnet add package Microsoft.Agents.AI
+dotnet add package OllamaSharp
+```
+
+These are the same two packages from Unit 2.1: Agent Framework and the Ollama client. Open the `GalaHost` folder in your editor.
+
+:::note[Versions]
+The examples in this module were run with `Microsoft.Agents.AI` 1.28 and `OllamaSharp` 5.5, the same versions as in Unit 2.1.
+:::
+
+### 2. Connect to the model
+
+Create a file `LocalModel.cs`. It is the same as in [Unit 2.1](/en/ai-agents/unit-2/agent-framework/first-agent/). If you still have the `PartyPlanner` project, just copy the file from there.
+
+```csharp title="LocalModel.cs"
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+using OllamaSharp.Models;
+
+public static class LocalModel
+{
+    private const string Model = "qwen3.5:9b";
+
+    public static IChatClient Create()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromMinutes(5),
+        };
+
+        return new ChatClientBuilder(new OllamaApiClient(http, Model))
+            .ConfigureOptions(options =>
+            {
+                options.Temperature = 0;
+                options.AddOllamaOption(OllamaOption.Think, false);
+            })
+            .Build();
+    }
+}
+```
+
+Nothing new here: a connection to the local model, a longer timeout, `Temperature = 0` for repeatable answers, and thinking turned off so you don't wait for minutes.
+
+## See the problem
+
+### 3. Ask Alfred about the guests
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+string[] questions =
+[
+    "Which of tonight's guests is passionate about pigeons?",
+    "Is anyone on tonight's guest list a vegetarian?",
+];
+
+foreach (string question in questions)
+{
+    AgentResponse response = await alfred.RunAsync(question);
+
+    Console.WriteLine($"You: {question}");
+    Console.WriteLine($"Alfred: {response.Text}");
+    Console.WriteLine();
+}
+```
+
+Alfred is the simplest possible Agent: a model and `instructions`, no tools. We ask him two questions about the guests. Run `dotnet run`:
+
+```text wrap
+You: Which of tonight's guests is passionate about pigeons?
+Alfred: Good evening. That would be Mr. Wayne himself. He has a particular fondness for them, though I must remind you to keep the conversation civil; he does not appreciate being called names while feeding the birds. Shall I bring him some seeds?
+
+You: Is anyone on tonight's guest list a vegetarian?
+Alfred: Good evening. I have reviewed the guest list; yes, there are several vegetarians among our attendees. The kitchen has prepared a selection of plant-based dishes to ensure their comfort. Would you like me to direct them to the dining area immediately?
+```
+
+Your wording may differ, but both answers will be made up. Nobody gave Alfred a guest list, yet he claims to have "reviewed" it. The story about the pigeons does not exist anywhere either.
+
+Notice that **nothing in the answer gives the problem away**. The tone is polite, the sentences are smooth and the details sound convincing. If you don't know the truth, you cannot tell it is invented. That is what makes hallucinations dangerous.
+
+## The idea: an open-book exam
+
+Picture a student at an exam who has not read the topic. With the textbook closed, all that is left is guessing. If they are allowed to open it, they find the page, read it and answer correctly. Their knowledge has not changed. What changed is what they have in front of them.
+
+RAG does the same with the model. Before we ask the question, we find the texts related to it and put them in the prompt. The name describes the three steps:
+
+| Step | What happens | Who does it |
+| --- | --- | --- |
+| **R**etrieval | We find the texts related to the question. | Your code |
+| **A**ugmented | We add them to the prompt, before the question. | Your code |
+| **G**eneration | The model writes the answer while reading what was added. | The LLM |
+
+```text
+question ──▶ Retrieve ──▶ Augment ──▶ Generate ──▶ answer
+                │            │
+            your data      prompt
+```
+
+The most important thing about this picture is what is **missing**: the model is not trained and does not change. You know from Unit 1 that an LLM only reads and writes text, and that everything it knows about the current situation is in the prompt: the `instructions`, the conversation, the tool results. RAG adds one more thing there, your documents.
+
+## Augment by hand
+
+Let's try the idea without a single new line of "infrastructure". We will play the search engine ourselves: we know which note the model needs, and we will put it in the prompt on our own.
+
+### 4. Put the note in the prompt
+
+In `Program.cs` replace everything below the creation of `alfred` with the following:
+
+```csharp title="Program.cs" wrap
+const string Question = "Is anyone on tonight's guest list a vegetarian?";
+
+const string GuestNotes = """
+    Name: Leonardo da Vinci
+    Relation: family friend
+    Description: Leonardo da Vinci is a painter, engineer and inventor who fills his notebooks with designs for flying machines. He is a strict vegetarian, so the kitchen has to prepare a separate plate for him.
+    Email: leonardo.davinci@example.com
+    """;
+
+string prompt = $"""
+    Answer the question using only the guest notes below.
+
+    Guest notes:
+    {GuestNotes}
+
+    Question: {Question}
+    """;
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"You: {Question}");
+Console.WriteLine($"Alfred: {response.Text}");
+```
+
+The code has three parts:
+
+1. **`Question`** is the same question about vegetarians.
+2. **`GuestNotes`** is the note about one guest. This is our "textbook".
+3. **`prompt`** puts the two together in one text: a rule first, then the note, and the question last.
+
+Run `dotnet run`:
+
+```text wrap
+You: Is anyone on tonight's guest list a vegetarian?
+Alfred: Yes, Mr. Leonardo da Vinci is a strict vegetarian.
+```
+
+The model is the same. The `instructions` are the same. The question is the same. We changed only the prompt, and instead of an invention we got a correct answer.
+
+The first sentence of the prompt plays a part too. `using only the guest notes below` tells the model to rely on the text it was given, not on its memory. An answer that rests on supplied text is called **grounded**.
+
+## What exactly we did
+
+This is already RAG, with one serious caveat: we played the Retrieval step ourselves. We knew in advance that this question needs the note about Leonardo da Vinci.
+
+In a real application you don't know what the user will ask. You have two ways out:
+
+1. **Put all the notes in the prompt on every question.** For twelve guests that works. We will try it in the next lesson and see when it stops working.
+2. **Find the right notes automatically.** That is the job of the *retriever*, and it will keep us busy until the end of the module.
+
+## RAG or fine-tuning?
+
+A common question is why we don't simply "teach" the model our data. That is called *fine-tuning*: additional training on your own examples. The two techniques solve different problems:
+
+| | RAG | Fine-tuning |
+| --- | --- | --- |
+| What changes | The prompt. | The model itself. |
+| New or changed data | You change the data and you're done. | You train again. |
+| Exact facts | The model reads them from the supplied text. | The model can still get them wrong. |
+| Source of the answer | You know which document it came from. | Cannot be traced. |
+| Good for | Knowledge: facts, documents, data. | Behavior: style, format, a narrow jargon. |
+
+For knowledge you almost always start with RAG. The guest list may change tomorrow, and nobody wants to train a model because of one new invitation.
+
+## Words you will keep meeting
+
+From here on we will use a few terms. Here they are in one place:
+
+| Term | Meaning |
+| --- | --- |
+| **Document** | One text from your data. For us it is the note about one guest. |
+| **Retriever** | The code that finds the right documents for a given question. |
+| **Context** | The retrieved texts, placed in the prompt. |
+| **Top-k** | How many documents the retriever returns. We will use three. |
+| **Grounding** | The answer rests on the supplied context, not on the model's memory. |
+| **Hallucination** | A plausible but made-up answer. |
+
+## Summary
+
+- An LLM does not know **your data**, **new things** and **exact details**. When it doesn't know, it makes something up.
+- **RAG** does not change the model. It changes the prompt: you find the right text (**Retrieval**), add it to the question (**Augmented**) and the model answers from it (**Generation**).
+- A rule like `using only the notes below` makes the model rely on the supplied text.
+- So far we chose which note to supply. The real work is making that happen automatically.
+
+In the next lesson we will load all twelve guests and write our first retriever.

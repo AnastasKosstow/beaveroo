@@ -91,18 +91,6 @@ Use it when the Agent has to remember, call several tools or work with other Age
 
 You don't need it for a single call to a model or a chain of prompts. Then `IChatClient` from `Microsoft.Extensions.AI` is enough, as you saw in Unit 1.
 
-## How it relates to the frameworks from the original course
-
-The original Hugging Face course covers three Python frameworks. If you meet them in articles or examples, here is what they correspond to here:
-
-| In the original course | Main idea | In Agent Framework |
-| --- | --- | --- |
-| smolagents | A lightweight framework for Agents that call tools. | An `AIAgent` with tools |
-| LlamaIndex | Agents, tools and workflows over your data. | `AIAgent` and the ready-made orchestrations for several Agents |
-| LangGraph | A graph of steps with explicit control over the flow. | A `Workflow` built with `WorkflowBuilder` |
-
-There is also one difference in approach. smolagents bets on **Code Agents**, where the model writes Python code instead of JSON (see [Actions](/en/ai-agents/unit-1/actions/)). In Agent Framework an Agent uses **function calling** by default: the model returns the tool call as structured data. That is the same approach you used in Unit 1.
-
 ## Which models it works with
 
 Agent Framework accepts any `IChatClient`. Here are some of the supported providers:

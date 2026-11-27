@@ -211,6 +211,58 @@ export default defineConfig({
             { label: 'Заключение', translations: { en: 'Conclusion' }, slug: 'ai-agents/unit-2/agent-framework/conclusion' },
           ],
         },
+        {
+          label: 'Unit 3. Agentic RAG',
+          translations: { en: 'Unit 3. Agentic RAG' },
+          collapsed: true,
+          items: [
+            {
+              label: 'Въведение в Agentic RAG',
+              translations: { en: 'Introduction to Agentic RAG' },
+              slug: 'ai-agents/unit-3/introduction',
+            },
+            { label: 'Какво е RAG?', translations: { en: 'What is RAG?' }, slug: 'ai-agents/unit-3/what-is-rag' },
+            {
+              label: 'Първият ти retriever',
+              translations: { en: 'Your First Retriever' },
+              slug: 'ai-agents/unit-3/retrieval',
+            },
+            {
+              label: 'Embeddings: търсене по смисъл',
+              translations: { en: 'Embeddings: Searching by Meaning' },
+              slug: 'ai-agents/unit-3/embeddings',
+            },
+            { label: 'Quick Quiz 1', translations: { en: 'Quick Quiz 1' }, slug: 'ai-agents/unit-3/quiz1' },
+            {
+              label: 'Vector store: дом за embeddings',
+              translations: { en: 'Vector Stores: a Home for Embeddings' },
+              slug: 'ai-agents/unit-3/vector-store',
+            },
+            {
+              label: 'RAG в Agent Framework',
+              translations: { en: 'RAG in Agent Framework' },
+              slug: 'ai-agents/unit-3/rag-in-agent-framework',
+            },
+            {
+              label: 'Agentic RAG: търсенето като tool',
+              translations: { en: 'Agentic RAG: Retrieval as a Tool' },
+              slug: 'ai-agents/unit-3/agentic-rag',
+            },
+            { label: 'Quick Quiz 2', translations: { en: 'Quick Quiz 2' }, slug: 'ai-agents/unit-3/quiz2' },
+            {
+              label: 'Още източници: времето, Wikipedia и NuGet',
+              translations: { en: 'More Sources: Weather, Wikipedia and NuGet' },
+              slug: 'ai-agents/unit-3/tools',
+            },
+            {
+              label: 'Alfred на гала вечерта',
+              translations: { en: 'Alfred at the Gala' },
+              slug: 'ai-agents/unit-3/gala-agent',
+            },
+            { label: 'Final Quiz за Unit 3', translations: { en: 'Unit 3 Final Quiz' }, slug: 'ai-agents/unit-3/final-quiz' },
+            { label: 'Заключение', translations: { en: 'Conclusion' }, slug: 'ai-agents/unit-3/conclusion' },
+          ],
+        },
 
         // Python за .NET програмисти. A unit here is one page, so it is a link, not a group.
         // AI Agents keeps groups with a lesson under each unit.

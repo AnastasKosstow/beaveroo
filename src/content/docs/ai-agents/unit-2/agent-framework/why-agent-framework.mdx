@@ -91,18 +91,6 @@ Agent-ът ти дава **свобода**, а Workflow-ът **предвиди
 
 Не ти трябва за едно извикване на модел или за верига от prompts. Тогава стига `IChatClient` от `Microsoft.Extensions.AI`, както видя в Unit 1.
 
-## Как стои спрямо frameworks от оригиналния курс
-
-Оригиналният курс на Hugging Face разглежда три Python frameworks. Ако ги срещнеш в статии или примери, ето на какво съответстват тук:
-
-| В оригиналния курс | Основна идея | В Agent Framework |
-| --- | --- | --- |
-| smolagents | Лек framework за Agents, които извикват tools. | `AIAgent` с tools |
-| LlamaIndex | Agents, tools и workflows върху твои данни. | `AIAgent` и готовите orchestrations за няколко Agents |
-| LangGraph | Граф от стъпки с изричен контрол върху хода. | `Workflow`, изграден с `WorkflowBuilder` |
-
-Има и една разлика в подхода. smolagents залага на **Code Agents**, при които моделът пише Python код вместо JSON (виж [Actions](/ai-agents/unit-1/actions/)). В Agent Framework един Agent по подразбиране използва **function calling**: моделът връща извикването на tool като структурирани данни. Това е същият подход, който използва в Unit 1.
-
 ## С кои модели работи
 
 Agent Framework приема всеки `IChatClient`. Ето някои от поддържаните доставчици:

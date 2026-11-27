@@ -1,0 +1,330 @@
+---
+title: "Още източници: времето, Wikipedia и NuGet"
+description: Даваме на Alfred три tools, които питат истински услуги в интернет без акаунти и API ключове - Open-Meteo за времето, Wikipedia за обща информация и NuGet за статистика на пакети. Изпробваме всеки сам и виждаме какво става, когато един източник не отговори.
+---
+
+Списъкът с гости е само един от източниците, които трябват на един домакин. Фойерверките зависят от времето навън. Разговорът на масата може да тръгне към тема, за която в бележките няма нито дума. А трима от гостите са програмисти и е добре Alfred да е в час с това, което се ползва днес.
+
+Нищо от това не е във vector store-а и няма нужда да бъде. В този урок ще дадем на Alfred три tools, които питат истински услуги в интернет:
+
+| Tool | Източник | За какво му е на Alfred |
+| --- | --- | --- |
+| `GetWeather` | [Open-Meteo](https://open-meteo.com/) | Времето в момента, заради фойерверките. |
+| `SearchWikipedia` | [Wikipedia](https://www.wikipedia.org/) | Обща информация по тема на разговор. |
+| `GetPackageStats` | [NuGet](https://www.nuget.org/) | Колко популярен е един .NET пакет. |
+
+За учебен проект и трите услуги са безплатни и не искат регистрация или API ключ.
+
+:::note[Нужен е интернет]
+Това е първият урок в курса, в който програмата излиза извън твоя компютър. Моделът продължава да работи локално. В интернет отиват само заявките на трите tools.
+:::
+
+## Подготовка
+
+Продължаваме в проекта `GalaHost`. Ще ти трябват `LocalModel.cs` и `AgentLog.cs`.
+
+### 1. Създай класа за tools
+
+Създай файл `WorldTools.cs`:
+
+```csharp title="WorldTools.cs"
+using System.ComponentModel;
+using System.Net.Http.Json;
+using System.Text.Json;
+
+public static class WorldTools
+{
+    private static readonly HttpClient Http = CreateClient();
+
+    private static HttpClient CreateClient()
+    {
+        HttpClient client = new() { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("GalaHost/1.0 (https://beaveroo.tech; course sample)");
+
+        return client;
+    }
+}
+```
+
+Засега в класа няма нито един tool, само общият `HttpClient`, който и трите ще използват. Две неща в него са важни:
+
+- **`Timeout`**: един tool не бива да виси безкрайно. Ако услугата не отговори за 20 секунди, се отказваме.
+- **`User-Agent`**: публичните услуги искат програмата да се представи с име и начин за връзка. Wikipedia например пуска само десет заявки в минута от клиенти, които не са го направили. Ако надградиш този код в свой проект, сложи тук свой адрес или имейл.
+
+## Времето навън
+
+### 2. Напиши GetWeather
+
+Добави този метод в класа `WorldTools`:
+
+```csharp title="WorldTools.cs"
+[Description("Gets the current weather in a city: temperature, wind, rain and cloud cover.")]
+public static async Task<string> GetWeather(
+    [Description("The name of the city, for example 'Sofia'.")] string city)
+{
+    try
+    {
+        JsonElement places = await Http.GetFromJsonAsync<JsonElement>(
+            $"https://geocoding-api.open-meteo.com/v1/search?count=1&name={Uri.EscapeDataString(city)}");
+
+        if (!places.TryGetProperty("results", out JsonElement results))
+        {
+            return $"Unknown city '{city}'.";
+        }
+
+        JsonElement place = results[0];
+
+        JsonElement forecast = await Http.GetFromJsonAsync<JsonElement>(
+            "https://api.open-meteo.com/v1/forecast" +
+            $"?latitude={place.GetProperty("latitude")}&longitude={place.GetProperty("longitude")}" +
+            "&current=temperature_2m,wind_speed_10m,precipitation,cloud_cover");
+
+        JsonElement now = forecast.GetProperty("current");
+
+        return $"Weather in {place.GetProperty("name")}, {place.GetProperty("country")}: " +
+               $"{now.GetProperty("temperature_2m")} °C, wind {now.GetProperty("wind_speed_10m")} km/h, " +
+               $"rain {now.GetProperty("precipitation")} mm, cloud cover {now.GetProperty("cloud_cover")}%.";
+    }
+    catch (HttpRequestException error)
+    {
+        return $"The weather service is not available: {error.Message}";
+    }
+}
+```
+
+Методът прави две заявки една след друга:
+
+1. **Намира града.** Услугата за времето работи с координати, затова първо питаме къде се намира градът. Ако такъв град няма, връщаме ясен текст.
+2. **Взима времето.** С координатите питаме за текущите температура, вятър, валеж и облачност.
+
+Отговорите четем с `JsonElement`, за да вземем само полетата, които ни трябват, без да описваме класове за целия JSON. Накрая сглобяваме едно изречение, защото моделът чете текст.
+
+Както всеки tool в този курс, и този **не хвърля грешка**. Непознат град и липсваща връзка се връщат като текст, който моделът ще получи като Observation.
+
+### 3. Изпробвай го
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.GetWeather("Sofia"));
+Console.WriteLine(await WorldTools.GetWeather("Gotham City"));
+```
+
+Изпълни `dotnet run`:
+
+```text
+Weather in Sofia, Bulgaria: 5.9 °C, wind 9.5 km/h, rain 0.00 mm, cloud cover 48%.
+Unknown city 'Gotham City'.
+```
+
+Първият ред е истинското време в София в момента, в който пуснахме програмата. При теб числата ще са други. Вторият ред показва, че Gotham City го няма на картата, затова в този урок ще питаме за истински градове.
+
+## Обща информация
+
+### 4. Напиши SearchWikipedia
+
+Добави втори метод в `WorldTools`:
+
+```csharp title="WorldTools.cs"
+[Description("Searches Wikipedia and returns short summaries of the best matching articles. Use it for general knowledge about people, places, science and history.")]
+public static async Task<string> SearchWikipedia(
+    [Description("What to search for, for example 'wireless power transfer'.")] string query)
+{
+    try
+    {
+        JsonElement response = await Http.GetFromJsonAsync<JsonElement>(
+            "https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=3" +
+            "&prop=extracts&exintro=1&explaintext=1&exsentences=2" +
+            $"&gsrsearch={Uri.EscapeDataString(query)}");
+
+        if (!response.TryGetProperty("query", out JsonElement found))
+        {
+            return $"Wikipedia has no article about '{query}'.";
+        }
+
+        IEnumerable<string> articles = found.GetProperty("pages")
+            .EnumerateObject()
+            .Select(page => page.Value)
+            .OrderBy(page => page.GetProperty("index").GetInt32())
+            .Select(page => $"{page.GetProperty("title")}: {page.GetProperty("extract")}");
+
+        return string.Join("\n\n", articles);
+    }
+    catch (HttpRequestException error)
+    {
+        return $"Wikipedia is not available: {error.Message}";
+    }
+}
+```
+
+Адресът изглежда страшно, но казва три прости неща: потърси по този текст (`gsrsearch`), върни първите три статии (`gsrlimit=3`) и за всяка дай първите две изречения като чист текст (`exsentences=2`). Wikipedia връща статиите без ред, затова ги подреждаме по полето `index`.
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.SearchWikipedia("wireless power transfer"));
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is the transmission of electrical energy without wires as a physical link. In a wireless power transmission system, an electrically powered transmitter device generates a time-varying electromagnetic field that transmits power across space to a receiver device; the receiver device extracts power from the field and supplies it to an electrical load.
+
+Wireless Power Consortium: The Wireless Power Consortium (WPC) is a multinational technology consortium formed on December 17, 2008, as an open standards development organization. WPC is a virtual corporation with administrative offices in Washington, DC. Its mission is to create and promote global adoption of its interface standards: Qi (pronounced "chee") for wireless power transfer in small, mobile electronics such as phones and wearable devices like watches, and Ki (pronounced "kee") for wireless power transfer in kitchen appliances like electric cooktops and kettles.
+
+Electric road: An electric road, eroad, e-roadway, or electric road system (ERS) is a road which supplies electric power to vehicles travelling on it. Common implementations are overhead power lines above the road, ground-level power supply through conductive rails, and dynamic wireless power transfer (DWPT) through resonant inductive coils or inductive cables embedded in the road.
+```
+
+Формата ти е позната. Влиза заявка, излизат трите най-подходящи текста. Това е същият договор като при `SearchGuests`. Разликата е, че търсачката не е наша: Wikipedia сама решава кои статии са най-близо до заявката, а ние нито знаем, нито ни интересува как го прави.
+
+## Статистика от NuGet
+
+### 5. Напиши GetPackageStats
+
+Добави третия метод в `WorldTools`:
+
+```csharp title="WorldTools.cs"
+[Description("Gets the latest version and the total number of downloads of a NuGet package.")]
+public static async Task<string> GetPackageStats(
+    [Description("The exact id of the package, for example 'OllamaSharp'.")] string packageId)
+{
+    try
+    {
+        JsonElement response = await Http.GetFromJsonAsync<JsonElement>(
+            $"https://azuresearch-usnc.nuget.org/query?take=1&q=packageid:{Uri.EscapeDataString(packageId)}");
+
+        JsonElement packages = response.GetProperty("data");
+
+        if (packages.GetArrayLength() == 0)
+        {
+            return $"There is no NuGet package with the id '{packageId}'.";
+        }
+
+        JsonElement package = packages[0];
+
+        return $"{package.GetProperty("id")}: latest version {package.GetProperty("version")}, " +
+               $"{package.GetProperty("totalDownloads")} downloads in total.";
+    }
+    catch (HttpRequestException error)
+    {
+        return $"NuGet is not available: {error.Message}";
+    }
+}
+```
+
+Една заявка към търсачката на NuGet, с точното име на пакета. От отговора взимаме три полета. Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.GetPackageStats("OllamaSharp"));
+Console.WriteLine(await WorldTools.GetPackageStats("Ollama.Sharp"));
+```
+
+Изпълни `dotnet run`:
+
+```text
+OllamaSharp: latest version 5.5.2, 5117622 downloads in total.
+There is no NuGet package with the id 'Ollama.Sharp'.
+```
+
+Пакетът, с който се свързваме с Ollama през целия курс, е изтеглен над пет милиона пъти. Сгрешеното име от втория ред получава ясен отговор, а не грешка.
+
+## Дай ги на Alfred
+
+Трите tools работят сами. Сега да видим как Alfred избира между тях.
+
+### 6. Задай въпрос за два източника
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use your tools to look things up and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(WorldTools.GetWeather),
+        AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+        AIFunctionFactory.Create(WorldTools.GetPackageStats),
+    ]);
+
+AgentResponse response = await alfred.RunAsync(
+    "What is the Roslyn compiler, and how popular is the Microsoft.CodeAnalysis.CSharp package?");
+
+AgentLog.Print(response);
+```
+
+Засега Alfred е без списъка с гости, само с трите нови tools. Въпросът има две части: едната е за обща информация, другата за число, което се променя всеки ден. Изпълни `dotnet run`:
+
+```text wrap
+Alfred: I shall investigate both inquiries for you, sir. First, I will consult Wikipedia regarding the Roslyn compiler, and then I will check the statistics for the `Microsoft.CodeAnalysis.CSharp` NuGet package.
+  Action: SearchWikipedia({"query":"Roslyn compiler"})
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Roslyn (compiler): .NET Compiler Platform, also known by its codename Roslyn, is a set of open-sourc...
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: The Roslyn compiler, also known as the .NET Compiler Platform, is a set of open-source compilers and code analysis APIs for C# and Visual Basic from Microsoft. It notably includes self-hosting versions of the C# and VB.NET compilers.
+
+Regarding the `Microsoft.CodeAnalysis.CSharp` package, it has reached version 5.12.0 and has been downloaded over 2 billion times in total.
+```
+
+Alfred извика два различни tools в една стъпка и сглоби един отговор от двата резултата. За описанието на Roslyn отиде в Wikipedia, а за изтеглянията в NuGet. Времето не го интересуваше и `GetWeather` остана неизползван. Никъде в кода не пише кой tool за какво е. Както винаги, моделът избра по описанията им.
+
+## Когато източникът не отговаря
+
+Външните услуги понякога отказват. Не се наложи да го симулираме. Докато подготвяхме този урок, изпратихме твърде много заявки за кратко време и Wikipedia ни спря за около минута. Ето какво видяхме тогава, със същия въпрос:
+
+```text wrap
+  Action: SearchWikipedia({"query":"Roslyn compiler"})
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Wikipedia is not available: Response status code does not indicate success: 429 (We suspect this req...
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: I regret to inform you that Wikipedia is currently unavailable due to a temporary block on automated requests. However, I have successfully retrieved the statistics for the `Microsoft.CodeAnalysis.CSharp` package.
+
+The latest version of the package is 5.12.0, and it has been downloaded over 2 billion times in total.
+```
+
+Програмата не спря. Alfred каза какво не е успял да провери и отговори на останалото. Това стана възможно заради блока `catch` в `SearchWikipedia`: вместо exception моделът получи текст с причината.
+
+Правилото го знаеш от Unit 1: **грешката също е Observation**. При tools, които зависят от чужда услуга, то е още по-важно, защото там грешките са въпрос на време. Можеш да го видиш и сам: изключи интернета и пусни програмата отново.
+
+## Retrieval е повече от vector search
+
+Погледни четирите tools, които Alfred вече има, като едно цяло:
+
+| Tool | Къде търси | Как намира |
+| --- | --- | --- |
+| `SearchGuests` | Във vector store на твоя компютър. | По смисъл, с embeddings. |
+| `SearchWikipedia` | В Wikipedia. | С търсачката на Wikipedia. |
+| `GetWeather` | В Open-Meteo. | По точно име на град. |
+| `GetPackageStats` | В NuGet. | По точно име на пакет. |
+
+И четирите правят едно и също: донасят в prompt-а факт, който моделът не знае, точно когато му потрябва. Това е буквата **R** в RAG. Vector store-ът е само един от начините да я изпълниш.
+
+Оттук идва и едно практично правило. Embeddings са за случаите, когато не знаеш с какви думи ще те попитат. Ако данните имат точен ключ, например име на град, номер на поръчка или име на пакет, обикновена заявка към API или към база данни е по-проста, по-бърза и по-точна.
+
+:::caution[Текст от интернет]
+Предупреждението от [предишния урок](/ai-agents/unit-3/rag-in-agent-framework/) важи с пълна сила тук. Статия в Wikipedia може да бъде редактирана от всеки, а текстът ѝ влиза направо в prompt-а. Не давай на Agent, който чете от интернет, tools, които могат да навредят, без одобрение от човек.
+:::
+
+## Твой ред
+
+**Сравни два града.** Попитай `Is it warmer in Sofia or in Lisbon right now?` и виж колко пъти Alfred ще извика `GetWeather`.
+
+**Добави часовник.** Вземи `GetCurrentTime` от [първия си Agent](/ai-agents/unit-1/tutorial/) в Unit 1 и го дай на Alfred. Попитай го колко време остава до полунощ в твоя град.
+
+**Изключи интернета.** Пусни въпроса за Roslyn без връзка и виж какво ще каже Alfred, когато и двата tools върнат грешка.
+
+## Обобщение
+
+- Tool може да пита **истинска услуга** в интернет. За Open-Meteo, Wikipedia и NuGet не са нужни акаунти и ключове.
+- **Изпробвай всеки tool сам**, преди да го дадеш на Agent-а.
+- Добрият tool връща **кратък текст** и превръща всяка грешка в ясно съобщение.
+- Когато един източник не отговори, Agent-ът получава причината като Observation и продължава с останалите.
+- **Retrieval не е само vector search.** Всеки tool, който носи факти в prompt-а, изпълнява буквата R в RAG.
+
+Alfred има всичко, което му трябва. В следващия урок ще съберем четирите tools и паметта в един Agent и ще го пуснем на гала вечерта.

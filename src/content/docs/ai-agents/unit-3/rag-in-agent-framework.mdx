@@ -1,0 +1,343 @@
+---
+title: "RAG в Agent Framework: TextSearchProvider"
+description: Закачаме търсенето за Alfred с TextSearchProvider - context provider, който търси преди всяко извикване на модела и добавя намереното към prompt-а. Виждаме какво точно получава моделът и къде подходът „търси при всеки въпрос“ се проваля.
+---
+
+Досега RAG pipeline-ът живееше в `Program.cs`: търсехме, сглобявахме prompt и го подавахме на Alfred като готов текст. Това работи, но Alfred не участва в него. Той не знае, че има списък с гости. Получава дълъг prompt и отговаря.
+
+В този урок търсенето става част от самия Agent. Ти ще му задаваш обикновен въпрос, а Microsoft Agent Framework ще се погрижи нужните бележки да стигнат до модела. Компонентът, който прави това, се казва `TextSearchProvider`.
+
+## Context providers
+
+В края на Unit 2.1 споменахме *context providers* като тема, която не покрихме. Ето я.
+
+**Context provider** е код, който Agent-ът изпълнява **преди всяко извикване на модела**. Той може да добави нещо към това, което моделът ще получи: messages, инструкции или tools.
+
+```text
+въпрос ──▶ [ context provider ] ──▶ модел ──▶ отговор
+                    │
+          добавя context към prompt-а
+```
+
+Прилича на middleware от [Unit 2.1](/ai-agents/unit-2/agent-framework/middleware/), но задачата му е друга. Middleware наблюдава и контролира. Context provider-ът **допълва**.
+
+`TextSearchProvider` е готов context provider за RAG. Даваш му функция за търсене, а той прави останалото: взима въпроса на потребителя, извиква функцията, оформя резултатите като текст и ги добавя към prompt-а.
+
+## Закачи търсенето за Alfred
+
+Продължаваме в проекта `GalaHost`. Ще ти трябват `LocalModel.cs`, `Guest.cs`, `guests.json` и `GuestBook.cs` от предишните уроци.
+
+### 1. Създай Alfred с TextSearchProvider
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(new ChatClientAgentOptions
+{
+    Name = "Alfred",
+    ChatOptions = new()
+    {
+        Instructions =
+            "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+            "You are polite and concise.",
+    },
+    AIContextProviders = [new TextSearchProvider(SearchGuests)],
+});
+
+AgentResponse response = await alfred.RunAsync("Who could entertain the guests with music?");
+
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+
+async Task<IEnumerable<TextSearchProvider.TextSearchResult>> SearchGuests(
+    string query, CancellationToken cancellationToken)
+{
+    List<Guest> found = await guestBook.SearchAsync(query);
+
+    Console.WriteLine($"  [search] {query.ReplaceLineEndings(" | ")}");
+    Console.WriteLine($"  [found] {string.Join(", ", found.Select(guest => guest.Name))}");
+
+    return found.Select(guest => new TextSearchProvider.TextSearchResult
+    {
+        SourceName = guest.Name,
+        Text = guest.Text,
+    });
+}
+```
+
+Има три нови неща:
+
+1. **`AsAIAgent` с `ChatClientAgentOptions`.** Досега подавахме `name` и `instructions` като параметри. Това е по-подробният вариант на същия метод, в който настройките са в един обект. `Name` е името, а `ChatOptions.Instructions` играе ролята на `instructions`.
+2. **`AIContextProviders`.** Списъкът с context providers на Agent-а. Слагаме един: `TextSearchProvider`, на който подаваме функцията `SearchGuests`.
+3. **`SearchGuests`.** Това е мостът между provider-а и нашия `GuestBook`. Получава текст за търсене, намира гостите и превръща всеки в `TextSearchResult`: `SourceName` е името на източника, а `Text` е това, което моделът ще прочете. Двата реда с `Console.WriteLine` са само за нас, за да виждаме кога се търси, с какъв текст и какво е намерено.
+
+Виж какво **липсва**: няма `RagPrompt`, няма извикване на търсенето в основния код. На `RunAsync` подаваме само въпроса.
+
+### 2. Стартирай програмата
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+  [search] Who could entertain the guests with music?
+  [found] Wolfgang Amadeus Mozart, Hedy Lamarr, Frida Kahlo
+Alfred: Good evening. For musical entertainment after dinner, I would recommend Mr. Wolfgang Amadeus Mozart. He has graciously offered to play the piano and is a neighbor of ours.
+
+*Source: Wolfgang Amadeus Mozart (wolfgang.mozart@example.com)*
+  [309 input tokens]
+```
+
+Проследи редовете:
+
+1. Преди да извика модела, Agent-ът извика `SearchGuests` с въпроса на потребителя.
+2. Търсенето върна същите трима гости като в предишните уроци.
+3. Alfred отговори вярно, макар че не сме му подавали никакви бележки.
+4. Последният ред на отговора е **цитат на източника**. Не сме го искали ние. `TextSearchProvider` моли модела да посочи откъде идва информацията.
+
+Цитатите са едно от големите предимства на RAG. Отговор, под който пише от кой документ идва, може да бъде проверен.
+
+### 3. Виж какво получи моделът
+
+Нещо се е случило между въпроса и отговора. За да го видим, ще отпечатаме точно това, което стига до модела. Спомни си третия вид middleware от Unit 2.1: този, който обгражда всяка заявка към модела на ниво `IChatClient`. Създай файл `ModelLog.cs`:
+
+```csharp title="ModelLog.cs"
+using Microsoft.Extensions.AI;
+
+public static class ModelLog
+{
+    public static IChatClient WithPromptLog(this IChatClient client) =>
+        client
+            .AsBuilder()
+            .Use(async (messages, options, next, cancellationToken) =>
+            {
+                Console.WriteLine("--- sent to the model ---");
+                Console.WriteLine($"[instructions] {options?.Instructions}");
+
+                foreach (ChatMessage message in messages)
+                {
+                    Console.WriteLine($"[{message.Role}] {message.Text}");
+                }
+
+                Console.WriteLine("-------------------------");
+
+                await next(messages, options, cancellationToken);
+            })
+            .Build();
+}
+```
+
+Методът обвива един `IChatClient`. Преди всяка заявка отпечатва инструкциите и всички messages, а после предава заявката нататък с `next`, без да я променя.
+
+В `Program.cs` добави `.WithPromptLog()` след `LocalModel.Create()`:
+
+```csharp
+AIAgent alfred = LocalModel.Create().WithPromptLog().AsAIAgent(new ChatClientAgentOptions
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+  [search] Who could entertain the guests with music?
+  [found] Wolfgang Amadeus Mozart, Hedy Lamarr, Frida Kahlo
+--- sent to the model ---
+[instructions] You are Alfred, the butler of Wayne Manor and the host of tonight's gala. You are polite and concise.
+[user] Who could entertain the guests with music?
+[user] ## Additional Context
+Consider the following information from source documents when responding to the user:
+SourceDocName: Wolfgang Amadeus Mozart
+Contents: Name: Wolfgang Amadeus Mozart
+Relation: neighbor
+Description: Wolfgang Amadeus Mozart is a composer who wrote his first symphony at the age of eight. He has offered to play the piano after dinner and never says no to a game of billiards.
+Email: wolfgang.mozart@example.com
+----
+SourceDocName: Hedy Lamarr
+Contents: Name: Hedy Lamarr
+Relation: no relation
+Description: Hedy Lamarr is a film star and inventor. She co-invented a frequency-hopping radio system that later became the basis for Wi-Fi and Bluetooth.
+Email: hedy.lamarr@example.com
+----
+SourceDocName: Frida Kahlo
+Contents: Name: Frida Kahlo
+Relation: no relation
+Description: Frida Kahlo is a Mexican painter known for her vivid self-portraits. She loves bright colors and spicy food, and she dislikes long formal speeches.
+Email: frida.kahlo@example.com
+----
+Include citations to the source document with document name and link if document name and link is available.
+-------------------------
+Alfred: Good evening. For musical entertainment after dinner, I would recommend Mr. Wolfgang Amadeus Mozart. He has graciously offered to play the piano and is a neighbor of ours.
+
+*Source: Wolfgang Amadeus Mozart (wolfgang.mozart@example.com)*
+  [309 input tokens]
+```
+
+Това е целият prompt. Той има три части:
+
+- **`[instructions]`** са нашите инструкции, без промяна.
+- Първият **`[user]`** message е въпросът, който подадохме на `RunAsync`.
+- Вторият **`[user]`** message не е от нас. Добави го `TextSearchProvider`. В него има заглавие, трите намерени бележки, всяка с името на източника си, и накрая молбата за цитати.
+
+Това е същият augmented prompt, който в предишните уроци сглобяваше `RagPrompt`. Разликата е само в това кой го пише. Затова цитатът в отговора изглежда малко странно: provider-ът пита за „document name and link“, ние сме подали само име, и моделът е сложил имейла на мястото на връзката.
+
+Преди да продължиш, махни `.WithPromptLog()` от `Program.cs`, за да не се пълни екранът.
+
+## Слабите места
+
+`TextSearchProvider` търси **преди всяко извикване на модела**. Това е неговата сила и неговият проблем.
+
+### 4. Кажи „добър вечер“
+
+В `Program.cs` смени въпроса:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Good evening, Alfred.");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+  [search] Good evening, Alfred.
+  [found] Albert Einstein, Alan Turing, Dr. Nikola Tesla
+Alfred: Good evening. I trust you are prepared for the gala tonight.
+
+Regarding your inquiries, I have reviewed the provided documents. However, please note that while these individuals—Albert Einstein, Alan Turing, and Dr. Nikola Tesla—are distinguished figures in science and history, they are not currently listed among our confirmed guests or business associates for this specific event at Wayne Manor.
+
+If you require their contact information for future correspondence, I can provide the details from your files:
+*   **Albert Einstein**: albert.einstein@example.com (SourceDocName: Albert Einstein)
+*   **Alan Turing**: alan.turing@example.com (SourceDocName: Alan Turing)
+*   **Dr. Nikola Tesla**: nikola.tesla@example.com (SourceDocName: Dr. Nikola Tesla)
+
+Shall I have the staff prepare your evening attire, or is there anything else you require before we proceed?
+  [309 input tokens]
+```
+
+Поздравихме го, а получихме три имейл адреса и твърдението, че Einstein, Turing и Tesla не са сред гостите. Те са.
+
+Причината е в първите два реда. Provider-ът потърси текста „Good evening, Alfred.“ в списъка с гости. От урока за embeddings знаеш, че семантичното търсене **винаги връща нещо**, затова намери трима случайни гости. Моделът получи три бележки, които нямат връзка с поздрава, и реши, че трябва да направи нещо с тях.
+
+Ненужният context не е безобиден. Той струва tokens, време и понякога верния отговор.
+
+### 5. Задай уточняващ въпрос
+
+В разговор хората рядко повтарят за кого питат. Замени трите реда, които извикват `RunAsync` и отпечатват отговора, със следното:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+string[] questions =
+[
+    "Which guest is passionate about pigeons?",
+    "What is his email address?",
+];
+
+foreach (string question in questions)
+{
+    Console.WriteLine($"You: {question}");
+
+    AgentResponse response = await alfred.RunAsync(question, session);
+
+    Console.WriteLine($"Alfred: {response.Text}");
+    Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+    Console.WriteLine();
+}
+```
+
+Два въпроса в един session, както в [урока за sessions](/ai-agents/unit-2/agent-framework/sessions/). Вторият разчита на първия. Изпълни `dotnet run`:
+
+```text wrap
+You: Which guest is passionate about pigeons?
+  [search] Which guest is passionate about pigeons?
+  [found] Dr. Nikola Tesla, Amelia Earhart, Leonardo da Vinci
+Alfred: Good evening. Regarding your inquiry, Dr. Nikola Tesla is our guest who holds a particular passion for pigeons. He would be delighted to discuss his new wireless energy transmission system with you; indeed, his affection for the birds makes for excellent small talk.
+
+*Source: Dr. Nikola Tesla (nikola.tesla@example.com)*
+  [320 input tokens]
+
+You: What is his email address?
+  [search] What is his email address?
+  [found] Alan Turing, Dr. Nikola Tesla, Hedy Lamarr
+Alfred: His email address is nikola.tesla@example.com.
+
+*Source: Dr. Nikola Tesla (nikola.tesla@example.com)*
+  [674 input tokens]
+```
+
+Отговорът е верен, но виж какво стана при втория въпрос:
+
+- **Търсенето беше слабо.** Provider-ът потърси буквално „What is his email address?“. В този текст няма име, затова на първо място излезе Alan Turing. Tesla е втори по случайност.
+- **Отговорът дойде от паметта на разговора.** Бележката за Tesla вече беше в session-а от първия въпрос. Допълнителният message на provider-а се записва в разговора заедно с останалите.
+- **Tokens се удвоиха**: от 320 на 674. Всеки въпрос добавя към разговора още три бележки, нужни или не. При дълъг разговор context-ът на модела се пълни бързо.
+
+### 6. Дай на търсенето памет
+
+За първия от трите проблема има настройка. В `Program.cs` замени реда с `AIContextProviders` със следното:
+
+```csharp
+    AIContextProviders =
+    [
+        new TextSearchProvider(SearchGuests, new TextSearchProviderOptions
+        {
+            RecentMessageMemoryLimit = 4,
+        }),
+    ],
+```
+
+`RecentMessageMemoryLimit` казва на provider-а да помни последните няколко messages и да ги включва в текста, по който търси. Изпълни `dotnet run` и виж реда `[search]` при втория въпрос:
+
+```text wrap
+You: What is his email address?
+  [search] Which guest is passionate about pigeons? | What is his email address?
+  [found] Dr. Nikola Tesla, Alan Turing, Leonardo da Vinci
+Alfred: Dr. Nikola Tesla's email address is nikola.tesla@example.com.
+
+*Source: Dr. Nikola Tesla (nikola.tesla@example.com)*
+  [679 input tokens]
+```
+
+Сега търсенето получи и предишния въпрос и Tesla е на първо място.
+
+Това е една от настройките на `TextSearchProviderOptions`. Ето най-полезните:
+
+| Настройка | Какво прави |
+| --- | --- |
+| `RecentMessageMemoryLimit` | Колко от последните messages да се включват в текста за търсене. По подразбиране 0. |
+| `ContextPrompt` | Текстът преди намерените документи. |
+| `CitationsPrompt` | Молбата за цитати след тях. |
+| `ContextFormatter` | Твоя функция, която оформя резултатите изцяло по твой начин. |
+| `SearchTime` | Кога да се търси. За другата възможна стойност ще стане дума в следващия урок. |
+
+## Кога този подход е правилен
+
+Това, което изгради, се нарича **класически RAG**: при всеки въпрос първо се търси, после се отговаря. Слабостите му вече ги видя, но той има и сериозни предимства:
+
+| Силни страни | Слаби страни |
+| --- | --- |
+| Предвидим: винаги едно търсене и едно извикване на модела. | Търси и когато не трябва. |
+| Бърз и евтин: моделът се вика веднъж. | Търси по думите на потребителя, каквито и да са. |
+| Работи с всеки модел, дори с такъв, който не поддържа tools. | Едно търсене на въпрос, от един източник. |
+
+Класическият RAG е добър избор, когато **всеки въпрос е за документите**: помощник към документацията на продукт, често задавани въпроси, „питай този PDF“. Там поздравите са рядкост, а предвидимостта е ценна.
+
+Alfred обаче води разговор. Поздравяват го, питат го за времето, връщат се към предишен отговор. За него е по-добре търсенето да не е задължителна стъпка, а нещо, което прави, когато прецени.
+
+:::caution[Намереният текст е недоверен вход]
+Всичко, което retriever-ът върне, влиза в prompt-а и моделът го чете като част от задачата. Ако в документите ти може да пише външен човек, той може да сложи там изречение като „ignore your instructions“. Това се нарича *indirect prompt injection*. Отнасяй се към документите като към потребителски вход, особено когато идват от интернет.
+:::
+
+## Обобщение
+
+- **Context provider** е код, който Agent-ът изпълнява преди всяко извикване на модела, за да добави context.
+- **`TextSearchProvider`** е готов context provider за RAG. Подаваш му функция за търсене и го слагаш в `AIContextProviders`.
+- Той добавя намерените документи като **допълнителен message** и моли модела да цитира източниците.
+- С middleware на ниво `IChatClient` можеш да видиш точния prompt, който стига до модела.
+- Класическият RAG **търси при всеки въпрос**. Това го прави предвидим, но води до ненужен context при поздрави и до слабо търсене при уточняващи въпроси.
+- **`RecentMessageMemoryLimit`** включва последните messages в текста за търсене.
+
+В следващия урок ще обърнем нещата: няма да търсим вместо Alfred, а ще му дадем търсенето като tool.

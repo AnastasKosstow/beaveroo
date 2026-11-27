@@ -1,0 +1,315 @@
+---
+title: "Vector store: дом за embeddings"
+description: Преместваме векторите от обикновен списък във vector store през Microsoft.Extensions.VectorData - описваме Guest с три атрибута, записваме гостите, търсим със SearchAsync и филтрираме по поле. Двете фази на RAG и защо дългите документи се режат на chunks.
+---
+
+`SemanticSearch` от предишния урок работи, но е играчка. Достатъчно е да си представиш сто хиляди документа вместо дванадесет гости, за да видиш слабите му места:
+
+- **Изчислява всички вектори при всяко стартиране.** За дванадесет бележки това е секунда. За голяма база са часове.
+- **Нищо не се пази.** Векторите живеят в един списък в паметта и изчезват заедно с програмата.
+- **Не може да филтрира.** „Търси само сред гостите, които не познавам“ не може да се изрази.
+
+Това са задачи на база данни. Базата, която пази вектори и търси по тях, се нарича **vector store**.
+
+## Какво е vector store?
+
+Vector store пази записи заедно с техните вектори и умее да отговори на един специален въпрос: *кои записи са най-близо до този вектор?*
+
+Има два вида. Едните са специализирани бази като Qdrant, Milvus и Weaviate. Другите са познатите бази данни, които вече поддържат вектори: PostgreSQL с pgvector, SQL Server, SQLite, Azure Cosmos DB. Ако приложението ти вече има база, много вероятно е тя да може да стане и твой vector store.
+
+В .NET не се налага да учиш API-то на всяка от тях. Библиотеката **`Microsoft.Extensions.VectorData`** дава общи абстракции за всички. Това е същата идея като `IChatClient` за моделите: кодът ти работи с абстракцията, а конкретната база се избира на един ред.
+
+| Абстракция | Какво е | Съответства на |
+| --- | --- | --- |
+| `VectorStore` | Цялото хранилище. | База данни |
+| `VectorStoreCollection<TKey, TRecord>` | Колекция от записи от един тип. | Таблица |
+| Твой клас с атрибути | Един запис. | Ред |
+
+Ще използваме най-простата реализация, която пази всичко в паметта. За нея не се инсталира нищо извън един NuGet пакет.
+
+## Подготовка
+
+### 1. Добави пакета
+
+В папката `GalaHost` изпълни:
+
+```bash
+dotnet add package CommunityToolkit.VectorData.InMemory
+```
+
+Самите абстракции вече са в проекта, защото Agent Framework ги носи със себе си. Този пакет добавя една тяхна реализация: `InMemoryVectorStore`.
+
+:::note[Версии]
+Примерите са изпълнени с `CommunityToolkit.VectorData.InMemory` 1.0.1. В по-стари статии ще срещнеш същия код с пакета `Microsoft.SemanticKernel.Connectors.InMemory`. Той е преименуван и вече не се поддържа.
+:::
+
+### 2. Опиши Guest за vector store-а
+
+Vector store-ът трябва да знае три неща за един запис: кое е ключът, кои полета са обикновени данни и от какво се прави векторът. Казваме му го с атрибути. Отвори `Guest.cs` и го промени така:
+
+```csharp title="Guest.cs" ins={2,6,9,12,15,18}
+using System.Text.Json;
+using Microsoft.Extensions.VectorData;
+
+public class Guest
+{
+    [VectorStoreKey]
+    public string Name { get; set; } = "";
+
+    [VectorStoreData]
+    public string Relation { get; set; } = "";
+
+    [VectorStoreData]
+    public string Description { get; set; } = "";
+
+    [VectorStoreData]
+    public string Email { get; set; } = "";
+
+    [VectorStoreVector(768)]
+    public string Text =>
+        $"""
+        Name: {Name}
+        Relation: {Relation}
+        Description: {Description}
+        Email: {Email}
+        """;
+
+    public static List<Guest> LoadAll() =>
+        JsonSerializer.Deserialize<List<Guest>>(File.ReadAllText("guests.json"), JsonSerializerOptions.Web)!;
+}
+```
+
+Самите данни не се променят. Добавихме един `using` и по един атрибут над всяко свойство:
+
+| Атрибут | Какво казва | При нас |
+| --- | --- | --- |
+| `[VectorStoreKey]` | Това е уникалният ключ на записа. | `Name` |
+| `[VectorStoreData]` | Обикновено поле. Пази се, връща се с резултата и по него може да се филтрира. | `Relation`, `Description`, `Email` |
+| `[VectorStoreVector(768)]` | От това поле се прави векторът. Числото е броят на измеренията. | `Text` |
+
+Числото 768 го видя в предишния урок: толкова числа връща `nomic-embed-text`. Ако смениш embedding модела, трябва да смениш и него.
+
+Забележи, че `Text` е `string`, а не масив от числа. Не изчисляваме вектора сами. Vector store-ът ще извика embedding модела вместо нас.
+
+## Запиши и търси
+
+### 3. Премести гостите във vector store
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using CommunityToolkit.VectorData.InMemory;
+using Microsoft.Extensions.VectorData;
+
+VectorStore store = new InMemoryVectorStore(new InMemoryVectorStoreOptions
+{
+    EmbeddingGenerator = LocalModel.CreateEmbeddingGenerator(),
+});
+
+VectorStoreCollection<string, Guest> guests = store.GetCollection<string, Guest>("guests");
+
+await guests.EnsureCollectionExistsAsync();
+await guests.UpsertAsync(Guest.LoadAll());
+
+const string Query = "Who could entertain the guests with music?";
+
+Console.WriteLine($"Query: {Query}");
+
+await foreach (VectorSearchResult<Guest> result in guests.SearchAsync(Query, top: 3))
+{
+    Console.WriteLine($"  {result.Score:F2}  {result.Record.Name}");
+}
+```
+
+Кодът има четири части:
+
+1. **Хранилището.** `InMemoryVectorStore` получава embedding генератора от `LocalModel`. С него ще превръща текст във вектори.
+2. **Колекцията.** `GetCollection<string, Guest>("guests")` дава колекция с име `guests`, в която ключът е `string`, а записите са от тип `Guest`. `EnsureCollectionExistsAsync` я създава, ако още я няма.
+3. **Записването.** `UpsertAsync` добавя гостите. Ако запис с такъв ключ вече съществува, го обновява. Точно тук vector store-ът изчислява вектора на всеки гост от свойството `Text`.
+4. **Търсенето.** `SearchAsync` получава обикновен текст. Vector store-ът го превръща във вектор със същия модел и връща трите най-близки записа. Всеки резултат носи самия запис в `Record` и близостта в `Score`.
+
+Изпълни `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.56  Wolfgang Amadeus Mozart
+  0.49  Hedy Lamarr
+  0.48  Frida Kahlo
+```
+
+Сравни числата с тези от предишния урок. Те са същите до втория знак. Няма нищо скрито: същият embedding модел, същата cosine similarity. Промени се само кой върши работата. Тридесетината реда на `SemanticSearch` се побраха в две извиквания: `UpsertAsync` и `SearchAsync`.
+
+### 4. Добави филтър
+
+Векторното търсене е „меко“: връща най-близкото по смисъл. Понякога ти трябва и „твърдо“ условие, което трябва да е изпълнено точно. За това служи филтърът.
+
+В `Program.cs` замени всичко от реда с `const string Query` надолу със следното:
+
+```csharp
+const string Query = "Which guest is an inventor?";
+
+VectorSearchOptions<Guest> options = new()
+{
+    Filter = guest => guest.Relation == "no relation",
+};
+
+Console.WriteLine($"Query: {Query}");
+
+await foreach (VectorSearchResult<Guest> result in guests.SearchAsync(Query, top: 3, options))
+{
+    Console.WriteLine($"  {result.Score:F2}  {result.Record.Name}");
+}
+```
+
+Питаме за изобретател, но само сред гостите, с които домакинът няма никаква връзка. Филтърът е обикновен C# израз, както в LINQ. Изпълни `dotnet run`:
+
+```text
+Query: Which guest is an inventor?
+  0.61  Hedy Lamarr
+  0.59  Marie Curie
+  0.54  Frida Kahlo
+```
+
+На първо място е Hedy Lamarr, „film star and inventor“. Без филтъра същият въпрос връща Tesla, da Vinci и Einstein. Те са по-близо по смисъл, но не отговарят на условието.
+
+Правилото е просто: **точните условия отиват във филтъра, а смисълът във вектора**. В истинските приложения най-важният филтър е достъпът. Един служител трябва да намира само документите, които има право да вижда, и това не бива да зависи от преценката на модел.
+
+Виж и последните два реда. Marie Curie и Frida Kahlo не са изобретатели, но търсенето пак ги върна. Причината е същата като в предишния урок: поискахме три резултата и получихме трите най-близки от останалите след филтъра.
+
+## Двете фази на RAG
+
+В кода от стъпка 3 има две напълно различни дейности и е полезно да ги разделиш в главата си:
+
+```text
+Indexing (веднъж и после при промяна на данните)
+documents ──▶ embedding модел ──▶ vector store
+
+Retrieval (при всеки въпрос)
+въпрос ──▶ embedding модел ──▶ търсене във vector store ──▶ top 3
+```
+
+| Фаза | В нашия код | Колко често |
+| --- | --- | --- |
+| **Indexing** | `UpsertAsync` | Веднъж и после само при промяна на данните. |
+| **Retrieval** | `SearchAsync` | При всеки въпрос. |
+
+При нас двете фази се случват в една програма, защото хранилището е в паметта и трябва да се пълни при всяко стартиране. С истинска база те се разделят. Един процес подготвя данните и ги записва. Приложението, което отговаря на въпроси, само търси.
+
+## Chunking: когато документите са дълги
+
+Нашите documents са удобно къси: един гост е три изречения. Истинските документи рядко са такива. Наръчник от четиридесет страници не може да се превърне в един вектор по три причини:
+
+- Един вектор за четиридесет страници е „средно аритметично“ от всички теми в тях и не прилича добре на нито една.
+- Embedding моделите имат ограничение за дължината на входа.
+- Дори да го намериш, ще трябва да сложиш целия наръчник в prompt-а заради едно изречение от него.
+
+Затова дългите документи се режат на парчета, наречени **chunks**. Всеки chunk е няколко абзаца, става отделен запис със собствен вектор и пази откъде идва: име на файла, страница, заглавие на раздела. Съседните chunks обикновено се застъпват с по едно-две изречения, за да не се загуби мисъл, разрязана на границата.
+
+Добрият chunk съдържа **една завършена мисъл**. Бележката за един гост е точно това, затова ние не режем нищо.
+
+:::note[Готови инструменти]
+За четене на файлове и рязане на chunks .NET има библиотеката `Microsoft.Extensions.DataIngestion`. В момента на писане тя е в preview. В този курс не ни трябва, но я потърси, когато стигнеш до собствени PDF и Markdown файлове.
+:::
+
+## Обвий го в GuestBook
+
+Оттук нататък Alfred ще търси в списъка с гости във всеки урок. За да не повтаряме подготовката на хранилището, ще я съберем в един клас.
+
+### 5. Напиши GuestBook
+
+Създай файл `GuestBook.cs`:
+
+```csharp title="GuestBook.cs"
+using CommunityToolkit.VectorData.InMemory;
+using Microsoft.Extensions.VectorData;
+
+public class GuestBook
+{
+    private readonly VectorStoreCollection<string, Guest> _guests;
+
+    private GuestBook(VectorStoreCollection<string, Guest> guests) => _guests = guests;
+
+    public static async Task<GuestBook> CreateAsync()
+    {
+        VectorStore store = new InMemoryVectorStore(new InMemoryVectorStoreOptions
+        {
+            EmbeddingGenerator = LocalModel.CreateEmbeddingGenerator(),
+        });
+
+        VectorStoreCollection<string, Guest> guests = store.GetCollection<string, Guest>("guests");
+
+        await guests.EnsureCollectionExistsAsync();
+        await guests.UpsertAsync(Guest.LoadAll());
+
+        return new GuestBook(guests);
+    }
+
+    public async Task<List<Guest>> SearchAsync(string query, int top = 3)
+    {
+        List<Guest> found = [];
+
+        await foreach (VectorSearchResult<Guest> result in _guests.SearchAsync(query, top))
+        {
+            found.Add(result.Record);
+        }
+
+        return found;
+    }
+}
+```
+
+В класа няма нищо ново. `CreateAsync` е фазата indexing: създава хранилището и записва гостите. `SearchAsync` е фазата retrieval: връща най-близките гости като обикновен списък.
+
+Замени съдържанието на `Program.cs` със следното, за да го провериш:
+
+```csharp title="Program.cs"
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+foreach (Guest guest in await guestBook.SearchAsync("Who could entertain the guests with music?"))
+{
+    Console.WriteLine(guest.Name);
+}
+```
+
+Изпълни `dotnet run`:
+
+```text
+Wolfgang Amadeus Mozart
+Hedy Lamarr
+Frida Kahlo
+```
+
+Файловете `KeywordSearch.cs` и `SemanticSearch.cs` повече няма да ни трябват. Можеш да ги изтриеш или да ги оставиш за справка.
+
+## Когато паметта не стига
+
+`InMemoryVectorStore` е удобен за учене и за прототипи, но данните му изчезват със спирането на програмата. За истинско приложение избираш друга реализация на същите абстракции:
+
+| Vector store | NuGet пакет | Къде са данните |
+| --- | --- | --- |
+| In-memory | `CommunityToolkit.VectorData.InMemory` | В паметта на програмата. |
+| SQLite | `CommunityToolkit.VectorData.SqliteVec` | В един файл на диска. |
+| Qdrant | `CommunityToolkit.VectorData.Qdrant` | В Qdrant сървър. |
+| PostgreSQL | `CommunityToolkit.VectorData.PgVector` | В PostgreSQL с разширението pgvector. |
+| Azure AI Search | `CommunityToolkit.VectorData.AzureAISearch` | В облака на Microsoft. |
+
+Променя се редът, който създава хранилището. Класът `Guest`, `UpsertAsync` и `SearchAsync` остават същите. Всяка база има свои особености, например какви типове приема за ключ и какви филтри поддържа, затова преди да избереш, виж [списъка в документацията](https://learn.microsoft.com/dotnet/ai/vector-stores/overview).
+
+## Твой ред
+
+**Смени броя на резултатите.** В `Program.cs` подай `top: 1` на `guestBook.SearchAsync`, а после `top: 5`. Помисли кога би искал повече резултати и какво плащаш за тях.
+
+**Добави гост.** Допиши себе си в `guests.json` с две изречения за това, което обичаш, и го потърси с въпрос, в който няма нито една дума от описанието ти.
+
+**Смени филтъра.** Върни се към кода от стъпка 4 и потърси изобретател само сред гостите с `Relation`, различно от `no relation`.
+
+## Обобщение
+
+- **Vector store** е база данни, която пази записи заедно с векторите им и намира най-близките до даден вектор.
+- **`Microsoft.Extensions.VectorData`** дава общи абстракции: `VectorStore`, `VectorStoreCollection` и клас с атрибутите `[VectorStoreKey]`, `[VectorStoreData]` и `[VectorStoreVector]`.
+- **`UpsertAsync`** записва и изчислява векторите. **`SearchAsync`** приема текст и връща най-близките записи с резултат.
+- **Филтърът** е точно условие върху обикновено поле. Смисълът отива във вектора, точните условия във филтъра.
+- RAG има две фази: **indexing**, което подготвя данните веднъж, и **retrieval**, което търси при всеки въпрос.
+- Дългите документи се режат на **chunks**, всеки със свой вектор.
+
+Търсенето е готово. В следващия урок ще го закачим за Alfred с Microsoft Agent Framework.

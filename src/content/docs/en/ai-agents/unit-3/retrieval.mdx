@@ -1,0 +1,430 @@
+---
+title: Your First Retriever
+description: We load the guest list from a JSON file, try putting everything in the prompt, and write our first retriever - a keyword search in about twenty lines of C#. We connect Retrieve, Augment and Generate into one pipeline and see where keyword search fails.
+---
+
+In the previous lesson you were the search engine: you chose which note to put in the prompt. Now we will write it as code.
+
+We'll take the same road you took in Unit 1 with the [Dummy Agent Library](/en/ai-agents/unit-1/dummy-agent-library/): by hand first, in plain C#, so you can see there is nothing mysterious about search. The ready-made libraries come in the next lessons.
+
+## The data: the guest list
+
+We continue in the `GalaHost` project. The `LocalModel.cs` file stays unchanged.
+
+### 1. Create the file with the guests
+
+In the project folder create a file `guests.json`:
+
+```json title="guests.json" wrap
+[
+  {
+    "name": "Ada Lovelace",
+    "relation": "best friend",
+    "description": "Lady Ada Lovelace is your best friend. She is an esteemed mathematician, celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine.",
+    "email": "ada.lovelace@example.com"
+  },
+  {
+    "name": "Dr. Nikola Tesla",
+    "relation": "old friend from university days",
+    "description": "Dr. Nikola Tesla is an old friend from your university days. He has recently patented a new wireless energy transmission system and would be delighted to discuss it with you. He is passionate about pigeons, so that makes for good small talk.",
+    "email": "nikola.tesla@example.com"
+  },
+  {
+    "name": "Marie Curie",
+    "relation": "no relation",
+    "description": "Marie Curie is a groundbreaking physicist and chemist, famous for her research on radioactivity. She is the only person to win Nobel Prizes in two different sciences.",
+    "email": "marie.curie@example.com"
+  },
+  {
+    "name": "Alan Turing",
+    "relation": "former colleague",
+    "description": "Alan Turing is a mathematician and codebreaker who laid the foundations of computer science and artificial intelligence. He is also a serious long-distance runner and loves to talk about his marathon times.",
+    "email": "alan.turing@example.com"
+  },
+  {
+    "name": "Grace Hopper",
+    "relation": "mentor",
+    "description": "Rear Admiral Grace Hopper wrote one of the first compilers and helped create the COBOL language. Ask her about the moth that was once found inside her computer, the original 'bug'.",
+    "email": "grace.hopper@example.com"
+  },
+  {
+    "name": "Leonardo da Vinci",
+    "relation": "family friend",
+    "description": "Leonardo da Vinci is a painter, engineer and inventor who fills his notebooks with designs for flying machines. He is a strict vegetarian, so the kitchen has to prepare a separate plate for him.",
+    "email": "leonardo.davinci@example.com"
+  },
+  {
+    "name": "Amelia Earhart",
+    "relation": "godmother",
+    "description": "Amelia Earhart is an aviation pioneer and the first woman to fly solo across the Atlantic Ocean. She always has a story about a daring landing.",
+    "email": "amelia.earhart@example.com"
+  },
+  {
+    "name": "Wolfgang Amadeus Mozart",
+    "relation": "neighbor",
+    "description": "Wolfgang Amadeus Mozart is a composer who wrote his first symphony at the age of eight. He has offered to play the piano after dinner and never says no to a game of billiards.",
+    "email": "wolfgang.mozart@example.com"
+  },
+  {
+    "name": "Frida Kahlo",
+    "relation": "no relation",
+    "description": "Frida Kahlo is a Mexican painter known for her vivid self-portraits. She loves bright colors and spicy food, and she dislikes long formal speeches.",
+    "email": "frida.kahlo@example.com"
+  },
+  {
+    "name": "Albert Einstein",
+    "relation": "business partner",
+    "description": "Albert Einstein is a theoretical physicist who developed the theory of relativity. He relaxes by playing the violin and sailing, and he never wears socks.",
+    "email": "albert.einstein@example.com"
+  },
+  {
+    "name": "Jesse Owens",
+    "relation": "cousin",
+    "description": "Jesse Owens is a sprinter who won four gold medals at the 1936 Olympic Games. He is happy to share training tips with anyone who asks.",
+    "email": "jesse.owens@example.com"
+  },
+  {
+    "name": "Hedy Lamarr",
+    "relation": "no relation",
+    "description": "Hedy Lamarr is a film star and inventor. She co-invented a frequency-hopping radio system that later became the basis for Wi-Fi and Bluetooth.",
+    "email": "hedy.lamarr@example.com"
+  }
+]
+```
+
+Twelve guests, each with four fields: name, relation to the host, a short description and an email. These are the notes a host would keep. In a real application their place is taken by the pages of the documentation, the records in the database or the files in a folder.
+
+### 2. Load the guests
+
+Create a file `Guest.cs`:
+
+```csharp title="Guest.cs"
+using System.Text.Json;
+
+public class Guest
+{
+    public string Name { get; set; } = "";
+
+    public string Relation { get; set; } = "";
+
+    public string Description { get; set; } = "";
+
+    public string Email { get; set; } = "";
+
+    public string Text =>
+        $"""
+        Name: {Name}
+        Relation: {Relation}
+        Description: {Description}
+        Email: {Email}
+        """;
+
+    public static List<Guest> LoadAll() =>
+        JsonSerializer.Deserialize<List<Guest>>(File.ReadAllText("guests.json"), JsonSerializerOptions.Web)!;
+}
+```
+
+The class has three parts:
+
+- **The four properties** match the fields in the JSON file.
+- **`Text`** gathers the guest into one text, the same as the note you wrote by hand in the previous lesson. This is our *document*: the text we will search in and put in the prompt.
+- **`LoadAll`** reads the file and returns a list of guests. `JsonSerializerOptions.Web` makes sure `name` from the file ends up in `Name`.
+
+The file is looked up in the folder you start the program from. With `dotnet run` that is the project folder, so `guests.json` has to sit next to `Program.cs`.
+
+## The simplest solution: everything in the prompt
+
+Before we write a search engine, let's try the obvious: give the model all the notes at once.
+
+### 3. Pass all the guests
+
+We will need to assemble the prompt several times, so we move it into its own file. Create `RagPrompt.cs`:
+
+```csharp title="RagPrompt.cs"
+public static class RagPrompt
+{
+    public static string Build(string question, IEnumerable<Guest> guests) =>
+        $"""
+        Answer the question using only the guest notes below.
+        If the notes do not contain the answer, say that you do not know.
+
+        Guest notes:
+        {string.Join("\n\n", guests.Select(guest => guest.Text))}
+
+        Question: {question}
+        """;
+}
+```
+
+This is the **Augment** step from the previous lesson, turned into a method: a rule, the notes, the question. We also added a second rule that tells the model what to do when the answer is not in the notes.
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+List<Guest> guests = Guest.LoadAll();
+
+const string Question = "Which guest is passionate about pigeons, and what is their email address?";
+
+AgentResponse response = await alfred.RunAsync(RagPrompt.Build(Question, guests));
+
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+The last line prints how many tokens the model read. The number comes from `response.Usage`, which you also used in the [middleware lesson](/en/ai-agents/unit-2/agent-framework/middleware/). Run `dotnet run`:
+
+```text wrap
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons. His email address is nikola.tesla@example.com.
+  [800 input tokens]
+```
+
+It works. The answer is correct, and the email is exact to the last letter, because the model copied it from the note.
+
+### Why we don't always do this
+
+For twelve guests this is a perfectly reasonable solution. If your data fits in the prompt, you need nothing more. The problem is the number on the second line: the model read 800 tokens to answer a question that needed one note. As the data grows, that number grows with it:
+
+| Data | Tokens on every question |
+| --- | --- |
+| 12 guests | about 800 |
+| 1,000 guests | about 60,000 |
+| The documentation of one product | millions |
+
+That leads to three problems:
+
+- **It does not fit.** Every model has a context length, a maximum number of tokens it can read at once. Beyond it the text is simply cut off.
+- **It is slow and expensive.** The model reads the whole prompt on every question. With a local model you pay in time, with a cloud model in money.
+- **It adds noise.** The more unneeded text there is in the prompt, the easier it is for the model to miss the important sentence.
+
+So we need something that picks the few notes that have to do with the question.
+
+## A retriever: keyword search
+
+A *retriever* is a function with a simple contract: it receives a question and returns a few documents that most likely contain the answer.
+
+The simplest way to write one is to count the words in common. If the question contains "pigeons" and a note contains "pigeons", that is probably the note we need.
+
+There is one subtlety: not all words say equally much. The word `the` is in almost every note and tells nothing apart. The word `pigeons` is in only one. So we will give each word a weight: **the rarer a word is, the more it weighs**.
+
+### 4. Write the search
+
+Create a file `KeywordSearch.cs`:
+
+```csharp title="KeywordSearch.cs"
+using System.Text.RegularExpressions;
+
+public class KeywordSearch
+{
+    private readonly List<(Guest Guest, HashSet<string> Words)> _documents;
+
+    public KeywordSearch(IEnumerable<Guest> guests) =>
+        _documents = guests.Select(guest => (guest, WordsIn(guest.Text))).ToList();
+
+    public List<(Guest Guest, double Score)> Search(string query, int top = 3) =>
+        _documents
+            .Select(document => (document.Guest, Score: WordsIn(query).Where(document.Words.Contains).Sum(Weight)))
+            .Where(result => result.Score > 0)
+            .OrderByDescending(result => result.Score)
+            .Take(top)
+            .ToList();
+
+    private double Weight(string word) =>
+        Math.Log((double)_documents.Count / _documents.Count(document => document.Words.Contains(word)));
+
+    private static HashSet<string> WordsIn(string text) =>
+        Regex.Matches(text.ToLowerInvariant(), "[a-z]{3,}").Select(match => match.Value).ToHashSet();
+}
+```
+
+The class is short, but it has all the parts of a search engine:
+
+- **`WordsIn`** turns a text into a set of words. It lowercases the letters and takes only words of at least three letters, so that `a`, `is`, `to` and the like drop out.
+- **The constructor** does this once for the note of every guest and keeps the result. This is our **index**: prepared data that is fast to search later.
+- **`Search`** goes through the guests. For each one it adds up the weights of the question's words that appear in that guest's note. Then it removes the guests with no match at all, sorts the rest by score and returns the first `top`.
+- **`Weight`** computes the weight of a word: the logarithm of the number of all notes divided by the number of notes that contain it. A word that is in all twelve gets `log(12/12) = 0` and has no effect. A word that is in only one gets `log(12/1) ≈ 2.48`.
+
+### 5. Try it
+
+First we will run the search on its own, without a model. Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+KeywordSearch search = new(Guest.LoadAll());
+
+string[] queries =
+[
+    "Tell me about Ada Lovelace.",
+    "Which guest is passionate about pigeons?",
+];
+
+foreach (string query in queries)
+{
+    Console.WriteLine($"Query: {query}");
+
+    foreach ((Guest guest, double score) in search.Search(query))
+    {
+        Console.WriteLine($"  {score:F2}  {guest.Name}");
+    }
+
+    Console.WriteLine();
+}
+```
+
+Run `dotnet run`. The answer comes instantly, because there is no model here:
+
+```text
+Query: Tell me about Ada Lovelace.
+  4.97  Ada Lovelace
+  1.10  Dr. Nikola Tesla
+  1.10  Alan Turing
+
+Query: Which guest is passionate about pigeons?
+  6.07  Dr. Nikola Tesla
+  1.10  Alan Turing
+  1.10  Grace Hopper
+```
+
+Both times the right guest is in first place, far ahead of the rest. The numbers can be traced by hand. The words `ada` and `lovelace` are in only one note, so each brings 2.48 and together they give 4.97. Tesla and Turing get 1.10 each because of the word `about`, which appears in four notes.
+
+:::note[Decimal comma]
+If Windows is set to a language that uses a decimal comma, you will see `4,97` instead of `4.97`. The numbers are the same, only the way .NET prints them differs.
+:::
+
+## The whole pipeline
+
+We have all three parts: search, prompt assembly and a model. What is left is to connect them.
+
+### 6. Retrieve, Augment, Generate
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise.");
+
+KeywordSearch search = new(Guest.LoadAll());
+
+const string Question = "Which guest is passionate about pigeons, and what is their email address?";
+
+List<Guest> found = search.Search(Question).Select(result => result.Guest).ToList();
+
+string prompt = RagPrompt.Build(Question, found);
+
+AgentResponse response = await alfred.RunAsync(prompt);
+
+Console.WriteLine($"Retrieved: {string.Join(", ", found.Select(guest => guest.Name))}");
+Console.WriteLine($"Alfred: {response.Text}");
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+The three lines in the middle are the three letters of RAG:
+
+1. **Retrieve.** `search.Search(Question)` returns the three guests with the highest score.
+2. **Augment.** `RagPrompt.Build` puts their notes in the prompt together with the question.
+3. **Generate.** `alfred.RunAsync(prompt)` sends the finished prompt to the model.
+
+Run `dotnet run`:
+
+```text wrap
+Retrieved: Dr. Nikola Tesla, Alan Turing, Grace Hopper
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons; his email address is nikola.tesla@example.com.
+  [283 input tokens]
+```
+
+The answer is the same as before, but the model read 283 tokens instead of 800. And that number will no longer grow: even if the guests become a thousand, only three notes will go into the prompt.
+
+Look at the `Retrieved` line too. Two of the three notes, the ones about Turing and Hopper, have nothing to do with the question. That does no harm. The model reads all three and uses the one it needs. We don't ask the retriever to be perfect. We ask that **the note we need is among the few it returns**.
+
+## Where it breaks
+
+So far we asked with words that are in the notes. The guests at a party, however, are under no obligation to know them.
+
+### 7. Ask about music
+
+In `Program.cs` change the question:
+
+```csharp
+const string Question = "Who could entertain the guests with music?";
+```
+
+Run `dotnet run`:
+
+```text wrap
+Retrieved: Leonardo da Vinci, Jesse Owens, Dr. Nikola Tesla
+Alfred: I do not know who could entertain the guests with music based on the provided guest notes.
+  [277 input tokens]
+```
+
+The list has a composer who has promised to play the piano after dinner. The search did not find him, though. The reason is simple: the question says `music` and `entertain`, while the note about Mozart says `composer`, `symphony` and `piano`. Not a single word in common, so a score of zero. The three that came back match only on words like `who` and `with`.
+
+There is good news too. Alfred did not make up an answer, he said he does not know. That is thanks to the second rule in `RagPrompt`. When the search fails, "I don't know" is the best possible answer.
+
+### 8. Ask about an athlete
+
+Change the question once more:
+
+```csharp
+const string Question = "Is there an athlete among the guests?";
+```
+
+Run `dotnet run`:
+
+```text wrap
+Retrieved: Ada Lovelace, Marie Curie, Alan Turing
+Alfred: Yes, Mr. Alan Turing is an athlete; he is a serious long-distance runner who enjoys discussing his marathon times.
+  [257 input tokens]
+```
+
+This answer is more treacherous than the previous one. It is correct, but it is incomplete. Among the guests is Jesse Owens, a sprinter with four Olympic gold medals, and Alfred does not mention him at all. His note says `sprinter`, not `athlete`, so the search passed him by. Turing ended up in the result by chance: all three returned notes match the question only on the word `the`.
+
+The user has no way of knowing something is missing. This is the most important rule in RAG:
+
+**The answer is never better than what the retriever found.**
+
+The model reads only what it was given. If the note it needs is not there, even the best model cannot use it.
+
+## The strength and the weakness of keyword search
+
+| Works well for | Does not work for |
+| --- | --- |
+| Names: `Ada Lovelace`. | Synonyms: `music` versus `piano`. |
+| Exact strings: an email, an order number, an error code. | Paraphrases: `athlete` versus `sprinter`. |
+| Rare terms the user knows. | Questions in another language. |
+
+On top of that it is instant, needs no model, and you can always explain why a result came out first.
+
+:::note[BM25]
+In real systems keyword search is done with the **BM25** algorithm. The idea is the same as in our `KeywordSearch`, rare words weigh more, with two improvements: it counts how many times the word appears in the document, and it takes the document's length into account. BM25 is behind Lucene, Elasticsearch and Azure AI Search.
+:::
+
+## Your turn
+
+**Ask for an exact detail.** Change the question to `What is Marie Curie's email address?`. The name is in the note, so keyword search handles it perfectly.
+
+**Return a single result.** Pass `top: 1` to `search.Search` and run the question about the pigeons. The tokens drop even further. Think about what you are risking: if the note you need turns out to be in second place, the model will not see it at all.
+
+**Ask in another language.** Try `Кой гост обича гълъби?`, which is Bulgarian for "Which guest loves pigeons?". Our `WordsIn` recognizes only Latin letters, so it does not find a single word. The search returns an empty list and Alfred answers that he does not know.
+
+## Summary
+
+- A **retriever** receives a question and returns the few documents that most likely contain the answer.
+- The RAG pipeline has three steps: **Retrieve** finds the notes, **Augment** puts them in the prompt, **Generate** gives the answer.
+- With a retriever the model reads only what it needs: 283 tokens instead of 800, no matter how many guests there are.
+- Keyword search finds **words, not meaning**. It handles names and exact strings and fails on synonyms.
+- **The answer is never better than what was found.** If the retriever misses a note, the model cannot use it.
+
+In the next lesson we will teach Alfred to search by meaning, so that `music` finds `piano`.

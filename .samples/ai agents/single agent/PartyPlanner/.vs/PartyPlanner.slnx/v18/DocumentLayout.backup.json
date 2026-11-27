@@ -1,0 +1,88 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner\\partyplanner\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner\\partyplanner\\middlewares\\alfredmiddleware.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\middlewares\\alfredmiddleware.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner\\partyplanner\\tools\\partytools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\tools\\partytools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|c:\\users\\kosstow\\source\\repos\\partyplanner\\partyplanner\\agentlog.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7727BF6E-B3A4-4396-A777-C19B20BF902A}|PartyPlanner\\PartyPlanner.csproj|solutionrelative:partyplanner\\agentlog.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 3,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "AlfredMiddleware.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Middlewares\\AlfredMiddleware.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Middlewares\\AlfredMiddleware.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Middlewares\\AlfredMiddleware.cs",
+              "RelativeToolTip": "PartyPlanner\\Middlewares\\AlfredMiddleware.cs",
+              "ViewState": "AgIAAAQAAAAAAAAAAADgvxoAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T09:22:57.731Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "PartyTools.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Tools\\PartyTools.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Tools\\PartyTools.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Tools\\PartyTools.cs",
+              "RelativeToolTip": "PartyPlanner\\Tools\\PartyTools.cs",
+              "ViewState": "AgIAABgAAAAAAAAAAAAowBIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T09:21:47.667Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "AgentLog.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\AgentLog.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\AgentLog.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\AgentLog.cs",
+              "RelativeToolTip": "PartyPlanner\\AgentLog.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T09:01:05.44Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Program.cs",
+              "RelativeDocumentMoniker": "PartyPlanner\\Program.cs",
+              "ToolTip": "C:\\Users\\kosstow\\source\\repos\\PartyPlanner\\PartyPlanner\\Program.cs",
+              "RelativeToolTip": "PartyPlanner\\Program.cs",
+              "ViewState": "AgIAADYAAAAAAAAAAAAiwDwAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-11-26T08:13:56.715Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
