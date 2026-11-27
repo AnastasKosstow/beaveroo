@@ -1,0 +1,330 @@
+---
+title: "More Sources: Weather, Wikipedia and NuGet"
+description: We give Alfred three tools that ask real services on the internet, with no accounts or API keys - Open-Meteo for the weather, Wikipedia for general information and NuGet for package statistics. We try each one on its own and see what happens when a source does not answer.
+---
+
+The guest list is only one of the sources a host needs. The fireworks depend on the weather outside. The conversation at the table may turn to a topic the notes say nothing about. And three of the guests are programmers, so it is good for Alfred to be up to date with what people use today.
+
+None of this is in the vector store, and it does not need to be. In this lesson we will give Alfred three tools that ask real services on the internet:
+
+| Tool | Source | Why Alfred needs it |
+| --- | --- | --- |
+| `GetWeather` | [Open-Meteo](https://open-meteo.com/) | The weather right now, because of the fireworks. |
+| `SearchWikipedia` | [Wikipedia](https://www.wikipedia.org/) | General information on a topic of conversation. |
+| `GetPackageStats` | [NuGet](https://www.nuget.org/) | How popular a .NET package is. |
+
+For a learning project all three services are free and require no registration or API key.
+
+:::note[You need an internet connection]
+This is the first lesson in the course where the program goes beyond your computer. The model still runs locally. Only the requests of the three tools go to the internet.
+:::
+
+## Setup
+
+We continue in the `GalaHost` project. You will need `LocalModel.cs` and `AgentLog.cs`.
+
+### 1. Create the class for the tools
+
+Create a file `WorldTools.cs`:
+
+```csharp title="WorldTools.cs"
+using System.ComponentModel;
+using System.Net.Http.Json;
+using System.Text.Json;
+
+public static class WorldTools
+{
+    private static readonly HttpClient Http = CreateClient();
+
+    private static HttpClient CreateClient()
+    {
+        HttpClient client = new() { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("GalaHost/1.0 (https://beaveroo.tech; course sample)");
+
+        return client;
+    }
+}
+```
+
+For now the class has no tools, only the shared `HttpClient` all three will use. Two things in it matter:
+
+- **`Timeout`**: a tool must not hang forever. If the service does not answer within 20 seconds, we give up.
+- **`User-Agent`**: public services want the program to introduce itself with a name and a way to get in touch. Wikipedia, for example, allows only ten requests a minute from clients that have not done so. If you build on this code in a project of your own, put your own address or email here.
+
+## The weather outside
+
+### 2. Write GetWeather
+
+Add this method to the `WorldTools` class:
+
+```csharp title="WorldTools.cs"
+[Description("Gets the current weather in a city: temperature, wind, rain and cloud cover.")]
+public static async Task<string> GetWeather(
+    [Description("The name of the city, for example 'Sofia'.")] string city)
+{
+    try
+    {
+        JsonElement places = await Http.GetFromJsonAsync<JsonElement>(
+            $"https://geocoding-api.open-meteo.com/v1/search?count=1&name={Uri.EscapeDataString(city)}");
+
+        if (!places.TryGetProperty("results", out JsonElement results))
+        {
+            return $"Unknown city '{city}'.";
+        }
+
+        JsonElement place = results[0];
+
+        JsonElement forecast = await Http.GetFromJsonAsync<JsonElement>(
+            "https://api.open-meteo.com/v1/forecast" +
+            $"?latitude={place.GetProperty("latitude")}&longitude={place.GetProperty("longitude")}" +
+            "&current=temperature_2m,wind_speed_10m,precipitation,cloud_cover");
+
+        JsonElement now = forecast.GetProperty("current");
+
+        return $"Weather in {place.GetProperty("name")}, {place.GetProperty("country")}: " +
+               $"{now.GetProperty("temperature_2m")} °C, wind {now.GetProperty("wind_speed_10m")} km/h, " +
+               $"rain {now.GetProperty("precipitation")} mm, cloud cover {now.GetProperty("cloud_cover")}%.";
+    }
+    catch (HttpRequestException error)
+    {
+        return $"The weather service is not available: {error.Message}";
+    }
+}
+```
+
+The method makes two requests, one after the other:
+
+1. **It finds the city.** The weather service works with coordinates, so first we ask where the city is. If there is no such city, we return clear text.
+2. **It gets the weather.** With the coordinates we ask for the current temperature, wind, precipitation and cloud cover.
+
+We read the answers with `JsonElement`, so we take only the fields we need without describing classes for the whole JSON. At the end we assemble one sentence, because the model reads text.
+
+Like every tool in this course, this one **does not throw**. An unknown city and a missing connection come back as text, which the model will receive as an Observation.
+
+### 3. Try it
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.GetWeather("Sofia"));
+Console.WriteLine(await WorldTools.GetWeather("Gotham City"));
+```
+
+Run `dotnet run`:
+
+```text
+Weather in Sofia, Bulgaria: 5.9 °C, wind 9.5 km/h, rain 0.00 mm, cloud cover 48%.
+Unknown city 'Gotham City'.
+```
+
+The first line is the real weather in Sofia at the moment we ran the program. Your numbers will be different. The second line shows that Gotham City is not on the map, so in this lesson we will ask about real cities.
+
+## General information
+
+### 4. Write SearchWikipedia
+
+Add a second method to `WorldTools`:
+
+```csharp title="WorldTools.cs"
+[Description("Searches Wikipedia and returns short summaries of the best matching articles. Use it for general knowledge about people, places, science and history.")]
+public static async Task<string> SearchWikipedia(
+    [Description("What to search for, for example 'wireless power transfer'.")] string query)
+{
+    try
+    {
+        JsonElement response = await Http.GetFromJsonAsync<JsonElement>(
+            "https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=3" +
+            "&prop=extracts&exintro=1&explaintext=1&exsentences=2" +
+            $"&gsrsearch={Uri.EscapeDataString(query)}");
+
+        if (!response.TryGetProperty("query", out JsonElement found))
+        {
+            return $"Wikipedia has no article about '{query}'.";
+        }
+
+        IEnumerable<string> articles = found.GetProperty("pages")
+            .EnumerateObject()
+            .Select(page => page.Value)
+            .OrderBy(page => page.GetProperty("index").GetInt32())
+            .Select(page => $"{page.GetProperty("title")}: {page.GetProperty("extract")}");
+
+        return string.Join("\n\n", articles);
+    }
+    catch (HttpRequestException error)
+    {
+        return $"Wikipedia is not available: {error.Message}";
+    }
+}
+```
+
+The address looks scary, but it says three simple things: search by this text (`gsrsearch`), return the first three articles (`gsrlimit=3`), and for each one give the first two sentences as plain text (`exsentences=2`). Wikipedia returns the articles in no particular order, so we sort them by the `index` field.
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.SearchWikipedia("wireless power transfer"));
+```
+
+Run `dotnet run`:
+
+```text wrap
+Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is the transmission of electrical energy without wires as a physical link. In a wireless power transmission system, an electrically powered transmitter device generates a time-varying electromagnetic field that transmits power across space to a receiver device; the receiver device extracts power from the field and supplies it to an electrical load.
+
+Wireless Power Consortium: The Wireless Power Consortium (WPC) is a multinational technology consortium formed on December 17, 2008, as an open standards development organization. WPC is a virtual corporation with administrative offices in Washington, DC. Its mission is to create and promote global adoption of its interface standards: Qi (pronounced "chee") for wireless power transfer in small, mobile electronics such as phones and wearable devices like watches, and Ki (pronounced "kee") for wireless power transfer in kitchen appliances like electric cooktops and kettles.
+
+Electric road: An electric road, eroad, e-roadway, or electric road system (ERS) is a road which supplies electric power to vehicles travelling on it. Common implementations are overhead power lines above the road, ground-level power supply through conductive rails, and dynamic wireless power transfer (DWPT) through resonant inductive coils or inductive cables embedded in the road.
+```
+
+The shape is familiar. A query goes in, the three best matching texts come out. It is the same contract as `SearchGuests`. The difference is that the search engine is not ours: Wikipedia decides which articles are closest to the query, and we neither know nor care how it does that.
+
+## Statistics from NuGet
+
+### 5. Write GetPackageStats
+
+Add the third method to `WorldTools`:
+
+```csharp title="WorldTools.cs"
+[Description("Gets the latest version and the total number of downloads of a NuGet package.")]
+public static async Task<string> GetPackageStats(
+    [Description("The exact id of the package, for example 'OllamaSharp'.")] string packageId)
+{
+    try
+    {
+        JsonElement response = await Http.GetFromJsonAsync<JsonElement>(
+            $"https://azuresearch-usnc.nuget.org/query?take=1&q=packageid:{Uri.EscapeDataString(packageId)}");
+
+        JsonElement packages = response.GetProperty("data");
+
+        if (packages.GetArrayLength() == 0)
+        {
+            return $"There is no NuGet package with the id '{packageId}'.";
+        }
+
+        JsonElement package = packages[0];
+
+        return $"{package.GetProperty("id")}: latest version {package.GetProperty("version")}, " +
+               $"{package.GetProperty("totalDownloads")} downloads in total.";
+    }
+    catch (HttpRequestException error)
+    {
+        return $"NuGet is not available: {error.Message}";
+    }
+}
+```
+
+One request to NuGet's search, with the exact name of the package. From the answer we take three fields. Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+Console.WriteLine(await WorldTools.GetPackageStats("OllamaSharp"));
+Console.WriteLine(await WorldTools.GetPackageStats("Ollama.Sharp"));
+```
+
+Run `dotnet run`:
+
+```text
+OllamaSharp: latest version 5.5.2, 5117622 downloads in total.
+There is no NuGet package with the id 'Ollama.Sharp'.
+```
+
+The package we have used to connect to Ollama throughout the course has been downloaded more than five million times. The misspelled name on the second line gets a clear answer, not an error.
+
+## Give them to Alfred
+
+The three tools work on their own. Now let's see how Alfred chooses between them.
+
+### 6. Ask a question for two sources
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use your tools to look things up and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(WorldTools.GetWeather),
+        AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+        AIFunctionFactory.Create(WorldTools.GetPackageStats),
+    ]);
+
+AgentResponse response = await alfred.RunAsync(
+    "What is the Roslyn compiler, and how popular is the Microsoft.CodeAnalysis.CSharp package?");
+
+AgentLog.Print(response);
+```
+
+For now Alfred is without the guest list, with only the three new tools. The question has two parts: one is about general information, the other about a number that changes every day. Run `dotnet run`:
+
+```text wrap
+Alfred: I shall investigate both inquiries for you, sir. First, I will consult Wikipedia regarding the Roslyn compiler, and then I will check the statistics for the `Microsoft.CodeAnalysis.CSharp` NuGet package.
+  Action: SearchWikipedia({"query":"Roslyn compiler"})
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Roslyn (compiler): .NET Compiler Platform, also known by its codename Roslyn, is a set of open-sourc...
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: The Roslyn compiler, also known as the .NET Compiler Platform, is a set of open-source compilers and code analysis APIs for C# and Visual Basic from Microsoft. It notably includes self-hosting versions of the C# and VB.NET compilers.
+
+Regarding the `Microsoft.CodeAnalysis.CSharp` package, it has reached version 5.12.0 and has been downloaded over 2 billion times in total.
+```
+
+Alfred called two different tools in one step and put together a single answer from the two results. For the description of Roslyn he went to Wikipedia, and for the downloads to NuGet. The weather did not interest him, and `GetWeather` stayed unused. Nowhere in the code does it say which tool is for what. As always, the model chose by their descriptions.
+
+## When a source does not answer
+
+External services sometimes say no. We did not have to simulate it. While we were preparing this lesson we sent too many requests in a short time, and Wikipedia stopped us for about a minute. Here is what we saw then, with the same question:
+
+```text wrap
+  Action: SearchWikipedia({"query":"Roslyn compiler"})
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Wikipedia is not available: Response status code does not indicate success: 429 (We suspect this req...
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: I regret to inform you that Wikipedia is currently unavailable due to a temporary block on automated requests. However, I have successfully retrieved the statistics for the `Microsoft.CodeAnalysis.CSharp` package.
+
+The latest version of the package is 5.12.0, and it has been downloaded over 2 billion times in total.
+```
+
+The program did not stop. Alfred said what he could not check and answered the rest. That was possible because of the `catch` block in `SearchWikipedia`: instead of an exception the model received text with the reason.
+
+You know the rule from Unit 1: **an error is an Observation too**. With tools that depend on someone else's service it matters even more, because there errors are a matter of time. You can see it for yourself: turn off the internet and run the program again.
+
+## Retrieval is more than vector search
+
+Look at the four tools Alfred now has as a whole:
+
+| Tool | Where it searches | How it finds things |
+| --- | --- | --- |
+| `SearchGuests` | In the vector store on your computer. | By meaning, with embeddings. |
+| `SearchWikipedia` | In Wikipedia. | With Wikipedia's search engine. |
+| `GetWeather` | In Open-Meteo. | By the exact name of a city. |
+| `GetPackageStats` | In NuGet. | By the exact name of a package. |
+
+All four do the same thing: they bring into the prompt a fact the model does not know, exactly when it needs it. That is the letter **R** in RAG. A vector store is only one of the ways to carry it out.
+
+A practical rule follows from this. Embeddings are for the cases where you don't know what words you will be asked with. If the data has an exact key, for example the name of a city, an order number or the name of a package, an ordinary request to an API or a database is simpler, faster and more accurate.
+
+:::caution[Text from the internet]
+The warning from the [previous lesson](/en/ai-agents/unit-3/rag-in-agent-framework/) applies in full here. A Wikipedia article can be edited by anyone, and its text goes straight into the prompt. Do not give an Agent that reads from the internet tools that can do harm without approval from a human.
+:::
+
+## Your turn
+
+**Compare two cities.** Ask `Is it warmer in Sofia or in Lisbon right now?` and see how many times Alfred calls `GetWeather`.
+
+**Add a clock.** Take `GetCurrentTime` from [your first Agent](/en/ai-agents/unit-1/tutorial/) in Unit 1 and give it to Alfred. Ask him how much time is left until midnight in your city.
+
+**Turn off the internet.** Run the question about Roslyn with no connection and see what Alfred says when both tools return an error.
+
+## Summary
+
+- A tool can ask a **real service** on the internet. Open-Meteo, Wikipedia and NuGet need no accounts or keys.
+- **Try every tool on its own** before you give it to the Agent.
+- A good tool returns **short text** and turns every error into a clear message.
+- When a source does not answer, the Agent receives the reason as an Observation and carries on with the others.
+- **Retrieval is not only vector search.** Every tool that brings facts into the prompt carries out the letter R in RAG.
+
+Alfred has everything he needs. In the next lesson we will put the four tools and the memory together in one Agent and send him to the gala.

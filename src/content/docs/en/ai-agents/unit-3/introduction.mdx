@@ -1,0 +1,100 @@
+---
+title: Introduction to Agentic RAG
+description: Unit 3 is the first use case in the course - Alfred welcomes the guests at a gala in Wayne Manor and learns to answer from data the model has never seen. What you will build, the topics the module covers and what you need.
+---
+
+Welcome to Unit 3. So far you have learned how an Agent works and how to build one with Microsoft Agent Framework. Now you will apply that to a **real use case**: an Agent that answers from your own data.
+
+The technique is called **RAG** (Retrieval-Augmented Generation). When the search through the data is driven by an Agent, we call it **Agentic RAG**. It is the most common way LLMs are used in practice: a chat over a product's documentation, an assistant on top of the company wiki, search across contracts and invoices. The idea is the same everywhere. The model does not know your data, so you find the piece it needs and hand it over exactly when it needs it.
+
+## A gala at Wayne Manor
+
+In Unit 2.1 Alfred prepared the party: a theme, a menu, catering, music and invitations. Tonight the guests arrive, and he is the host.
+
+A good host knows who is who. He remembers how you know each guest, what they do, what they like and what to talk to them about. He also keeps an eye on the weather, so the fireworks go off at the right moment, and he knows enough about the world to keep a conversation going with anyone.
+
+For Alfred that means four things:
+
+- finding the **notes about the guests**: name, relation to the host, description and email;
+- answering questions like "who could play some music tonight?" without anyone telling him where to look;
+- checking the **weather outside** in real time;
+- finding **general information** about a topic that comes up at the table.
+
+None of that is in the model. The guest list is yours, and no LLM was ever trained on it. The weather changes every hour. This is where RAG comes in.
+
+## What you will build
+
+By the end of the module you will have a chat with Alfred that looks like this:
+
+```text wrap
+You: I want to talk to Dr. Nikola Tesla about wireless energy. Look him up, find some background on wireless power transfer and suggest two conversation starters.
+  Action: SearchGuests({"query":"Dr. Nikola Tesla"})
+  Action: SearchWikipedia({"query":"wireless power transfer"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+  Observation: Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is ...
+Alfred: Dr. Nikola Tesla is an old friend from your university days who has recently patented a new wireless energy transmission system. He would be delighted to discuss it with you.
+
+Here are two conversation starters:
+1. "I heard about your recent patent for wireless energy transmission. How does it work?"
+2. "I've always been fascinated by your work on pigeons. Do you still keep them?"
+```
+
+The model does not know that Tesla is your old friend from university, or that he loves pigeons. Alfred **searches** the guest list and Wikipedia, **reads** what he found, and only then answers. We will get to this result step by step, and we will do everything by hand first.
+
+## Contents
+
+### 1️⃣ What is RAG?
+
+You'll watch the model make up an answer about a guest it does not know, and then see the same question answered correctly once you put the right note in the prompt. That is the whole idea of RAG.
+
+### 2️⃣ Your first retriever
+
+Someone has to find the right note. You'll load the guest list from a file and write a keyword search in about twenty lines of C#. Then you'll see where it fails.
+
+### 3️⃣ Embeddings: searching by meaning
+
+An embedding model turns text into numbers in such a way that texts with similar meaning get similar numbers. With it, Alfred will find the pianist when he is asked about music.
+
+### 4️⃣ Vector stores
+
+Embeddings have to live somewhere. We'll move them into a vector store through `Microsoft.Extensions.VectorData`: the same code works with an in-memory store, with SQLite or with Qdrant.
+
+### 5️⃣ RAG in Agent Framework
+
+`TextSearchProvider` adds the search to the Agent in a few lines. You'll see exactly what the model receives, and why "search on every question" is not always a good idea.
+
+### 6️⃣ Agentic RAG
+
+The search becomes a tool. Alfred decides for himself when to search, what to search for and how many times. We'll compare the two approaches with the same questions.
+
+### 7️⃣ More sources
+
+Not everything is in the guest list. We'll add three tools that ask real services on the internet: for the weather, for Wikipedia and for NuGet.
+
+### 8️⃣ Alfred at the gala
+
+Finally we put everything together in one Agent with memory and try it with the questions a host gets in a single evening.
+
+There are two short quizzes between the lessons, and a final quiz for the whole module at the end.
+
+## What you need
+
+You already have almost everything:
+
+- The [.NET SDK](https://dotnet.microsoft.com/download) from [Unit 0](/en/ai-agents/unit-0/introduction/).
+- [Ollama](https://ollama.com/download) and the `qwen3.5:9b` model from Unit 1.
+- One new, small model for embeddings: `nomic-embed-text` (274 MB). You'll pull it in the lesson on embeddings.
+
+The first six lessons run entirely on your computer. In the last two Alfred asks public services on the internet, so you'll need a connection. Accounts and API keys are still not required.
+
+:::tip[One project for the whole module]
+As in Unit 2.1, we work in a single project, this time `GalaHost`, and build on it in every lesson. Take the lessons in order.
+:::
+
+## Resources
+
+- [RAG in Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/agents/rag) - the official documentation for `TextSearchProvider`.
+- [Vector databases for .NET AI apps](https://learn.microsoft.com/dotnet/ai/vector-stores/overview) - an introduction to `Microsoft.Extensions.VectorData`.
+- [Embedding models in Ollama](https://ollama.com/search?c=embedding) - the list of models you can run locally.
+
+Ready? Let's start with the question of what exactly an LLM does not know. 🚀

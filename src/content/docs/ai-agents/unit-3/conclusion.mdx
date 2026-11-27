@@ -1,0 +1,55 @@
+---
+title: Заключение
+description: Поздравления за завършването на Unit 3 - вече можеш да изградиш Agent, който отговаря по твои данни с RAG и Agentic RAG в .NET.
+---
+
+Поздравления за завършването на Unit 3 🥳
+
+В началото Alfred уверено разказваше за гости, които никога не е виждал. В края търси в списъка, проверява времето, чете Wikipedia и помни за кого сте говорили преди малко.
+
+## Какво научи
+
+- **RAG** не променя модела, а prompt-а: намираш нужния текст, добавяш го към въпроса и моделът отговаря по него.
+- **Retriever** получава въпрос и връща няколко документа. Търсенето по думи намира точни низове, а търсенето по смисъл намира синоними и перифрази.
+- **Embedding** е вектор, който описва смисъла на текст. В .NET го получаваш през `IEmbeddingGenerator`.
+- **Vector store** пази записите с векторите им. `Microsoft.Extensions.VectorData` ти дава един и същ код за памет, SQLite, Qdrant и PostgreSQL.
+- **`TextSearchProvider`** прави класически RAG в Agent Framework: търси преди всяко извикване на модела и добавя намереното към prompt-а.
+- В **Agentic RAG** търсенето е tool. Моделът решава дали, какво и колко пъти да търси.
+- **Retrieval е повече от vector search.** Всеки tool, който носи факти в prompt-а, е източник на знание.
+
+Преди да посегнеш към embeddings, питай се **откъде трябва да дойде фактът**. Ако данните са малко, сложи ги в prompt-а. Ако имат точен ключ, направи справка по него. Ако не знаеш с какви думи ще те попитат, ти трябва търсене по смисъл. А ако източниците са няколко, остави Agent-а да избира и му кажи ясно кой е с предимство.
+
+## Целият проект
+
+Ето файловете, които събра в `GalaHost` по време на модула:
+
+| Файл | Какво съдържа | От кой урок е |
+| --- | --- | --- |
+| `LocalModel.cs` | Връзката с chat модела и с embedding модела. | [Какво е RAG?](/ai-agents/unit-3/what-is-rag/) и [Embeddings](/ai-agents/unit-3/embeddings/) |
+| `guests.json` | Бележките за дванадесетте гости. | [Първият ти retriever](/ai-agents/unit-3/retrieval/) |
+| `Guest.cs` | Един гост, описан за vector store-а. | [Първият ти retriever](/ai-agents/unit-3/retrieval/) и [Vector store](/ai-agents/unit-3/vector-store/) |
+| `RagPrompt.cs` | Сглобява augmented prompt на ръка. | [Първият ти retriever](/ai-agents/unit-3/retrieval/) |
+| `KeywordSearch.cs` | Търсене по думи. | [Първият ти retriever](/ai-agents/unit-3/retrieval/) |
+| `SemanticSearch.cs` | Търсене по смисъл на ръка. | [Embeddings](/ai-agents/unit-3/embeddings/) |
+| `GuestBook.cs` | Vector store-ът с гостите и tool-ът `SearchGuests`. | [Vector store](/ai-agents/unit-3/vector-store/) и [Agentic RAG](/ai-agents/unit-3/agentic-rag/) |
+| `ModelLog.cs` | Показва точния prompt, който стига до модела. | [RAG в Agent Framework](/ai-agents/unit-3/rag-in-agent-framework/) |
+| `AgentLog.cs` | Отпечатва стъпките на един отговор. | [Agentic RAG](/ai-agents/unit-3/agentic-rag/) |
+| `WorldTools.cs` | Tools за времето, Wikipedia и NuGet. | [Още източници](/ai-agents/unit-3/tools/) |
+
+Най-добрият начин да затвърдиш наученото е да смениш данните. Сложи в `guests.json` нещо свое: бележките от последните ти проекти, списък с книги или рецепти, и виж как се държи Alfred.
+
+## Какво следва
+
+Нормално е някои неща все още да не са ти напълно ясни. Върни се към уроците, промени примерите и виж какво се случва.
+
+Това, което изгради, е работещ прототип. По пътя към истинско приложение ще срещнеш няколко теми, които не покрихме:
+
+- [Data ingestion](https://learn.microsoft.com/dotnet/ai/conceptual/data-ingestion) - четене на PDF и Markdown файлове, рязане на chunks и записването им във vector store.
+- [Vector store providers](https://learn.microsoft.com/dotnet/ai/vector-stores/overview) - как да преместиш данните от паметта в SQLite, Qdrant или PostgreSQL.
+- [Evaluation](https://learn.microsoft.com/dotnet/ai/evaluation/libraries) - как да измериш с числа дали retriever-ът намира правилните документи и дали отговорите стъпват върху тях.
+- [Context providers](https://learn.microsoft.com/agent-framework/agents/conversations/context-providers) - памет, която Agent-ът носи между различни разговори, изградена върху същите vector stores.
+- *Hybrid search* и *reranking* - комбиниране на търсене по думи и по смисъл и пренареждане на резултатите с втори модел.
+
+В следващия Unit те очаква финалното задание на курса.
+
+### Продължавай да учиш, бъди страхотен 🤗

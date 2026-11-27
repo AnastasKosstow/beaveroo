@@ -1,0 +1,257 @@
+---
+title: Alfred at the Gala
+description: We put everything from the module together in one Agent - search through the guest list, the weather, Wikipedia, NuGet and memory for the conversation. We watch Alfred pick the wrong source, fix it with one sentence and let him work a whole evening.
+---
+
+All the parts are ready. In this lesson we gather them in one Agent and try it with the questions a host gets in a single evening.
+
+Here is what you have collected in the `GalaHost` project so far:
+
+| File | What it contains | Which lesson it is from |
+| --- | --- | --- |
+| `LocalModel.cs` | The connection to the chat model and to the embedding model. | [What is RAG?](/en/ai-agents/unit-3/what-is-rag/) and [Embeddings](/en/ai-agents/unit-3/embeddings/) |
+| `guests.json` and `Guest.cs` | The notes about the guests. | [Your First Retriever](/en/ai-agents/unit-3/retrieval/) and [Vector Stores](/en/ai-agents/unit-3/vector-store/) |
+| `GuestBook.cs` | The vector store with the guests and the `SearchGuests` tool. | [Vector Stores](/en/ai-agents/unit-3/vector-store/) and [Agentic RAG](/en/ai-agents/unit-3/agentic-rag/) |
+| `WorldTools.cs` | Tools for the weather, Wikipedia and NuGet. | [More Sources](/en/ai-agents/unit-3/tools/) |
+| `AgentLog.cs` | Prints the steps of a response. | [Agentic RAG](/en/ai-agents/unit-3/agentic-rag/) |
+
+## Assemble Alfred
+
+### 1. Give him the four tools
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use your tools to look things up and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(guestBook.SearchGuests),
+        AIFunctionFactory.Create(WorldTools.GetWeather),
+        AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+        AIFunctionFactory.Create(WorldTools.GetPackageStats),
+    ]);
+
+AgentResponse response = await alfred.RunAsync("Tell me about Lady Ada Lovelace.");
+
+AgentLog.Print(response);
+```
+
+This is Alfred from the previous lesson with one more tool: `SearchGuests`. We ask him about a guest from the list, just as in the [first lesson on Agentic RAG](/en/ai-agents/unit-3/agentic-rag/). Run `dotnet run`:
+
+```text wrap
+Alfred: I shall certainly do that, sir. Allow me to consult my resources regarding Lady Ada Lovelace.
+  Action: SearchWikipedia({"query":"Ada Lovelace"})
+  Observation: Ada Lovelace: Augusta Ada King, Countess of Lovelace (née Byron; 10 December 1815 – 27 November 1852...
+Alfred: Lady Ada Lovelace, born Augusta Ada King, Countess of Lovelace, was an English mathematician and writer. She is chiefly known for her work on Charles Babbage's proposed mechanical general-purpose computer, the analytical engine. She was the first to recognize that such a machine had applications beyond pure calculation.
+```
+
+### 2. What went wrong
+
+Every word of the answer is true, and it is completely useless to a host. The most important thing is missing: that Ada Lovelace is your best friend. Her email is missing too.
+
+Look at the `Action` line. Alfred did not search the guest list. He went to Wikipedia.
+
+Put yourself in the model's place. It receives the sentence `Tell me about Lady Ada Lovelace.` and four tools. It does not know that Ada is invited tonight. To the model this is a question about a famous historical figure, and the description of `SearchWikipedia` says "general knowledge about people". Its choice is perfectly logical.
+
+While Alfred had a single tool, this problem did not exist. With several sources the question is no longer just **whether** to search, but **where**. This is the hardest part of Agentic RAG, and no framework solves it for you.
+
+### 3. Tell him what comes first
+
+The model needs a rule of priority. In `Program.cs` add one sentence at the end of `instructions`:
+
+```csharp
+        "Use your tools to look things up and never invent their results. " +
+        "When a person is mentioned, look them up in the guest list before anything else.",
+```
+
+Run `dotnet run`:
+
+```text wrap
+  Action: SearchGuests({"query":"Lady Ada Lovelace"})
+  Observation: Name: Ada Lovelace Relation: best friend Description: Lady Ada Lovelace is your best friend. She is ...
+Alfred: Lady Ada Lovelace, my dear friend, is an esteemed mathematician celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine. She will be delighted to see you at tonight's gala.
+```
+
+Now Alfred opens the guest list first, and the answer comes from our notes.
+
+Look closely at the words `my dear friend`, though. The note says `your best friend`, and the model has turned around whose friend Ada is. A small inaccuracy, but a telling one: even with the right document in front of it, a small model sometimes passes on a detail wrongly. RAG reduces made-up answers a lot, but it does not remove them completely.
+
+:::tip[Check with real questions]
+We tried another remedy as well: longer descriptions of `SearchGuests` and `SearchWikipedia` that explain when each one is used. The result was worse, and Alfred went to Wikipedia again. Small models are sensitive to wording, and you cannot guess in advance what will work. So keep a few questions with a known correct answer and run them after every change.
+:::
+
+## A whole evening with Alfred
+
+One question is not an evening. We will turn the program into a conversation, as we did with `session` in Unit 2.1.
+
+### 4. Turn it into a conversation
+
+In `Program.cs` replace the last two lines, the ones with `RunAsync` and `AgentLog.Print`, with the following:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+Console.WriteLine("Alfred is ready. Ask a question (or press Enter to exit).");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    string? input = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
+
+    AgentLog.Print(await alfred.RunAsync(input, session));
+}
+```
+
+The loop is the same as in the [lesson on sessions](/en/ai-agents/unit-2/agent-framework/sessions/). Run `dotnet run` and ask the questions below one by one. The answers arrive in ten to twenty seconds.
+
+### 5. Ask about a guest
+
+```text wrap
+You: Tell me about Lady Ada Lovelace.
+  Action: SearchGuests({"query":"Lady Ada Lovelace"})
+  Observation: Name: Ada Lovelace Relation: best friend Description: Lady Ada Lovelace is your best friend. She is ...
+Alfred: Lady Ada Lovelace, my dear friend, is an esteemed mathematician celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine. She will be delighted to see you at tonight's gala.
+```
+
+The same question, the same answer. The data comes from the vector store on your computer.
+
+### 6. Ask about the weather
+
+```text wrap
+You: What is the weather like in Sofia right now? Is it a good night for fireworks?
+  Action: GetWeather({"city":"Sofia"})
+  Observation: Weather in Sofia, Bulgaria: 5.9 °C, wind 9.5 km/h, rain 0.00 mm, cloud cover 48%.
+Alfred: The weather in Sofia is mild with a temperature of 5.9 °C and light winds. With minimal rain and moderate cloud cover, it seems like a pleasant evening for fireworks.
+```
+
+There is no person in the question, so Alfred does not search the list. He gets the weather from Open-Meteo and judges for himself whether it suits fireworks. The numbers are from the moment we ran the program. Yours will be different.
+
+### 7. Ask about a package
+
+```text wrap
+You: Grace Hopper wrote one of the first compilers. How popular is the Microsoft.CodeAnalysis.CSharp package on NuGet today?
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: The Microsoft.CodeAnalysis.CSharp package is quite popular on NuGet, with over 2 billion downloads to date and the latest version being 5.12.0.
+```
+
+The answer is correct, but look at what did **not** happen. The question mentions Grace Hopper, and our rule says to check the guest list first when a person is mentioned. Alfred skipped it, because the question is really about the package. Here that is reasonable. It is also one more reminder that `instructions` are a request, not a guarantee.
+
+### 8. Ask something that needs two sources
+
+```text wrap
+You: I want to talk to Dr. Nikola Tesla about wireless energy. Look him up, find some background on wireless power transfer and suggest two conversation starters.
+  Action: SearchGuests({"query":"Dr. Nikola Tesla"})
+  Action: SearchWikipedia({"query":"wireless power transfer"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+  Observation: Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is ...
+Alfred: Dr. Nikola Tesla is an old friend from your university days who has recently patented a new wireless energy transmission system. He would be delighted to discuss it with you.
+
+Here are two conversation starters:
+1. "I heard about your recent patent for wireless energy transmission. How does it work?"
+2. "I've always been fascinated by your work on pigeons. Do you still keep them?"
+```
+
+This is Agentic RAG in its full form. In a single step Alfred searches in two places: in **your data** for who Tesla is to you, and in **Wikipedia** for the topic itself. Then he brings the two together in one answer. The second conversation starter comes straight from the note: the pigeons.
+
+### 9. Come back to an earlier answer
+
+```text wrap
+You: What was his email address again?
+Alfred: Dr. Nikola Tesla's email address is nikola.tesla@example.com.
+```
+
+Not a single `Action`. Alfred understands who "his" refers to and knows the email, because the note about Tesla is in the session from the previous question. Press Enter on an empty line to exit.
+
+## What you built
+
+```text
+Alfred
+├── SearchGuests
+├── GetWeather
+├── SearchWikipedia
+└── GetPackageStats
+```
+
+One Agent with four sources of knowledge and memory for the conversation:
+
+| The question is about | Alfred uses | Where the answer comes from |
+| --- | --- | --- |
+| A guest | `SearchGuests` | Your data, found by meaning. |
+| The weather | `GetWeather` | A service that answers in real time. |
+| A topic of conversation | `SearchWikipedia` | General information from the internet. |
+| A .NET package | `GetPackageStats` | An exact lookup by name. |
+| Something already said | Nothing | The session. |
+
+None of these answers comes from the model's memory. The model does what it is good at: it understands the question, chooses where to take the facts from and arranges them into a sentence.
+
+## The context is not infinite
+
+Every tool result stays in the session. After the five questions above the conversation was already around 2,000 tokens, and every next answer reads all of it.
+
+Ollama loads the model with a limited context. Check it with `ollama ps` while the program is running: the `CONTEXT` column shows the size. On our machine it is 4096 tokens. When the conversation exceeds it, its oldest part is cut off without your program getting an error, and Alfred starts "forgetting" the beginning.
+
+That is why we kept the results small throughout the module: the retriever returns three notes, not twenty, and from every Wikipedia article we take two sentences. For longer conversations you will also need *compaction* from the [lesson on sessions](/en/ai-agents/unit-2/agent-framework/sessions/).
+
+## Your turn
+
+**Find a weak spot.** Ask Alfred ten questions of your own. Look for one where he picks the wrong source or does not search at all, and try to fix it with one sentence in `instructions`.
+
+**Save the conversation.** Add saving the session to a file with `SerializeSessionAsync`, as in Unit 2.1, so that Alfred remembers the evening even after a restart.
+
+**Combine the two kinds of RAG.** The rule "the guest list first" is a request. Make it a guarantee: let the notes about the guests arrive through `TextSearchProvider` on every question, while the weather, Wikipedia and NuGet stay tools.
+
+<details>
+<summary>See the solution</summary>
+
+The tools are passed through `ChatOptions.Tools`, and the search through the guests through `AIContextProviders`. The `SearchGuests` function is the same as in the [lesson on TextSearchProvider](/en/ai-agents/unit-3/rag-in-agent-framework/).
+
+```csharp
+AIAgent alfred = LocalModel.Create().AsAIAgent(new ChatClientAgentOptions
+{
+    Name = "Alfred",
+    ChatOptions = new()
+    {
+        Instructions =
+            "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+            "You are polite and concise. " +
+            "Use your tools to look things up and never invent their results.",
+        Tools =
+        [
+            AIFunctionFactory.Create(WorldTools.GetWeather),
+            AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+            AIFunctionFactory.Create(WorldTools.GetPackageStats),
+        ],
+    },
+    AIContextProviders = [new TextSearchProvider(SearchGuests)],
+});
+```
+
+Now Alfred answers the question about Ada Lovelace from the notes, without a single `Action`, and for the weather he still calls `GetWeather`. You know the price: three notes go into the conversation on every question, even when you ask about the weather.
+
+</details>
+
+## Summary
+
+- One Agent can have **several sources of knowledge**: your data, real-time services and general information.
+- With several sources the hardest part is **choosing between them**. The model does not know what is in your data until you tell it.
+- One clear rule of priority in `instructions` is often enough. Check it with questions you know the answer to.
+- The **session** keeps the tool results as well, so follow-up questions do not require a new search.
+- The model's context is limited. Keep the search results **short**.
+
+Alfred is ready for the gala. Only the final quiz is left.

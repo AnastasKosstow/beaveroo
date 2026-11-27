@@ -1,0 +1,257 @@
+---
+title: Alfred на гала вечерта
+description: Сглобяваме всичко от модула в един Agent - търсене в списъка с гости, времето, Wikipedia, NuGet и памет за разговора. Виждаме как Alfred избира грешния източник, поправяме го с едно изречение и го пускаме да работи цяла вечер.
+---
+
+Всички части са готови. В този урок ги събираме в един Agent и го изпробваме с въпросите, които един домакин получава за една вечер.
+
+Ето какво събра в проекта `GalaHost` дотук:
+
+| Файл | Какво съдържа | От кой урок е |
+| --- | --- | --- |
+| `LocalModel.cs` | Връзката с chat модела и с embedding модела. | [Какво е RAG?](/ai-agents/unit-3/what-is-rag/) и [Embeddings](/ai-agents/unit-3/embeddings/) |
+| `guests.json` и `Guest.cs` | Бележките за гостите. | [Първият ти retriever](/ai-agents/unit-3/retrieval/) и [Vector store](/ai-agents/unit-3/vector-store/) |
+| `GuestBook.cs` | Vector store-ът с гостите и tool-ът `SearchGuests`. | [Vector store](/ai-agents/unit-3/vector-store/) и [Agentic RAG](/ai-agents/unit-3/agentic-rag/) |
+| `WorldTools.cs` | Tools за времето, Wikipedia и NuGet. | [Още източници](/ai-agents/unit-3/tools/) |
+| `AgentLog.cs` | Отпечатва стъпките на един отговор. | [Agentic RAG](/ai-agents/unit-3/agentic-rag/) |
+
+## Сглоби Alfred
+
+### 1. Дай му четирите tools
+
+Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use your tools to look things up and never invent their results.",
+    tools:
+    [
+        AIFunctionFactory.Create(guestBook.SearchGuests),
+        AIFunctionFactory.Create(WorldTools.GetWeather),
+        AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+        AIFunctionFactory.Create(WorldTools.GetPackageStats),
+    ]);
+
+AgentResponse response = await alfred.RunAsync("Tell me about Lady Ada Lovelace.");
+
+AgentLog.Print(response);
+```
+
+Това е Alfred от предишния урок с още един tool: `SearchGuests`. Питаме го за гост от списъка, точно както в [първия урок за Agentic RAG](/ai-agents/unit-3/agentic-rag/). Изпълни `dotnet run`:
+
+```text wrap
+Alfred: I shall certainly do that, sir. Allow me to consult my resources regarding Lady Ada Lovelace.
+  Action: SearchWikipedia({"query":"Ada Lovelace"})
+  Observation: Ada Lovelace: Augusta Ada King, Countess of Lovelace (née Byron; 10 December 1815 – 27 November 1852...
+Alfred: Lady Ada Lovelace, born Augusta Ada King, Countess of Lovelace, was an English mathematician and writer. She is chiefly known for her work on Charles Babbage's proposed mechanical general-purpose computer, the analytical engine. She was the first to recognize that such a machine had applications beyond pure calculation.
+```
+
+### 2. Какво се обърка
+
+Всяка дума в отговора е вярна и той е напълно безполезен за един домакин. Няма го най-важното: че Ada Lovelace е най-добрата ти приятелка. Няма го и имейлът ѝ.
+
+Погледни реда `Action`. Alfred не потърси в списъка с гости. Отиде в Wikipedia.
+
+Постави се на мястото на модела. Той получава изречението `Tell me about Lady Ada Lovelace.` и четири tools. Не знае, че Ada е поканена тази вечер. За него това е въпрос за известна историческа личност, а в описанието на `SearchWikipedia` пише „general knowledge about people“. Изборът му е напълно логичен.
+
+Докато Alfred имаше един tool, този проблем не съществуваше. С няколко източника въпросът вече не е само **дали** да търси, а **къде**. Това е най-трудната част на Agentic RAG и никой framework не я решава вместо теб.
+
+### 3. Кажи му кое е на първо място
+
+Моделът има нужда от правило за предимство. В `Program.cs` добави едно изречение в края на `instructions`:
+
+```csharp
+        "Use your tools to look things up and never invent their results. " +
+        "When a person is mentioned, look them up in the guest list before anything else.",
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+  Action: SearchGuests({"query":"Lady Ada Lovelace"})
+  Observation: Name: Ada Lovelace Relation: best friend Description: Lady Ada Lovelace is your best friend. She is ...
+Alfred: Lady Ada Lovelace, my dear friend, is an esteemed mathematician celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine. She will be delighted to see you at tonight's gala.
+```
+
+Сега Alfred първо отваря списъка с гости и отговорът идва от нашите бележки.
+
+Вгледай се обаче в думите `my dear friend`. В бележката пише `your best friend`, а моделът е обърнал чия приятелка е Ada. Дребна неточност, но показателна: дори с правилния document пред себе си малък модел понякога предава детайл погрешно. RAG намалява измислиците много, но не ги премахва напълно.
+
+:::tip[Проверявай с истински въпроси]
+Пробвахме и друго лекарство: по-дълги описания на `SearchGuests` и `SearchWikipedia`, които обясняват кога се използва всеки. Резултатът беше по-лош и Alfred пак отиде в Wikipedia. Малките модели са чувствителни към формулировката и няма как да познаеш предварително какво ще сработи. Затова си запази няколко въпроса с известен верен отговор и ги пускай след всяка промяна.
+:::
+
+## Цяла вечер с Alfred
+
+Един въпрос не е вечер. Ще превърнем програмата в разговор, както направихме със `session` в Unit 2.1.
+
+### 4. Превърни го в разговор
+
+В `Program.cs` замени последните два реда, тези с `RunAsync` и `AgentLog.Print`, със следното:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+Console.WriteLine("Alfred is ready. Ask a question (or press Enter to exit).");
+
+while (true)
+{
+    Console.Write("\nYou: ");
+    string? input = Console.ReadLine();
+
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
+
+    AgentLog.Print(await alfred.RunAsync(input, session));
+}
+```
+
+Цикълът е същият като в [урока за sessions](/ai-agents/unit-2/agent-framework/sessions/). Изпълни `dotnet run` и задай въпросите по-долу един по един. Отговорите идват за десет до двадесет секунди.
+
+### 5. Попитай за гост
+
+```text wrap
+You: Tell me about Lady Ada Lovelace.
+  Action: SearchGuests({"query":"Lady Ada Lovelace"})
+  Observation: Name: Ada Lovelace Relation: best friend Description: Lady Ada Lovelace is your best friend. She is ...
+Alfred: Lady Ada Lovelace, my dear friend, is an esteemed mathematician celebrated as the first computer programmer for her work on Charles Babbage's Analytical Engine. She will be delighted to see you at tonight's gala.
+```
+
+Същият въпрос, същият отговор. Данните идват от vector store-а на твоя компютър.
+
+### 6. Попитай за времето
+
+```text wrap
+You: What is the weather like in Sofia right now? Is it a good night for fireworks?
+  Action: GetWeather({"city":"Sofia"})
+  Observation: Weather in Sofia, Bulgaria: 5.9 °C, wind 9.5 km/h, rain 0.00 mm, cloud cover 48%.
+Alfred: The weather in Sofia is mild with a temperature of 5.9 °C and light winds. With minimal rain and moderate cloud cover, it seems like a pleasant evening for fireworks.
+```
+
+Във въпроса няма човек, затова Alfred не търси в списъка. Взима времето от Open-Meteo и сам преценява дали е подходящо за фойерверки. Числата са от момента, в който пуснахме програмата. При теб ще са други.
+
+### 7. Попитай за пакет
+
+```text wrap
+You: Grace Hopper wrote one of the first compilers. How popular is the Microsoft.CodeAnalysis.CSharp package on NuGet today?
+  Action: GetPackageStats({"packageId":"Microsoft.CodeAnalysis.CSharp"})
+  Observation: Microsoft.CodeAnalysis.CSharp: latest version 5.12.0, 2049489889 downloads in total.
+Alfred: The Microsoft.CodeAnalysis.CSharp package is quite popular on NuGet, with over 2 billion downloads to date and the latest version being 5.12.0.
+```
+
+Отговорът е верен, но виж какво **не** се случи. Във въпроса се споменава Grace Hopper, а правилото ни казва при споменат човек първо да се провери списъкът с гости. Alfred го прескочи, защото въпросът всъщност е за пакета. Тук това е разумно. То е и поредното напомняне, че `instructions` са молба, а не гаранция.
+
+### 8. Попитай за нещо, което иска два източника
+
+```text wrap
+You: I want to talk to Dr. Nikola Tesla about wireless energy. Look him up, find some background on wireless power transfer and suggest two conversation starters.
+  Action: SearchGuests({"query":"Dr. Nikola Tesla"})
+  Action: SearchWikipedia({"query":"wireless power transfer"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+  Observation: Wireless power transfer: Wireless power transfer (WPT; also wireless energy transmission or WET) is ...
+Alfred: Dr. Nikola Tesla is an old friend from your university days who has recently patented a new wireless energy transmission system. He would be delighted to discuss it with you.
+
+Here are two conversation starters:
+1. "I heard about your recent patent for wireless energy transmission. How does it work?"
+2. "I've always been fascinated by your work on pigeons. Do you still keep them?"
+```
+
+Това е Agentic RAG в пълния му вид. В една стъпка Alfred търси на две места: в **твоите данни** за това кой е Tesla за теб и в **Wikipedia** за самата тема. После събира двете в един отговор. Вторият въпрос за начало на разговор идва право от бележката: гълъбите.
+
+### 9. Върни се към предишен отговор
+
+```text wrap
+You: What was his email address again?
+Alfred: Dr. Nikola Tesla's email address is nikola.tesla@example.com.
+```
+
+Няма нито един `Action`. Alfred разбира кой е „his“ и знае имейла, защото бележката за Tesla е в session-а от предишния въпрос. Натисни Enter на празен ред, за да излезеш.
+
+## Какво изгради
+
+```text
+Alfred
+├── SearchGuests
+├── GetWeather
+├── SearchWikipedia
+└── GetPackageStats
+```
+
+Един Agent с четири източника на знание и памет за разговора:
+
+| Въпросът е за | Alfred използва | Откъде идва отговорът |
+| --- | --- | --- |
+| Гост | `SearchGuests` | Твоите данни, намерени по смисъл. |
+| Времето | `GetWeather` | Услуга, която отговаря в реално време. |
+| Тема на разговор | `SearchWikipedia` | Обща информация от интернет. |
+| .NET пакет | `GetPackageStats` | Точна справка по име. |
+| Нещо вече казано | Нищо | Session-ът. |
+
+Нито един от тези отговори не идва от паметта на модела. Моделът прави това, в което е силен: разбира въпроса, избира откъде да вземе фактите и ги подрежда в изречение.
+
+## Контекстът не е безкраен
+
+Всеки резултат от tool остава в session-а. След петте въпроса по-горе разговорът вече беше около 2000 tokens, а всеки следващ отговор го прочита целия.
+
+Ollama зарежда модела с ограничен context. Провери го с `ollama ps`, докато програмата работи: колоната `CONTEXT` показва размера. При нас той е 4096 tokens. Когато разговорът го надхвърли, най-старата му част се отрязва, без програмата ти да получи грешка, и Alfred започва да „забравя“ началото.
+
+Затова през целия модул държахме резултатите малки: retriever-ът връща три бележки, а не двадесет, и от всяка статия в Wikipedia взимаме по две изречения. За по-дълги разговори ще ти трябва и *compaction* от [урока за sessions](/ai-agents/unit-2/agent-framework/sessions/).
+
+## Твой ред
+
+**Намери слабо място.** Задай на Alfred десет свои въпроса. Потърси такъв, при който той избира грешния източник или не търси изобщо, и опитай да го поправиш с едно изречение в `instructions`.
+
+**Запази разговора.** Добави записване на session-а във файл с `SerializeSessionAsync`, както в Unit 2.1, за да помни Alfred вечерта и след рестарт.
+
+**Комбинирай двата вида RAG.** Правилото „първо списъкът с гости“ е молба. Направи го гаранция: нека бележките за гостите идват с `TextSearchProvider` при всеки въпрос, а времето, Wikipedia и NuGet останат tools.
+
+<details>
+<summary>Виж решението</summary>
+
+Tools се подават през `ChatOptions.Tools`, а търсенето в гостите през `AIContextProviders`. Функцията `SearchGuests` е същата като в [урока за TextSearchProvider](/ai-agents/unit-3/rag-in-agent-framework/).
+
+```csharp
+AIAgent alfred = LocalModel.Create().AsAIAgent(new ChatClientAgentOptions
+{
+    Name = "Alfred",
+    ChatOptions = new()
+    {
+        Instructions =
+            "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+            "You are polite and concise. " +
+            "Use your tools to look things up and never invent their results.",
+        Tools =
+        [
+            AIFunctionFactory.Create(WorldTools.GetWeather),
+            AIFunctionFactory.Create(WorldTools.SearchWikipedia),
+            AIFunctionFactory.Create(WorldTools.GetPackageStats),
+        ],
+    },
+    AIContextProviders = [new TextSearchProvider(SearchGuests)],
+});
+```
+
+Сега на въпроса за Ada Lovelace Alfred отговаря от бележките, без нито един `Action`, а за времето пак вика `GetWeather`. Цената я знаеш: три бележки влизат в разговора при всеки въпрос, дори когато питаш за времето.
+
+</details>
+
+## Обобщение
+
+- Един Agent може да има **няколко източника на знание**: твоите данни, услуги в реално време и обща информация.
+- С няколко източника най-трудното е **изборът между тях**. Моделът не знае кое е в твоите данни, докато не му кажеш.
+- Едно ясно правило за предимство в `instructions` често е достатъчно. Проверявай го с въпроси, на които знаеш отговора.
+- **Session-ът** пази и резултатите от tools, затова уточняващите въпроси не изискват ново търсене.
+- Context-ът на модела е ограничен. Дръж резултатите от търсенето **кратки**.
+
+Alfred е готов за гала вечерта. Остава финалният quiz.

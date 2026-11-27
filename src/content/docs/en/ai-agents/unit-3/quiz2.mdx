@@ -1,0 +1,164 @@
+---
+title: Quick Quiz 2
+description: A short, ungraded quiz on vector stores, TextSearchProvider and the difference between classic RAG and Agentic RAG.
+---
+
+import Question from '../../../../../components/Question.astro';
+
+One more short quiz. 😅 It covers the three things from the last lessons: **vector stores, classic RAG and Agentic RAG**.
+
+### Q1: What does a vector store do?
+
+<Question
+  choices={[
+    {
+      text: 'It keeps records together with their vectors and finds the ones closest to a given vector.',
+      explain: 'That is why SearchAsync takes text, turns it into a vector and returns the records that are closest in meaning.',
+      correct: true,
+    },
+    {
+      text: 'It turns text into a vector.',
+      explain: 'That is what the embedding model does. The vector store calls it and keeps the result.',
+    },
+    {
+      text: 'It writes the answer for the user from the retrieved documents.',
+      explain: 'The answer is written by the LLM. The vector store only searches.',
+    },
+  ]}
+/>
+
+---
+
+### Q2: What does the `[VectorStoreVector(768)]` attribute on the `Text` property say?
+
+<Question
+  choices={[
+    {
+      text: 'That the text cannot be longer than 768 characters.',
+      explain: 'The number has nothing to do with the length of the text.',
+    },
+    {
+      text: 'That the vector of the record is made from this property and that it has 768 dimensions.',
+      explain: 'The number has to match how many numbers the embedding model returns. For nomic-embed-text that is 768.',
+      correct: true,
+    },
+    {
+      text: 'That the record is kept in 768 copies for faster search.',
+      explain: 'Every record is kept once, together with one vector.',
+    },
+  ]}
+/>
+
+---
+
+### Q3: You want employees to find only the documents of their own department. Where do you put that condition?
+
+<Question
+  choices={[
+    {
+      text: 'In the text of the question, for example "search only in the Sales department".',
+      explain: 'Then the condition becomes part of the meaning that is searched by, and it is not guaranteed.',
+    },
+    {
+      text: 'In the instructions of the Agent.',
+      explain: 'Instructions are a request to the model. Access to data must not depend on its judgment.',
+    },
+    {
+      text: 'In the filter of the search, as an exact condition on a field of the record.',
+      explain: 'Exact conditions go in the filter, meaning goes in the vector. A filter is code and is always applied.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q4: When does `TextSearchProvider` search in its default mode?
+
+<Question
+  choices={[
+    {
+      text: "Before every call to the model, with the user's message as the query.",
+      explain: 'What it finds is added to the prompt as an extra message. That is why Alfred received three notes even on a greeting.',
+      correct: true,
+    },
+    {
+      text: 'Only when the model asks for a search.',
+      explain: 'That is the other mode, OnDemandFunctionCalling, and the basis of Agentic RAG.',
+    },
+    {
+      text: 'Once, when the Agent is created.',
+      explain: 'Only GuestBook is prepared at creation. The search happens on every question.',
+    },
+  ]}
+/>
+
+---
+
+### Q5: What changes when the search becomes a tool?
+
+<Question
+  choices={[
+    {
+      text: 'The search becomes more accurate, because a different embedding model is used.',
+      explain: 'The embedding model and the vector store are the same. What changes is who decides when and what to search for.',
+    },
+    {
+      text: 'The model decides whether to search, writes the query itself and can search several times.',
+      explain: 'You saw it three times: no search on a greeting, the query musician instead of the whole question, and two searches for a two-part question.',
+      correct: true,
+    },
+    {
+      text: 'The model no longer needs the retrieved documents.',
+      explain: 'The documents are still needed. They simply arrive as an Observation instead of an extra message.',
+    },
+  ]}
+/>
+
+---
+
+### Q6: Alfred answered that Isaac Newton is not among the guests without calling `SearchGuests`. What does that show?
+
+<Question
+  choices={[
+    {
+      text: 'That the tool is broken and has to be fixed.',
+      explain: 'The tool works. The model simply decided not to use it.',
+    },
+    {
+      text: 'That Agentic RAG is always better than classic RAG.',
+      explain: 'Quite the opposite: this is its weak spot.',
+    },
+    {
+      text: 'That with Agentic RAG the model can skip the search and answer from its memory.',
+      explain: 'Clearer instructions help, but they are not a guarantee. If a source has to be read always, that is ensured with code.',
+      correct: true,
+    },
+  ]}
+/>
+
+---
+
+### Q7: You are building an assistant that answers only from the documentation of one product. Which approach is the natural choice?
+
+<Question
+  choices={[
+    {
+      text: 'Agentic RAG, because it is the newer approach.',
+      explain: 'Newer does not mean a better fit. Here every question is about the documents and there is nothing to decide.',
+    },
+    {
+      text: 'Classic RAG: every question is about the documents, the search is always needed, and the model is called only once.',
+      explain: 'You get predictability and a lower cost. Agentic RAG pays off when there is a conversation, several sources or complex questions.',
+      correct: true,
+    },
+    {
+      text: 'Neither. It is enough to put the whole documentation in the instructions.',
+      explain: 'That works only for very little data. The documentation of a product does not fit in the prompt.',
+    },
+  ]}
+/>
+
+---
+
+How did it go? Excellent! Alfred now searches the guest list when he sees fit. In the next lesson we will give him **sources beyond the list**.

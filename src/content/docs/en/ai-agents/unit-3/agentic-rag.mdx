@@ -1,0 +1,385 @@
+---
+title: "Agentic RAG: Retrieval as a Tool"
+description: We turn the search through the guest list into a tool and let Alfred decide on his own when to search, what to search for and how many times. We compare Agentic RAG with classic RAG on the same questions and see what we gain and what we risk.
+---
+
+In classic RAG the search is a mandatory step that someone carries out on the model's behalf. You saw where that leads: Alfred received three notes about guests when we simply greeted him.
+
+In **Agentic RAG** the search is a tool. Alfred decides for himself whether to use it.
+
+## The idea
+
+You need nothing new for it. From Unit 1 you know the Thought → Action → Observation cycle, and from Unit 2.1 you know how to give a tool to an Agent. Here the Action is the search, and the Observation is the notes that were found.
+
+```text
+Classic RAG
+question ──▶ search ──▶ model ──▶ answer
+
+Agentic RAG
+question ──▶ model ──▶ search ──▶ model ──▶ answer
+               │
+               └──▶ answer (when no search is needed)
+```
+
+The difference looks small, but it moves three decisions from your code to the model:
+
+| Decision | Classic RAG | Agentic RAG |
+| --- | --- | --- |
+| Whether to search | Always. | The model judges. |
+| What to search for | The user's words. | A query written by the model. |
+| How many times | Once. | As many as needed. |
+
+## Turn the search into a tool
+
+We continue in the `GalaHost` project. You will need `LocalModel.cs`, `Guest.cs`, `guests.json` and `GuestBook.cs`.
+
+### 1. Add a tool to GuestBook
+
+Open `GuestBook.cs`. At the very top add one more `using`:
+
+```csharp title="GuestBook.cs"
+using System.ComponentModel;
+```
+
+Then add this method to the class, below `SearchAsync`:
+
+```csharp title="GuestBook.cs"
+[Description("Searches the guest list of tonight's gala and returns the notes about the guests that match best.")]
+public async Task<string> SearchGuests(
+    [Description("What to look for: a name, a relation to the host, an interest or a topic.")]
+    string query)
+{
+    List<Guest> found = await SearchAsync(query);
+
+    return string.Join("\n\n", found.Select(guest => guest.Text));
+}
+```
+
+This is a tool by the rules from [Unit 2.1](/en/ai-agents/unit-2/agent-framework/tools/): a method with `[Description]`, a parameter with `[Description]` and a result as text. Inside, it calls the familiar `SearchAsync` and joins the notes of the guests it found.
+
+Pay attention to the description of the parameter. It does not just say "the search text", it lists what can be searched for: a name, a relation to the host, an interest or a topic. That way the model understands which queries make sense.
+
+### 2. Try the tool on its own
+
+Before you give a tool to an Agent, run it once by itself. That way you see exactly what the model will receive. Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+Console.WriteLine(await guestBook.SearchGuests("musician"));
+```
+
+Run `dotnet run`:
+
+```text wrap
+Name: Wolfgang Amadeus Mozart
+Relation: neighbor
+Description: Wolfgang Amadeus Mozart is a composer who wrote his first symphony at the age of eight. He has offered to play the piano after dinner and never says no to a game of billiards.
+Email: wolfgang.mozart@example.com
+
+Name: Hedy Lamarr
+Relation: no relation
+Description: Hedy Lamarr is a film star and inventor. She co-invented a frequency-hopping radio system that later became the basis for Wi-Fi and Bluetooth.
+Email: hedy.lamarr@example.com
+
+Name: Albert Einstein
+Relation: business partner
+Description: Albert Einstein is a theoretical physicist who developed the theory of relativity. He relaxes by playing the violin and sailing, and he never wears socks.
+Email: albert.einstein@example.com
+```
+
+Three notes as plain text. This is exactly what will arrive at the model as an Observation.
+
+### 3. Show the Agent's steps
+
+To see what Alfred does, we need `AgentLog` from Unit 2.1. Create a file `AgentLog.cs`:
+
+```csharp title="AgentLog.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class AgentLog
+{
+    public static void Print(AgentResponse response)
+    {
+        foreach (ChatMessage message in response.Messages)
+        {
+            foreach (AIContent content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent text:
+                        Console.WriteLine($"{message.AuthorName}: {text.Text}");
+                        break;
+                    case FunctionCallContent call:
+                        string arguments = JsonSerializer.Serialize(call.Arguments);
+                        Console.WriteLine($"  Action: {call.Name}({arguments})");
+                        break;
+                    case FunctionResultContent result:
+                        Console.WriteLine($"  Observation: {Shorten($"{result.Result}")}");
+                        break;
+                }
+            }
+        }
+    }
+
+    private static string Shorten(string text)
+    {
+        text = text.ReplaceLineEndings(" ");
+
+        return text.Length <= 100 ? text : text[..100] + "...";
+    }
+}
+```
+
+The file is the same as in `PartyPlanner`, with one addition: the `Shorten` method. The notes about three guests take up half a screen, so from every Observation we print only the first hundred characters. The model, of course, receives the whole text.
+
+### 4. Give the tool to Alfred
+
+Replace the contents of `Program.cs` with the following:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use the SearchGuests tool whenever a question is about the guests " +
+        "and never invent details about them.",
+    tools: [AIFunctionFactory.Create(guestBook.SearchGuests)]);
+
+AgentResponse response = await alfred.RunAsync("Who could entertain the guests with music?");
+
+AgentLog.Print(response);
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Compared with the previous lesson:
+
+- **`TextSearchProvider` is gone.** We are back to the short `AsAIAgent` with `name`, `instructions` and `tools`.
+- **The search is in `tools`.** `guestBook.SearchGuests` is a method of an object, not a static method, but `AIFunctionFactory.Create` accepts it the same way.
+- **There is a new sentence in `instructions`** that says when to use the tool.
+
+### 5. Start the program
+
+```bash
+dotnet run
+```
+
+output:
+
+```text wrap
+Alfred: I shall inquire into our guest list to see if any musical talents have graced us this evening.
+  Action: SearchGuests({"query":"musician"})
+  Observation: Name: Wolfgang Amadeus Mozart Relation: neighbor Description: Wolfgang Amadeus Mozart is a composer ...
+Alfred: Mr. Mozart would be most suitable to entertain the guests with music, as he is a composer who has offered to play the piano after dinner.
+  [984 input tokens]
+```
+
+One lap of the familiar cycle:
+
+1. **Thought.** Alfred says he will check the guest list.
+2. **Action.** He calls `SearchGuests`. Look at the argument: he did not send the user's question, he wrote a query of his own, `musician`.
+3. **Observation.** The framework runs our method and returns the three notes.
+4. **Answer.** Alfred reads the notes and answers.
+
+The second point is the first big difference. In classic RAG we searched by the sentence `Who could entertain the guests with music?`. Here the model translated it into the language of the notes by itself. This is called *query rewriting*, and you get it without a single line of code.
+
+Look at the price as well: 984 input tokens against 309 in the previous lesson. The model was called **twice**, once to ask for the search and once to answer, and both times it read the instructions and the description of the tool.
+
+## The same questions, different behavior
+
+Now we will repeat the three situations in which classic RAG struggled.
+
+### 6. Say "good evening"
+
+Change the question in `Program.cs`:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Good evening, Alfred.");
+```
+
+Run `dotnet run`:
+
+```text wrap
+Alfred: Good evening, sir. How may I assist you with preparations for the gala?
+  [358 input tokens]
+```
+
+No `Action`, no notes, no emails. A greeting does not need a search, and Alfred does not search.
+
+### 7. Ask a follow-up question
+
+In `Program.cs` replace everything below the creation of `alfred` with the following:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+string[] questions =
+[
+    "Which guest is passionate about pigeons?",
+    "What is his email address?",
+];
+
+foreach (string question in questions)
+{
+    Console.WriteLine($"You: {question}");
+
+    AgentResponse response = await alfred.RunAsync(question, session);
+
+    AgentLog.Print(response);
+    Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+    Console.WriteLine();
+}
+```
+
+Run `dotnet run`:
+
+```text wrap
+You: Which guest is passionate about pigeons?
+  Action: SearchGuests({"query":"pigeons"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons.
+  [971 input tokens]
+
+You: What is his email address?
+Alfred: Dr. Nikola Tesla's email address is nikola.tesla@example.com.
+  [640 input tokens]
+```
+
+On the first question Alfred searches. On the second he does not search at all. The note about Tesla is already in the conversation as the Observation from the first question, so he simply read it again. Classic RAG did a second, unneeded search and added three more notes to the conversation.
+
+### 8. Ask a two-part question
+
+Once more replace everything below the creation of `alfred`, this time with a single question:
+
+```csharp
+AgentResponse response = await alfred.RunAsync(
+    "I need two people for the opening: an athlete and someone who plays an instrument. " +
+    "Who are they, and what are their email addresses?");
+
+AgentLog.Print(response);
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Run `dotnet run`:
+
+```text wrap
+  Action: SearchGuests({"query":"athlete"})
+  Action: SearchGuests({"query":"instrument"})
+  Observation: Name: Jesse Owens Relation: cousin Description: Jesse Owens is a sprinter who won four gold medals a...
+  Observation: Name: Wolfgang Amadeus Mozart Relation: neighbor Description: Wolfgang Amadeus Mozart is a composer ...
+Alfred: For the opening, I have identified Jesse Owens as our athlete and Wolfgang Amadeus Mozart as the musician. Their email addresses are jesse.owens@example.com and wolfgang.mozart@example.com respectively.
+  [1223 input tokens]
+```
+
+The question has two parts, and Alfred made **two searches**, each with its own short query. Nowhere in the code did you tell him to split the question. He judged by himself that one search for "athlete" and one for "instrument" would do a better job than one long sentence.
+
+## The flip side
+
+Freedom has a price. Once the model decides when to search, it can also decide wrongly.
+
+### 9. Ask about someone who is not there
+
+Replace the call to `RunAsync` with a new question:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Is Isaac Newton coming tonight?");
+```
+
+Run `dotnet run`:
+
+```text wrap
+Alfred: I apologize, sir, but Isaac Newton is not on the guest list for tonight's gala. He was a historical figure who passed away centuries ago. Would you like me to search for any other guests instead?
+  [359 input tokens]
+```
+
+The answer is correct: Newton really is not invited. But look at how Alfred got there. There is no `Action`. He **did not look at the list at all**. He decided on his own, from general knowledge, that a man who died centuries ago cannot be a guest. By the same logic neither Tesla nor Mozart would be invited.
+
+This time we got lucky. That is the risk of Agentic RAG: the model can skip the search and answer confidently from its memory.
+
+### 10. Tighten the instructions
+
+The simplest remedy is to tell the model more clearly what you expect. In `Program.cs` add one more sentence at the end of `instructions`:
+
+```csharp
+        "Use the SearchGuests tool whenever a question is about the guests " +
+        "and never invent details about them. " +
+        "Never say that someone is or is not a guest without searching first.",
+```
+
+Run `dotnet run` with the same question:
+
+```text wrap
+  Action: SearchGuests({"query":"Isaac Newton"})
+  Observation: Name: Albert Einstein Relation: business partner Description: Albert Einstein is a theoretical physi...
+Alfred: No, Isaac Newton is not on the guest list for tonight's gala. However, we do have Albert Einstein, Alan Turing, and Leonardo da Vinci attending. Would you like to know more about any of them?
+  [985 input tokens]
+```
+
+Now Alfred checked. The search returned the three closest guests, Newton was not among them, and only then did he say "no".
+
+But remember the rule from Unit 2.1: **`instructions` are a request to the model, not a guarantee**. One sentence helped here, but on another question the model may skip the search again. If a source has to be read **always**, that is ensured with code. In our case the code is classic RAG from the previous lesson.
+
+## The same with TextSearchProvider
+
+`TextSearchProvider` can work this way too. The `SearchTime` setting has a second value, with which the provider does not search before every call but offers the search to the model as a tool:
+
+```csharp
+new TextSearchProvider(SearchGuests, new TextSearchProviderOptions
+{
+    SearchTime = TextSearchProviderOptions.TextSearchBehavior.OnDemandFunctionCalling,
+    FunctionToolName = "SearchGuests",
+    FunctionToolDescription =
+        "Searches the guest list of tonight's gala and returns the notes about the guests that match best.",
+})
+```
+
+You get the formatting of the results and the request for citations for free. You lose control over the parameter: it is called `userQuestion`, and you cannot give it a description. When we tried it, Alfred searched for the pigeons and for the athlete, but on the question about music he answered, without searching, that he had no such information. With our own tool, whose description says "an interest or a topic", he searched for the music as well.
+
+It is the same lesson as in Unit 2.1: **the description is the interface**.
+
+## Classic or Agentic?
+
+Here are the two approaches side by side, with the numbers from our runs:
+
+| | Classic RAG | Agentic RAG |
+| --- | --- | --- |
+| The question about music | 1 call to the model, 309 tokens | 2 calls, 984 tokens |
+| A greeting | 309 tokens and a confused answer | 358 tokens and a clean answer |
+| A follow-up question | Searches again. | Does not search, reads from the conversation. |
+| A two-part question | One search with the whole question. | Two separate searches. |
+| Who decides whether to search | Your code. | The model. |
+| What model is needed | Any. | One that supports tools. |
+
+The choice is the same as between a Workflow and an Agent in Unit 2.1. You ask **who should decide**:
+
+- Choose **classic RAG** when every question is about the documents, when you need a guarantee that the source was read, or when every second counts.
+- Choose **Agentic RAG** when the Agent holds a conversation, when the questions are complex, or when there are several sources to choose from.
+
+The two approaches can also be combined: a context provider for what has to be in the prompt always, and tools for everything else.
+
+## Your turn
+
+**Spoil the description.** In `GuestBook.cs` change the description of the `query` parameter to `The search text.` and run the question about music. See whether Alfred still searches and what query he writes.
+
+**Ask about two people.** Ask a question that involves two guests, for example `What do Ada Lovelace and Grace Hopper have in common?`, and count the `Action` lines.
+
+**Compare for yourself.** Bring back `Program.cs` from the previous lesson and ask the classic Alfred the two-part question. Compare the guests that were found and the number of tokens.
+
+## Summary
+
+- In **Agentic RAG** the search is a tool. The retrieved documents arrive as an Observation.
+- The model decides **whether** to search, **what** to search for and **how many times**.
+- It writes its own query (**query rewriting**) and can split a complex question into several searches.
+- The price is at least one extra call to the model whenever a search happens.
+- The risk is that the model **skips the search** and answers from its memory. Clearer instructions help, but they are not a guarantee.
+- **Classic RAG** is code and is predictable. **Agentic RAG** is flexible. You choose according to who should decide.
+
+Alfred now searches the guest list on his own. It is time for a short quiz, and after it we will give him other sources too.

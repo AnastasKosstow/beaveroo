@@ -1,0 +1,385 @@
+---
+title: "Agentic RAG: търсенето като tool"
+description: Превръщаме търсенето в списъка с гости в tool и оставяме Alfred сам да реши кога да търси, какво да търси и колко пъти. Сравняваме Agentic RAG с класическия RAG върху едни и същи въпроси и виждаме какво печелим и какво рискуваме.
+---
+
+В класическия RAG търсенето е задължителна стъпка, която някой изпълнява вместо модела. Видя докъде води това: Alfred получи три бележки за гости, когато просто го поздравихме.
+
+В **Agentic RAG** търсенето е tool. Alfred сам решава дали да го използва.
+
+## Идеята
+
+За нея не ти трябва нищо ново. От Unit 1 знаеш цикъла Thought → Action → Observation, а от Unit 2.1 знаеш как се дава tool на Agent. Тук Action е търсенето, а Observation са намерените бележки.
+
+```text
+Класически RAG
+въпрос ──▶ търсене ──▶ модел ──▶ отговор
+
+Agentic RAG
+въпрос ──▶ модел ──▶ търсене ──▶ модел ──▶ отговор
+             │
+             └──▶ отговор (когато търсене не е нужно)
+```
+
+Разликата изглежда малка, но прехвърля три решения от твоя код към модела:
+
+| Решение | Класически RAG | Agentic RAG |
+| --- | --- | --- |
+| Дали да се търси | Винаги. | Преценява моделът. |
+| Какво да се търси | Думите на потребителя. | Заявка, написана от модела. |
+| Колко пъти | Веднъж. | Колкото е нужно. |
+
+## Превърни търсенето в tool
+
+Продължаваме в проекта `GalaHost`. Ще ти трябват `LocalModel.cs`, `Guest.cs`, `guests.json` и `GuestBook.cs`.
+
+### 1. Добави tool в GuestBook
+
+Отвори `GuestBook.cs`. Най-горе добави още един `using`:
+
+```csharp title="GuestBook.cs"
+using System.ComponentModel;
+```
+
+После добави този метод в класа, под `SearchAsync`:
+
+```csharp title="GuestBook.cs"
+[Description("Searches the guest list of tonight's gala and returns the notes about the guests that match best.")]
+public async Task<string> SearchGuests(
+    [Description("What to look for: a name, a relation to the host, an interest or a topic.")]
+    string query)
+{
+    List<Guest> found = await SearchAsync(query);
+
+    return string.Join("\n\n", found.Select(guest => guest.Text));
+}
+```
+
+Това е tool по правилата от [Unit 2.1](/ai-agents/unit-2/agent-framework/tools/): метод с `[Description]`, параметър с `[Description]` и резултат като текст. Вътре той вика познатия `SearchAsync` и слепва бележките на намерените гости.
+
+Обърни внимание на описанието на параметъра. То не казва само „текст за търсене“, а изброява какво може да се търси: име, връзка с домакина, интерес или тема. Така моделът разбира какви заявки имат смисъл.
+
+### 2. Изпробвай tool-а сам
+
+Преди да дадеш един tool на Agent, пусни го веднъж сам. Така виждаш точно какво ще получи моделът. Отвори `Program.cs`, изтрий съдържанието му и сложи следното:
+
+```csharp title="Program.cs"
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+Console.WriteLine(await guestBook.SearchGuests("musician"));
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Name: Wolfgang Amadeus Mozart
+Relation: neighbor
+Description: Wolfgang Amadeus Mozart is a composer who wrote his first symphony at the age of eight. He has offered to play the piano after dinner and never says no to a game of billiards.
+Email: wolfgang.mozart@example.com
+
+Name: Hedy Lamarr
+Relation: no relation
+Description: Hedy Lamarr is a film star and inventor. She co-invented a frequency-hopping radio system that later became the basis for Wi-Fi and Bluetooth.
+Email: hedy.lamarr@example.com
+
+Name: Albert Einstein
+Relation: business partner
+Description: Albert Einstein is a theoretical physicist who developed the theory of relativity. He relaxes by playing the violin and sailing, and he never wears socks.
+Email: albert.einstein@example.com
+```
+
+Три бележки като обикновен текст. Точно това ще пристигне при модела като Observation.
+
+### 3. Покажи стъпките на Agent-а
+
+За да виждаме какво прави Alfred, ни трябва `AgentLog` от Unit 2.1. Създай файл `AgentLog.cs`:
+
+```csharp title="AgentLog.cs"
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+public static class AgentLog
+{
+    public static void Print(AgentResponse response)
+    {
+        foreach (ChatMessage message in response.Messages)
+        {
+            foreach (AIContent content in message.Contents)
+            {
+                switch (content)
+                {
+                    case TextContent text:
+                        Console.WriteLine($"{message.AuthorName}: {text.Text}");
+                        break;
+                    case FunctionCallContent call:
+                        string arguments = JsonSerializer.Serialize(call.Arguments);
+                        Console.WriteLine($"  Action: {call.Name}({arguments})");
+                        break;
+                    case FunctionResultContent result:
+                        Console.WriteLine($"  Observation: {Shorten($"{result.Result}")}");
+                        break;
+                }
+            }
+        }
+    }
+
+    private static string Shorten(string text)
+    {
+        text = text.ReplaceLineEndings(" ");
+
+        return text.Length <= 100 ? text : text[..100] + "...";
+    }
+}
+```
+
+Файлът е същият като в `PartyPlanner`, с една добавка: методът `Shorten`. Бележките за трима гости заемат половин екран, затова от всеки Observation отпечатваме само първите сто знака. Моделът, разбира се, получава целия текст.
+
+### 4. Дай tool-а на Alfred
+
+Замени съдържанието на `Program.cs` със следното:
+
+```csharp title="Program.cs"
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+AIAgent alfred = LocalModel.Create().AsAIAgent(
+    name: "Alfred",
+    instructions:
+        "You are Alfred, the butler of Wayne Manor and the host of tonight's gala. " +
+        "You are polite and concise. " +
+        "Use the SearchGuests tool whenever a question is about the guests " +
+        "and never invent details about them.",
+    tools: [AIFunctionFactory.Create(guestBook.SearchGuests)]);
+
+AgentResponse response = await alfred.RunAsync("Who could entertain the guests with music?");
+
+AgentLog.Print(response);
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Спрямо предишния урок:
+
+- **`TextSearchProvider` го няма.** Върнахме се към краткия `AsAIAgent` с `name`, `instructions` и `tools`.
+- **Търсенето е в `tools`.** `guestBook.SearchGuests` е метод на обект, а не статичен метод, но `AIFunctionFactory.Create` го приема по същия начин.
+- **В `instructions` има ново изречение**, което казва кога да се използва tool-ът.
+
+### 5. Стартирай програмата
+
+```bash
+dotnet run
+```
+
+изход:
+
+```text wrap
+Alfred: I shall inquire into our guest list to see if any musical talents have graced us this evening.
+  Action: SearchGuests({"query":"musician"})
+  Observation: Name: Wolfgang Amadeus Mozart Relation: neighbor Description: Wolfgang Amadeus Mozart is a composer ...
+Alfred: Mr. Mozart would be most suitable to entertain the guests with music, as he is a composer who has offered to play the piano after dinner.
+  [984 input tokens]
+```
+
+Една обиколка на познатия цикъл:
+
+1. **Thought.** Alfred казва, че ще провери в списъка с гости.
+2. **Action.** Извиква `SearchGuests`. Погледни аргумента: не е изпратил въпроса на потребителя, а е написал своя заявка, `musician`.
+3. **Observation.** Framework-ът изпълнява нашия метод и връща трите бележки.
+4. **Отговор.** Alfred прочита бележките и отговаря.
+
+Втората точка е първата голяма разлика. В класическия RAG търсехме по изречението `Who could entertain the guests with music?`. Тук моделът сам го преведе на езика на бележките. Това се нарича *query rewriting* и го получаваш без нито един ред код.
+
+Виж и цената: 984 input tokens срещу 309 в предишния урок. Моделът беше извикан **два пъти**, веднъж за да поиска търсенето и веднъж за да отговори, и двата пъти прочете инструкциите и описанието на tool-а.
+
+## Същите въпроси, друго поведение
+
+Сега ще повторим трите ситуации, в които класическият RAG се затрудни.
+
+### 6. Кажи „добър вечер“
+
+Смени въпроса в `Program.cs`:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Good evening, Alfred.");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Alfred: Good evening, sir. How may I assist you with preparations for the gala?
+  [358 input tokens]
+```
+
+Няма `Action`, няма бележки, няма имейли. За поздрав не е нужно търсене и Alfred не търси.
+
+### 7. Задай уточняващ въпрос
+
+В `Program.cs` замени всичко под създаването на `alfred` със следното:
+
+```csharp
+AgentSession session = await alfred.CreateSessionAsync();
+
+string[] questions =
+[
+    "Which guest is passionate about pigeons?",
+    "What is his email address?",
+];
+
+foreach (string question in questions)
+{
+    Console.WriteLine($"You: {question}");
+
+    AgentResponse response = await alfred.RunAsync(question, session);
+
+    AgentLog.Print(response);
+    Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+    Console.WriteLine();
+}
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+You: Which guest is passionate about pigeons?
+  Action: SearchGuests({"query":"pigeons"})
+  Observation: Name: Dr. Nikola Tesla Relation: old friend from university days Description: Dr. Nikola Tesla is an...
+Alfred: Dr. Nikola Tesla is the guest who is passionate about pigeons.
+  [971 input tokens]
+
+You: What is his email address?
+Alfred: Dr. Nikola Tesla's email address is nikola.tesla@example.com.
+  [640 input tokens]
+```
+
+При първия въпрос Alfred търси. При втория не търси изобщо. Бележката за Tesla вече е в разговора като Observation от първия въпрос, затова той просто я прочете отново. Класическият RAG направи второ, ненужно търсене и добави още три бележки към разговора.
+
+### 8. Задай въпрос от две части
+
+Отново замени всичко под създаването на `alfred`, този път с един въпрос:
+
+```csharp
+AgentResponse response = await alfred.RunAsync(
+    "I need two people for the opening: an athlete and someone who plays an instrument. " +
+    "Who are they, and what are their email addresses?");
+
+AgentLog.Print(response);
+Console.WriteLine($"  [{response.Usage?.InputTokenCount} input tokens]");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+  Action: SearchGuests({"query":"athlete"})
+  Action: SearchGuests({"query":"instrument"})
+  Observation: Name: Jesse Owens Relation: cousin Description: Jesse Owens is a sprinter who won four gold medals a...
+  Observation: Name: Wolfgang Amadeus Mozart Relation: neighbor Description: Wolfgang Amadeus Mozart is a composer ...
+Alfred: For the opening, I have identified Jesse Owens as our athlete and Wolfgang Amadeus Mozart as the musician. Their email addresses are jesse.owens@example.com and wolfgang.mozart@example.com respectively.
+  [1223 input tokens]
+```
+
+Въпросът има две части и Alfred направи **две търсения**, всяко със своя кратка заявка. Никъде в кода не си му казал да раздели въпроса. Той сам прецени, че едно търсене за „athlete“ и едно за „instrument“ ще свършат по-добра работа от едно дълго изречение.
+
+## Обратната страна
+
+Свободата има цена. Щом моделът решава кога да търси, той може и да реши грешно.
+
+### 9. Попитай за човек, когото го няма
+
+Замени извикването на `RunAsync` с нов въпрос:
+
+```csharp
+AgentResponse response = await alfred.RunAsync("Is Isaac Newton coming tonight?");
+```
+
+Изпълни `dotnet run`:
+
+```text wrap
+Alfred: I apologize, sir, but Isaac Newton is not on the guest list for tonight's gala. He was a historical figure who passed away centuries ago. Would you like me to search for any other guests instead?
+  [359 input tokens]
+```
+
+Отговорът е верен: Newton наистина не е поканен. Но виж как Alfred стигна до него. Няма `Action`. Той **изобщо не погледна в списъка**. Реши сам, от общата си култура, че човек, починал преди векове, няма как да е гост. По същата логика нямаше да са поканени нито Tesla, нито Mozart.
+
+Този път извадихме късмет. Това е рискът на Agentic RAG: моделът може да прескочи търсенето и да отговори уверено от паметта си.
+
+### 10. Затегни инструкциите
+
+Най-простото лекарство е да кажеш на модела по-ясно какво очакваш. В `Program.cs` добави още едно изречение в края на `instructions`:
+
+```csharp
+        "Use the SearchGuests tool whenever a question is about the guests " +
+        "and never invent details about them. " +
+        "Never say that someone is or is not a guest without searching first.",
+```
+
+Изпълни `dotnet run` със същия въпрос:
+
+```text wrap
+  Action: SearchGuests({"query":"Isaac Newton"})
+  Observation: Name: Albert Einstein Relation: business partner Description: Albert Einstein is a theoretical physi...
+Alfred: No, Isaac Newton is not on the guest list for tonight's gala. However, we do have Albert Einstein, Alan Turing, and Leonardo da Vinci attending. Would you like to know more about any of them?
+  [985 input tokens]
+```
+
+Сега Alfred провери. Търсенето върна тримата най-близки гости, Newton не беше сред тях, и чак тогава той каза „не“.
+
+Помни обаче правилото от Unit 2.1: **`instructions` са молба към модела, а не гаранция**. Едно изречение помогна тук, но при друг въпрос моделът пак може да прескочи търсенето. Ако един източник трябва да се чете **винаги**, това се осигурява с код. В нашия случай кодът е класическият RAG от предишния урок.
+
+## Същото с TextSearchProvider
+
+`TextSearchProvider` също може да работи по този начин. Настройката `SearchTime` има втора стойност, при която provider-ът не търси преди всяко извикване, а предлага търсенето на модела като tool:
+
+```csharp
+new TextSearchProvider(SearchGuests, new TextSearchProviderOptions
+{
+    SearchTime = TextSearchProviderOptions.TextSearchBehavior.OnDemandFunctionCalling,
+    FunctionToolName = "SearchGuests",
+    FunctionToolDescription =
+        "Searches the guest list of tonight's gala and returns the notes about the guests that match best.",
+})
+```
+
+Получаваш оформлението на резултатите и молбата за цитати наготово. Губиш контрола върху параметъра: той се казва `userQuestion` и не можеш да му сложиш описание. Когато го пробвахме, Alfred потърси за гълъбите и за спортиста, но на въпроса за музиката отговори, без да търси, че не разполага с такава информация. Със собствения ни tool, в чието описание пише „an interest or a topic“, той потърси и за музиката.
+
+Това е същият урок като в Unit 2.1: **описанието е интерфейсът**.
+
+## Класически или Agentic?
+
+Ето двата подхода един до друг, с числата от нашите изпълнения:
+
+| | Класически RAG | Agentic RAG |
+| --- | --- | --- |
+| Въпрос за музика | 1 извикване на модела, 309 tokens | 2 извиквания, 984 tokens |
+| Поздрав | 309 tokens и объркан отговор | 358 tokens и чист отговор |
+| Уточняващ въпрос | Търси отново. | Не търси, чете от разговора. |
+| Въпрос от две части | Едно търсене с целия въпрос. | Две отделни търсения. |
+| Кой решава дали да се търси | Твоят код. | Моделът. |
+| Какъв модел е нужен | Всякакъв. | С поддръжка на tools. |
+
+Изборът е същият като между Workflow и Agent в Unit 2.1. Питаш се **кой трябва да реши**:
+
+- Избери **класически RAG**, когато всеки въпрос е за документите, когато ти трябва гаранция, че източникът е прочетен, или когато всяка секунда е важна.
+- Избери **Agentic RAG**, когато Agent-ът води разговор, когато въпросите са сложни или когато има няколко източника, между които трябва да се избира.
+
+Двата подхода могат и да се комбинират: context provider за това, което трябва да е в prompt-а винаги, и tools за всичко останало.
+
+## Твой ред
+
+**Развали описанието.** В `GuestBook.cs` смени описанието на параметъра `query` на `The search text.` и пусни въпроса за музиката. Виж дали Alfred още търси и каква заявка пише.
+
+**Попитай за двама.** Задай въпрос, в който участват двама гости, например `What do Ada Lovelace and Grace Hopper have in common?`, и преброй редовете `Action`.
+
+**Сравни сам.** Върни `Program.cs` от предишния урок и задай въпроса от две части на класическия Alfred. Сравни намерените гости и броя tokens.
+
+## Обобщение
+
+- В **Agentic RAG** търсенето е tool. Намерените документи пристигат като Observation.
+- Моделът решава **дали** да търси, **какво** да търси и **колко пъти**.
+- Той пише собствена заявка (**query rewriting**) и може да раздели сложен въпрос на няколко търсения.
+- Цената е поне едно допълнително извикване на модела, когато се търси.
+- Рискът е моделът да **прескочи търсенето** и да отговори от паметта си. По-ясните instructions помагат, но не са гаранция.
+- **Класическият RAG** е код и е предвидим. **Agentic RAG** е гъвкав. Избираш според това кой трябва да реши.
+
+Alfred вече сам търси в списъка с гости. Време е за кратък quiz, а след него ще му дадем и други източници.

@@ -1,0 +1,315 @@
+---
+title: "Vector Stores: a Home for Embeddings"
+description: We move the vectors from a plain list into a vector store through Microsoft.Extensions.VectorData - we describe Guest with three attributes, store the guests, search with SearchAsync and filter by a field. The two phases of RAG and why long documents are cut into chunks.
+---
+
+`SemanticSearch` from the previous lesson works, but it is a toy. It is enough to imagine a hundred thousand documents instead of twelve guests to see its weak spots:
+
+- **It computes all vectors on every startup.** For twelve notes that is a second. For a large knowledge base it is hours.
+- **Nothing is kept.** The vectors live in a list in memory and disappear together with the program.
+- **It cannot filter.** "Search only among the guests I don't know" cannot be expressed.
+
+These are jobs for a database. A database that stores vectors and searches by them is called a **vector store**.
+
+## What is a vector store?
+
+A vector store keeps records together with their vectors and can answer one special question: *which records are closest to this vector?*
+
+There are two kinds. Some are specialized databases such as Qdrant, Milvus and Weaviate. The others are the familiar databases that now support vectors: PostgreSQL with pgvector, SQL Server, SQLite, Azure Cosmos DB. If your application already has a database, chances are it can become your vector store too.
+
+In .NET you don't have to learn the API of each of them. The **`Microsoft.Extensions.VectorData`** library gives common abstractions for all. It is the same idea as `IChatClient` for models: your code works with the abstraction, and the concrete database is chosen in one line.
+
+| Abstraction | What it is | Corresponds to |
+| --- | --- | --- |
+| `VectorStore` | The whole store. | A database |
+| `VectorStoreCollection<TKey, TRecord>` | A collection of records of one type. | A table |
+| Your class with attributes | One record. | A row |
+
+We will use the simplest implementation, which keeps everything in memory. It needs nothing installed beyond a single NuGet package.
+
+## Setup
+
+### 1. Add the package
+
+In the `GalaHost` folder run:
+
+```bash
+dotnet add package CommunityToolkit.VectorData.InMemory
+```
+
+The abstractions themselves are already in the project, because Agent Framework brings them along. This package adds one implementation of them: `InMemoryVectorStore`.
+
+:::note[Versions]
+The examples were run with `CommunityToolkit.VectorData.InMemory` 1.0.1. In older articles you will find the same code with the `Microsoft.SemanticKernel.Connectors.InMemory` package. It was renamed and is no longer maintained.
+:::
+
+### 2. Describe Guest for the vector store
+
+The vector store has to know three things about a record: which property is the key, which fields are ordinary data, and what the vector is made from. We tell it with attributes. Open `Guest.cs` and change it like this:
+
+```csharp title="Guest.cs" ins={2,6,9,12,15,18}
+using System.Text.Json;
+using Microsoft.Extensions.VectorData;
+
+public class Guest
+{
+    [VectorStoreKey]
+    public string Name { get; set; } = "";
+
+    [VectorStoreData]
+    public string Relation { get; set; } = "";
+
+    [VectorStoreData]
+    public string Description { get; set; } = "";
+
+    [VectorStoreData]
+    public string Email { get; set; } = "";
+
+    [VectorStoreVector(768)]
+    public string Text =>
+        $"""
+        Name: {Name}
+        Relation: {Relation}
+        Description: {Description}
+        Email: {Email}
+        """;
+
+    public static List<Guest> LoadAll() =>
+        JsonSerializer.Deserialize<List<Guest>>(File.ReadAllText("guests.json"), JsonSerializerOptions.Web)!;
+}
+```
+
+The data itself does not change. We added one `using` and an attribute above every property:
+
+| Attribute | What it says | In our case |
+| --- | --- | --- |
+| `[VectorStoreKey]` | This is the unique key of the record. | `Name` |
+| `[VectorStoreData]` | An ordinary field. It is stored, returned with the result, and can be filtered on. | `Relation`, `Description`, `Email` |
+| `[VectorStoreVector(768)]` | The vector is made from this field. The number is the number of dimensions. | `Text` |
+
+You saw the number 768 in the previous lesson: that is how many numbers `nomic-embed-text` returns. If you change the embedding model, you have to change it too.
+
+Notice that `Text` is a `string`, not an array of numbers. We do not compute the vector ourselves. The vector store will call the embedding model for us.
+
+## Store and search
+
+### 3. Move the guests into a vector store
+
+Open `Program.cs`, delete its contents and put the following:
+
+```csharp title="Program.cs"
+using CommunityToolkit.VectorData.InMemory;
+using Microsoft.Extensions.VectorData;
+
+VectorStore store = new InMemoryVectorStore(new InMemoryVectorStoreOptions
+{
+    EmbeddingGenerator = LocalModel.CreateEmbeddingGenerator(),
+});
+
+VectorStoreCollection<string, Guest> guests = store.GetCollection<string, Guest>("guests");
+
+await guests.EnsureCollectionExistsAsync();
+await guests.UpsertAsync(Guest.LoadAll());
+
+const string Query = "Who could entertain the guests with music?";
+
+Console.WriteLine($"Query: {Query}");
+
+await foreach (VectorSearchResult<Guest> result in guests.SearchAsync(Query, top: 3))
+{
+    Console.WriteLine($"  {result.Score:F2}  {result.Record.Name}");
+}
+```
+
+The code has four parts:
+
+1. **The store.** `InMemoryVectorStore` receives the embedding generator from `LocalModel`. It will use it to turn text into vectors.
+2. **The collection.** `GetCollection<string, Guest>("guests")` gives a collection named `guests`, where the key is a `string` and the records are of type `Guest`. `EnsureCollectionExistsAsync` creates it if it is not there yet.
+3. **Storing.** `UpsertAsync` adds the guests. If a record with that key already exists, it updates it. This is exactly where the vector store computes the vector of each guest from the `Text` property.
+4. **Searching.** `SearchAsync` receives plain text. The vector store turns it into a vector with the same model and returns the three closest records. Each result carries the record itself in `Record` and the closeness in `Score`.
+
+Run `dotnet run`:
+
+```text
+Query: Who could entertain the guests with music?
+  0.56  Wolfgang Amadeus Mozart
+  0.49  Hedy Lamarr
+  0.48  Frida Kahlo
+```
+
+Compare the numbers with the ones from the previous lesson. They are the same to the second decimal place. Nothing is hidden: the same embedding model, the same cosine similarity. Only who does the work has changed. The thirty-odd lines of `SemanticSearch` fit into two calls: `UpsertAsync` and `SearchAsync`.
+
+### 4. Add a filter
+
+Vector search is "soft": it returns what is closest in meaning. Sometimes you also need a "hard" condition that has to hold exactly. That is what a filter is for.
+
+In `Program.cs` replace everything from the line with `const string Query` down with the following:
+
+```csharp
+const string Query = "Which guest is an inventor?";
+
+VectorSearchOptions<Guest> options = new()
+{
+    Filter = guest => guest.Relation == "no relation",
+};
+
+Console.WriteLine($"Query: {Query}");
+
+await foreach (VectorSearchResult<Guest> result in guests.SearchAsync(Query, top: 3, options))
+{
+    Console.WriteLine($"  {result.Score:F2}  {result.Record.Name}");
+}
+```
+
+We ask for an inventor, but only among the guests the host has no relation to. The filter is an ordinary C# expression, as in LINQ. Run `dotnet run`:
+
+```text
+Query: Which guest is an inventor?
+  0.61  Hedy Lamarr
+  0.59  Marie Curie
+  0.54  Frida Kahlo
+```
+
+First place goes to Hedy Lamarr, "film star and inventor". Without the filter the same question returns Tesla, da Vinci and Einstein. They are closer in meaning, but they do not meet the condition.
+
+The rule is simple: **exact conditions go in the filter, meaning goes in the vector**. In real applications the most important filter is access. An employee should find only the documents they are allowed to see, and that must not depend on the judgment of a model.
+
+Look at the last two lines as well. Marie Curie and Frida Kahlo are not inventors, but the search returned them anyway. The reason is the same as in the previous lesson: we asked for three results and got the three closest among those left after the filter.
+
+## The two phases of RAG
+
+The code from step 3 contains two completely different activities, and it helps to keep them apart in your head:
+
+```text
+Indexing (once, and then when the data changes)
+documents ──▶ embedding model ──▶ vector store
+
+Retrieval (on every question)
+question ──▶ embedding model ──▶ search in the vector store ──▶ top 3
+```
+
+| Phase | In our code | How often |
+| --- | --- | --- |
+| **Indexing** | `UpsertAsync` | Once, and then only when the data changes. |
+| **Retrieval** | `SearchAsync` | On every question. |
+
+In our case both phases happen in one program, because the store is in memory and has to be filled on every startup. With a real database they are separated. One process prepares the data and writes it. The application that answers questions only searches.
+
+## Chunking: when documents are long
+
+Our documents are conveniently short: one guest is three sentences. Real documents are rarely like that. A forty-page manual cannot be turned into a single vector, for three reasons:
+
+- One vector for forty pages is an "average" of all the topics in them and does not resemble any of them well.
+- Embedding models have a limit on the length of the input.
+- Even if you find it, you would have to put the whole manual in the prompt for the sake of one sentence from it.
+
+So long documents are cut into pieces called **chunks**. Each chunk is a few paragraphs, becomes a separate record with its own vector, and keeps where it came from: file name, page, section title. Neighboring chunks usually overlap by a sentence or two, so that a thought cut at the border is not lost.
+
+A good chunk contains **one complete thought**. The note about one guest is exactly that, which is why we don't cut anything.
+
+:::note[Ready-made tools]
+For reading files and cutting chunks .NET has the `Microsoft.Extensions.DataIngestion` library. At the time of writing it is in preview. We don't need it in this course, but look it up when you get to your own PDF and Markdown files.
+:::
+
+## Wrap it in GuestBook
+
+From here on Alfred will search the guest list in every lesson. To avoid repeating the store setup, we will gather it in one class.
+
+### 5. Write GuestBook
+
+Create a file `GuestBook.cs`:
+
+```csharp title="GuestBook.cs"
+using CommunityToolkit.VectorData.InMemory;
+using Microsoft.Extensions.VectorData;
+
+public class GuestBook
+{
+    private readonly VectorStoreCollection<string, Guest> _guests;
+
+    private GuestBook(VectorStoreCollection<string, Guest> guests) => _guests = guests;
+
+    public static async Task<GuestBook> CreateAsync()
+    {
+        VectorStore store = new InMemoryVectorStore(new InMemoryVectorStoreOptions
+        {
+            EmbeddingGenerator = LocalModel.CreateEmbeddingGenerator(),
+        });
+
+        VectorStoreCollection<string, Guest> guests = store.GetCollection<string, Guest>("guests");
+
+        await guests.EnsureCollectionExistsAsync();
+        await guests.UpsertAsync(Guest.LoadAll());
+
+        return new GuestBook(guests);
+    }
+
+    public async Task<List<Guest>> SearchAsync(string query, int top = 3)
+    {
+        List<Guest> found = [];
+
+        await foreach (VectorSearchResult<Guest> result in _guests.SearchAsync(query, top))
+        {
+            found.Add(result.Record);
+        }
+
+        return found;
+    }
+}
+```
+
+There is nothing new in the class. `CreateAsync` is the indexing phase: it creates the store and writes the guests. `SearchAsync` is the retrieval phase: it returns the closest guests as a plain list.
+
+Replace the contents of `Program.cs` with the following to check it:
+
+```csharp title="Program.cs"
+GuestBook guestBook = await GuestBook.CreateAsync();
+
+foreach (Guest guest in await guestBook.SearchAsync("Who could entertain the guests with music?"))
+{
+    Console.WriteLine(guest.Name);
+}
+```
+
+Run `dotnet run`:
+
+```text
+Wolfgang Amadeus Mozart
+Hedy Lamarr
+Frida Kahlo
+```
+
+We won't need the `KeywordSearch.cs` and `SemanticSearch.cs` files any more. You can delete them or keep them for reference.
+
+## When memory is not enough
+
+`InMemoryVectorStore` is handy for learning and for prototypes, but its data disappears when the program stops. For a real application you choose another implementation of the same abstractions:
+
+| Vector store | NuGet package | Where the data lives |
+| --- | --- | --- |
+| In-memory | `CommunityToolkit.VectorData.InMemory` | In the program's memory. |
+| SQLite | `CommunityToolkit.VectorData.SqliteVec` | In a single file on disk. |
+| Qdrant | `CommunityToolkit.VectorData.Qdrant` | In a Qdrant server. |
+| PostgreSQL | `CommunityToolkit.VectorData.PgVector` | In PostgreSQL with the pgvector extension. |
+| Azure AI Search | `CommunityToolkit.VectorData.AzureAISearch` | In Microsoft's cloud. |
+
+What changes is the line that creates the store. The `Guest` class, `UpsertAsync` and `SearchAsync` stay the same. Every database has its own quirks, for example which types it accepts for a key and which filters it supports, so before you choose, see the [list in the documentation](https://learn.microsoft.com/dotnet/ai/vector-stores/overview).
+
+## Your turn
+
+**Change the number of results.** In `Program.cs` pass `top: 1` to `guestBook.SearchAsync`, and then `top: 5`. Think about when you would want more results and what you pay for them.
+
+**Add a guest.** Add yourself to `guests.json` with two sentences about what you like, and search for yourself with a question that has not a single word from your description.
+
+**Change the filter.** Go back to the code from step 4 and look for an inventor only among the guests whose `Relation` is different from `no relation`.
+
+## Summary
+
+- A **vector store** is a database that keeps records together with their vectors and finds the ones closest to a given vector.
+- **`Microsoft.Extensions.VectorData`** gives common abstractions: `VectorStore`, `VectorStoreCollection` and a class with the attributes `[VectorStoreKey]`, `[VectorStoreData]` and `[VectorStoreVector]`.
+- **`UpsertAsync`** stores and computes the vectors. **`SearchAsync`** takes text and returns the closest records with a score.
+- A **filter** is an exact condition on an ordinary field. Meaning goes in the vector, exact conditions go in the filter.
+- RAG has two phases: **indexing**, which prepares the data once, and **retrieval**, which searches on every question.
+- Long documents are cut into **chunks**, each with its own vector.
+
+The search is ready. In the next lesson we will attach it to Alfred with Microsoft Agent Framework.
